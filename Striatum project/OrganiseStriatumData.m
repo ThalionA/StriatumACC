@@ -48,11 +48,22 @@ for imouse = 1:num_mice
     
     % Correct time
     corrected_vr_time = (VR_times_synched - VR_times_synched(1))*1000;
+    npx_time = 0:1:size(final_spikes, 2)-1;
 
     % Process licks
     corrected_licks = process_licks(VR_data(8, :) >= 1, corrected_vr_time, 100);
 
-    
+    all_data(imouse).mouseid = all_mouse_ids(imouse);
+    all_data(imouse).final_spikes = final_spikes;
+    all_data(imouse).final_areas = final_areas;
+    all_data(imouse).npx_time = npx_time;
+    all_data(imouse).corrected_vr_time = corrected_vr_time;
+    all_data(imouse).corrected_licks = corrected_licks';
+    all_data(imouse).vr_position = VR_data(2, :);
+    all_data(imouse).vr_world = VR_data(5, :);
+    all_data(imouse).vr_reward = VR_data(6, :);
+    all_data(imouse).vr_trial = VR_data(7, :);
+
 
     % Bin in space (2.5cm)
 
@@ -79,12 +90,17 @@ for imouse = 1:num_mice
     % Simple average lick rate
     average_lick_rate = sum(corrected_licks)/((corrected_vr_time(end)-corrected_vr_time(1))/1000);
 
-    figure
-    my_errorbar_plot({average_ACC_fr, average_DMS_fr})
-    xticklabels({'ACC', 'DMS'})
-    ylabel('average FR')
-    [~, pval] = ttest2(average_ACC_fr, average_DMS_fr);
-    sigstar([1, 2], pval)
+    % figure
+    % my_errorbar_plot({average_ACC_fr, average_DMS_fr})
+    % xticklabels({'ACC', 'DMS'})
+    % ylabel('average FR')
+    % [~, pval] = ttest2(average_ACC_fr, average_DMS_fr);
+    % sigstar([1, 2], pval)
+    % save_to_svg(['avg_fr_' num2str(all_mouse_ids(imouse))])
 
+    all_data(imouse).avg_fr_all = average_firing_rates;
+    all_data(imouse).average_DMS_fr = average_DMS_fr;
+    all_data(imouse).average_ACC_fr = average_ACC_fr;
+    all_data(imouse).average_lick_rate = average_lick_rate;
 
 end
