@@ -1,0 +1,528 @@
+close all
+clear all
+
+
+folder_name={     %%%folder for each mouse
+% '513_M2'
+
+% '523_M3'
+
+ '614_M2';
+%   '624_M2';
+%   '727_M1';
+%    '730_M2';
+%     '823_M2';
+
+
+
+};
+
+
+[folderLength,~]=size(folder_name); 
+
+
+                                                                                                                                                                                                                                                                                                                             
+for kk=1:folderLength
+     
+     name_now=folder_name{kk};
+     
+       currentFile=['E:\visual_learning' '/' name_now ]; %%read the folder contains everything for one mouse
+       
+      cd(currentFile);
+end
+
+% length of corridor
+
+c_l=200 ;
+
+tunnel_length=200;  %(AU) the length of the VR corridor. 1 AU= 1.25cm
+%time
+sr=30000; %samplerate
+ttstep=1/1000; %use 1ms window to bin data
+% ttstep=100/1000; %100ms window
+
+
+triallength=3; % 3s
+minsend=140;
+tt=0:ttstep:minsend*60; %sample time for trials. In order to include all the data, it is longer than the task. 
+% tt2=1:sr*minsend*60; %sample time for neuonpixal
+darkt=10; %10mins darkness after  task
+
+darklength=5; %5s darkness in each trial
+
+tb=1000;% bstr time
+%visual Stimuli position
+Vp1=80;   %%%%(AU)
+Vp2=100;
+%Reward position
+Rp1=100; %%%%(AU)
+Rp2=130;
+Rp3=110;
+%read neuonpixal
+
+
+%%%%%%%%%%%
+tolerance=20;  %%%AU
+%%%%%%%%%%
+
+
+cluster=readNPY('spike_clusters.npy');
+time=readNPY('spike_times.npy');
+
+
+
+[rawDataNum, rawDataStr]=xlsread('info'); %save the cluter_info as .xls and name it info before 
+ID=rawDataNum(:,1);  %cluster ID
+
+CH=rawDataNum(:,6); %channel
+Depth=rawDataNum(:,7);% depth of cluster
+
+
+
+% chanMap = readNPY([path_cluster{1,1} '\channel_map.npy']);
+chanMap = readNPY('channel_map.npy');
+cluster_id=ID;
+
+
+
+
+for i=2:length(rawDataStr)
+KSL{i-1,1}=rawDataStr{i,4}; %auto label
+ML{i-1,1}=rawDataStr{i,9}; %manually label
+
+end
+
+
+
+cluster_label=ML; %select the label
+
+
+
+
+fid = fopen('cluster_group.tsv'); % read cluster infomation
+C2 = textscan(fid, '%f %s ', 'HeaderLines', 1); 
+fclose(fid); 
+
+ml=C2; %manually label
+
+
+load accstr  %load VR   this is the file from the sychonization script,after runing the script save everything and name it accstr
+
+currentFile=['E:\visual_learning'];
+cd(currentFile)
+
+
+
+time2=VR_times_synched; % synchronized time
+Ai=VR_data; %behavior data
+
+
+        
+        goodcluster=[];
+        clustergroup={};
+
+        %start and end of VR
+startt1=max(time2);
+endt1=min(time2);
+
+%start and end of darkness
+
+startt2=max(time2)+ttstep;
+endt2=startt2+darkt*60;
+
+
+
+   
+%select good cluster  %select ID and depth
+      for i=1:length(ID)
+          if isempty(cluster_label{i,1})==0 & cluster_label{i,1}(1,1:3)=='goo' 
+       goodcluster(i,1)=ID(i,1);
+        goodcluster(i,2)=Depth(i,1);
+%           elseif isempty(cluster_label{i,1})==0 & cluster_label{i,1}(1,1:3)=='mua' 
+%        goodcluster(i,1)=ID(i,1);
+%         goodcluster(i,2)=Depth(i,1);
+             i
+              else
+                  goodcluster(i,1:2)=nan;
+          end
+        
+      end
+      goodcluster2=goodcluster(goodcluster(:,1)>=0,:);
+
+      %caluclate spike
+     %%%%%%%%%%%sigma
+      sigma_spike=100;
+      sigma_spike=0.025/(sqrt(12)*ttstep);
+      
+      
+      
+      AU_cm=1.25; %1.25 cm/AU
+      spatial_bin_size=2*AU_cm; % spatial bin size in cm; needs to be multiple of AU's to avoid merged bins
+      
+      
+      
+    gaussFilterSigma_vel = 0.1/ttstep;   %standard deviation of gaussfilter -> 100 ms
+    gaussFilterSigma_pos = 0.1/ttstep;   %standard deviation of gaussfilter -> 100 ms
+    gaussFilterSigma_licks = 0.1/ttstep; %standard deviation of gaussfilter -> 100 ms
+    gaussFilterSigma_accel = sqrt(2)*gaussFilterSigma_vel;   %standard deviation of gaussfilter for first derivative -> sqrt(2)*200 ms
+      
+      
+      
+      %Sigma of spatial Gauss filter
+    gaussFilterSigma_pos_spatial = 5/spatial_bin_size; %in number of bins
+    
+        for ii=1:length(goodcluster2) 
+     cluster2=[];    
+
+   clustergroup{ii,1}=time(cluster==goodcluster2(ii,1),1); %spike timepoint
+   clustergroup{ii,2}=goodcluster2(ii,1);   %ID
+   cluster2=double(clustergroup{ii,1});
+
+%    spike1(ii,:)=histcounts(cluster2(:,1)./sr,tt)./ttstep;   % spike in every 100ms
+   
+     spike1(ii,:)=histcounts(cluster2(:,1)./sr,tt);   % spike count in every 1ms
+%    spike2(ii,:)=smoothdata(spike1(ii,:),'gaussian',3);%%%smooth
+   
+   spike2(ii,:)=gaussFilter(spike1(ii,:),sigma_spike);
+   ii
+
+    end
+
+  
+    
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      
+   
+   spike_gf=spike2;   %%%%%%%%%%gaussian
+
+   
+     binned_spikes= spike1;
+     binned_time=tt;
+   
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   
+   
+     ncluster=size(binned_spikes,1);
+        
+
+        licks_binned=zeros(1,length(tt));   
+  
+      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+     clear cluster2   spike1 spike2 tt2  spike_raw
+      
+         
+
+idx1=(goodcluster(:,1)>=0);
+
+cluster_id=cluster_id(idx1');
+% % idx=sum(cluster==cluster_id,1)==1;
+depth=Depth(idx1')';
+
+idx=[];
+idx(1:length(cluster))=0;
+
+for i=1:length(cluster)
+if intersect(cluster(i,1),cluster_id)>0  
+    idx(i)=1;     
+end
+
+end
+
+
+clusters=cluster(idx>0);
+times=double(time(idx>0))/sr;
+
+clear idx1
+
+
+   
+            idx_spike_bin_VR=nan(1,length(binned_spikes));   %VR indices for binned spikes
+    idx=2;
+    for i = 1:length(binned_time)-1
+        if binned_time(i) > VR_times_synched(idx-1) && binned_time(i) <= VR_times_synched(idx)
+            if VR_data(10,idx)==VR_data(10,idx-1)   %making sure file hasn't changed
+                idx_spike_bin_VR(i)=idx;
+            end
+        else
+            while binned_time(i) > VR_times_synched(idx) && idx<length(VR_times_synched)
+                idx=idx+1;
+            end
+            if binned_time(i) > VR_times_synched(idx-1) && binned_time(i) <= VR_times_synched(idx)
+                if VR_data(10,idx)==VR_data(10,idx)   %making sure file hasn't changed
+                    idx_spike_bin_VR(i)=idx;
+                end
+            end
+        end
+    end
+
+     
+    idx_bin_VR=~isnan(idx_spike_bin_VR);    
+        
+    [velocity_binned,pos_binned,licks_binned]=interpolate_binned_values(binned_time,VR_data,idx_spike_bin_VR);
+    acceleration_binned_gf = nan(1,length(binned_time));
+    velocity_binned_gf = nan(1,length(binned_time));
+     pos_binned=pos_binned*AU_cm;
+    
+      nbins=length(binned_time);
+  
+      
+      
+      
+ 
+
+
+      
+      
+      
+      %% #INI CALC: vectors of trial, licks, reward, default_reward for binned spikes
+    trial_binned = nan(1,nbins);
+    valve_binned = nan(1,nbins);
+    world_binned = nan(1,nbins);
+    idx_bin_VR=~isnan(idx_spike_bin_VR);
+    trial_binned(idx_bin_VR)=VR_data(7,idx_spike_bin_VR(idx_bin_VR));
+    nalltrials=length(unique(trial_binned(~isnan(trial_binned))));
+    
+    
+    for i=1:length(valve_binned)-1   %create single events from binned values
+        if ~isnan(idx_spike_bin_VR(i))
+            val=VR_data(6,idx_spike_bin_VR(i));
+            valve_binned(i)=val;
+            if idx_spike_bin_VR(i+1)==idx_spike_bin_VR(i)
+                valve_binned(i+1)=0;
+            end
+        end
+    end
+    world_binned(idx_bin_VR)=VR_data(5,idx_spike_bin_VR(idx_bin_VR));
+    
+    
+
+  
+     
+       % To avoid gauss-filtering of position between world-switches, teleport and file switch:
+%     idx1=find(~isnan(idx_spike_bin_VR));
+%     idx2=find(diff(isnan(idx_spike_bin_VR))~=0);
+%     idx = idx1(diff(VR_data(5,idx_spike_bin_VR(idx1)))~=0 | diff(VR_data(10,idx_spike_bin_VR(idx1)))~=0 | diff(VR_data(2,idx_spike_bin_VR(idx1)))>=10 | diff(VR_data(2,idx_spike_bin_VR(idx1)))<=-10); % find switches in world, file or position
+%     idx = unique(cat(2,idx,idx2));
+%     idx_sections=[];
+%     n=1;
+%     for i=1:length(idx)-1
+%         if sum(isnan(idx_spike_bin_VR(idx(i)+1:idx(i+1))))==0
+%             idx_sections(:,n)=[idx(i)+1 idx(i+1)];
+%             n=n+1;
+%         end
+%     end
+%   
+clear idx_bin_VR idx_spike_bin_VR
+    idx_sections=[];
+    n=1;
+    for i=1:max(trial_binned)-1
+        
+     idx_sections(:,n)=[ min(find(trial_binned==i&world_binned==6)) max(find(trial_binned==i&world_binned==6))];
+     idx_sections(:,n+1)=[ min(find(trial_binned==i&world_binned==12)) max(find(trial_binned==i&world_binned==12))];
+      n=n+2;
+    
+    end
+    
+    
+
+    pos_binned_gf=nan(1,length(binned_time));
+    for i = 1 : size(idx_sections,2)
+        % because gauss-filtering tends to 0 towards begin and end of the
+        % snippet, it is applied to a snippit with repeats of the first and last values
+        pos_binned_gf(idx_sections(1,i):idx_sections(2,i))=gaussFilter_border(pos_binned(idx_sections(1,i):idx_sections(2,i)),gaussFilterSigma_pos); %gauss-filtering of position to interpolate data
+    end
+    idx=find(diff(isnan(velocity_binned))~=0);
+    idx(1:2:end)=idx(1:2:end)+1;
+    for i = 1:length(idx)/2
+        velocity_binned_gf(idx((i-1)*2+1):idx((i-1)*2+2))=gaussFilter_border(velocity_binned(idx((i-1)*2+1):idx((i-1)*2+2)),gaussFilterSigma_vel);   %gauss-filtering of velocity to interpolate data
+        vgf=gaussFilter_border(velocity_binned(idx((i-1)*2+1):idx((i-1)*2+2)),gaussFilterSigma_accel);
+        acceleration_binned_gf(idx((i-1)*2+1):idx((i-1)*2+2)-1)=diff(vgf/ttstep);
+    end
+
+     clear vgf
+  
+
+  
+ licks_binned_gf=gaussFilter(licks_binned,gaussFilterSigma_licks);
+  
+[lpeak,lpeak_loc]= findpeaks(licks_binned_gf);
+        
+ licks_binned_gf2= zeros(1,length(tt));
+     
+  licks_binned_gf2(:,lpeak_loc)=1;
+  
+ 
+
+
+   tolerance=tolerance*AU_cm;
+   tunnel_length=tunnel_length*AU_cm;
+   space=spatial_bin_size:spatial_bin_size:tunnel_length; 
+   nspace = length(space);
+   ntrials=max(VR_data(7,:))-1;%%%%%%%ignore last trial
+     
+    
+   
+      
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   
+    spatialOccupation_time=zeros(ntrials,nspace);
+    spatialOccupation_time_gf=zeros(ntrials,nspace);
+    for i = 1:ntrials
+        idx1=find(trial_binned==i &world_binned==12);
+        for n = 1 : nspace
+            idx2=(pos_binned(idx1)<space(n)&pos_binned(idx1)>=space(n)-spatial_bin_size);
+            spatialOccupation_time(i,n)=sum(idx2)*ttstep;
+        end
+        disp(['Calculation of spatial occupation map at ' num2str(i/ntrials*100) '%']);
+%         spatialOccupation_time_gf(i,:)=gaussFilter_border(spatialOccupation_time(i,:),gaussFilterSigma_pos_spatial);
+    end
+   
+   
+ figure
+    surface(space,(1:1:ntrials),spatialOccupation_time);
+      caxis([0.03 17])
+    axis tight
+    shading flat
+    set(gca,'ColorScale','log','YDir','reverse');
+    xlabel('Space (cm)');
+    ylabel('Trial');
+    c=colorbar;
+    c.Label.String = 'Occupancy (s)';
+     title('Spatial occupancy over trials');
+
+    colormap(turbo)
+   
+   set(gca,'YMinorGrid','on','MinorGridColor','y')
+    xl1=xline(Vp1*AU_cm,'r','linewidth',1.2)
+    xl2=xline(Vp2*AU_cm,'r','linewidth',1.2)
+  
+xline(Rp2*AU_cm,'r','linewidth',1.2) 
+    set(gca,'fontsize',18)
+    
+    
+    
+  
+    
+    figure;
+    [~,edges] = histcounts(log10(spatialOccupation_time));
+    histogram(spatialOccupation_time,10.^edges)
+    set(gca, 'xscale','log')
+
+    figure;
+    hold on
+    plot(min(spatialOccupation_time,[],1)) %plots the minimum of time spent in a spatial bin over each trial
+    plot(mean(spatialOccupation_time,1)) %plots the minimum of time spent in a spatial bin over each trial
+    plot(median(spatialOccupation_time,1)) %plots the minimum of time spent in a spatial bin over each trial
+
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5
+    
+   % Analysis plan - 5.1.1.2 Assessing spatial speed
+    spatialVelocity = zeros(ncluster,ntrials,nspace);
+
+    for n=1:ntrials
+        idx1=find(trial_binned==n &world_binned==12);
+        for i = 1 : nspace
+            idx2=idx1(pos_binned_gf(idx1)<space(i)&pos_binned_gf(idx1)>=space(i)-spatial_bin_size);
+            spatialVelocity(:,n,i)=sum(velocity_binned(:,idx2),2);
+        end
+        spatialVelocity(:,n,:)=squeeze(spatialVelocity(:,n,:))./spatialOccupation_time(n,:);
+    end
+    spatialVelocity_mean=squeeze(mean(spatialVelocity,1));
+
+   save([name_now 'speed'],'spatialVelocity')
+    clear spatialVelocity
+    
+    % Analysis plan - 5.1.1.2 Assessing spatial lick
+    spatiallick = zeros(ncluster,ntrials,nspace);
+
+    for n=1:ntrials
+        idx1=find(trial_binned==n &world_binned==12);
+        for i = 1 : nspace
+            idx2=idx1(pos_binned_gf(idx1)<space(i)&pos_binned_gf(idx1)>=space(i)-spatial_bin_size);
+            spatiallick(:,n,i)=sum(licks_binned_gf2(:,idx2),2);
+
+%             spatiallick(:,n,i)=sum(licks_binned(:,idx2),2);
+        end
+%           spatiallick(:,n,:)=squeeze(spatiallick(:,n,:))./spatialOccupation_time(n,:);
+          spatiallick(:,n,:)=squeeze(spatiallick(:,n,:));
+    end
+    spatiallick_mean=squeeze(mean(spatiallick,1)); % lick number in space
+ 
+   spatiallick_mean_s=spatiallick_mean./spatialOccupation_time; 
+   
+   
+ clear map3   spatiallick
+cn=6;
+
+    
+map3(1:cn,3)=1;
+map3(1:cn,1)= linspace(0.7,0,cn);
+map3(1:cn,2)= linspace(0.7,0,cn);  
+map3(1,:)=1;  
+      
+    figure
+imagesc(space,(1:1:ntrials),spatiallick_mean_s)           
+
+colormap(map3)
+
+% caxis([0 5])
+      set(gca,'YMinorGrid','on','MinorGridColor','y')
+    xl1=xline(Vp1*AU_cm,'r','linewidth',1.2)
+    xl2=xline(Vp2*AU_cm,'r','linewidth',1.2)
+  
+xline(Rp2*AU_cm,'r','linewidth',1.2)
+   
+     xlabel('Space (cm)');
+    ylabel('Trial');
+
+     title('Spatial lick over trials');
+    c=colorbar;
+    c.Label.String = 'Lick count';    
+    set(gca,'fontsize',18)
+
+
+  % Analysis plan - 5.1.1.2 Assessing spatial tuning
+    spatialFiring = zeros(ncluster,ntrials,nspace);
+
+    for n=1:ntrials
+        idx1=find(trial_binned==n &world_binned==12);
+        for i = 1 : nspace
+            idx2=idx1(pos_binned_gf(idx1)<space(i)&pos_binned_gf(idx1)>=space(i)-spatial_bin_size);
+            spatialFiring(:,n,i)=sum(binned_spikes(:,idx2),2);
+        end
+        spatialFiring(:,n,:)=squeeze(spatialFiring(:,n,:))./spatialOccupation_time(n,:);
+    end
+    spatialFiring_mean=squeeze(mean(spatialFiring,2));
+% 
+%  goodcluster2(:,3)= mean(mean(spatialFiring,3),2); 
+%   save([name_now '_goodcluster'],"goodcluster2")
+    
+      %% #SPA-TRIAL CALC: within- and across-trial z-score of spatial firing
+    % Analysis plan - 5.1.1.2 Assessing spatial tuning
+    % KEEP IN MIND: some neurons don't fire during some of the trials ->
+    % z-score set to 0
+    spatialFiring_z=zeros(ncluster,ntrials,nspace);
+%     spatialFiring_z_trialwise=zeros(ncluster,ntrials,nspace);
+    for n=1:ncluster
+        spatialFiring_z(n,:,:)=(spatialFiring(n,:,:)-mean(spatialFiring(n,:,:),'all','omitnan'))/std(spatialFiring(n,:,:),1,'all','omitnan');
+%         spatialFiring_z_trialwise(n,:,:)=(spatialFiring(n,:,:)-mean(spatialFiring(n,:,:),3,'omitnan'))./std(spatialFiring(n,:,:),1,3,'omitnan');
+    end
+
+    % Calculation of across-trial mean of spatial firing z-score
+%     spatialFiring_z_trialwise(isnan(spatialFiring_z_trialwise))=0;
+    spatialFiring_z_mean = squeeze(mean(spatialFiring_z,2));
+%     spatialFiring_z_mean_trialwise = squeeze(mean(spatialFiring_z_trialwise,2));
+
+    % Gaussian Filter of spatial firing z-score
+    spatialFiring_gf=zeros(ncluster,ntrials,nspace);
+    spatialFiring_z_gf=zeros(ncluster,ntrials,nspace);
+    for i = 1:ncluster
+        for n=1:ntrials
+            spatialFiring_gf(i,n,:)=gaussFilter_border(squeeze(spatialFiring(i,n,:)),gaussFilterSigma_pos_spatial);
+        end
+        spatialFiring_z_gf(i,:,:)=zscore(spatialFiring_gf(i,:,:),0,'all');
+    end
+    spatialFiring_gf(spatialFiring_gf<0)=0; %correct error from gaussian filtered traces
+    
+    spatialFiring_z_mean = squeeze(mean(spatialFiring_z_gf,2));
+
+
