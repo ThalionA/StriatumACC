@@ -1,6 +1,6 @@
 %% Lick correction, calculating lick rate
 
-licks = VR_data2(8,:)>=1;
+licks = VR_data(8,:)>=1;
 lick_idx = find(licks==1);
 lick_times = VR_times_synched(lick_idx);
 lick_freq = 1./diff(lick_times);
