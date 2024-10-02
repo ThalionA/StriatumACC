@@ -1,10 +1,10 @@
 %% Lick correction, calculating lick rate
 
 licks = VR_data(8,:)>=1;
-lick_idx=find(licks==1);
-lick_times=VR_times_synched(lick_idx);
-lick_freq= 1./diff(lick_times);
-figure;histogram(lick_freq,'BinEdges',0:1:70); title('Lick frequency before correction')
+lick_idx = find(licks==1);
+lick_times = VR_times_synched(lick_idx);
+lick_freq = 1./diff(lick_times);
+figure; histogram(lick_freq,'BinEdges',0:1:70); title('Lick frequency before correction')
 licks2 = zeros(1,length(licks));
 licks_positive = find(licks==1);
 licks_valid = licks_positive(1);
