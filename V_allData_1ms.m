@@ -5,7 +5,7 @@
 
  %% Read the folder containing all the data %%
 
-folder_name= {'614_M2'};
+folder_name= {'614_M2'}; %change this to the mouse being analysed
 [folderLength,~]=size(folder_name); 
                                                                                                                                                                                                                                                                                                                            
 for kk=1:folderLength
@@ -150,7 +150,7 @@ for i=1:length(VR_data)-1
     end
 end
 allData{1,2} = gaussFilter(allData{1,2},30); %smoothening velocity with 30ms gaussian sigma width
-allData{1,8} = sc_chopped;
+allData{1,8} = scc;
 allData{2,8} = 'Spikes';
 allData{2,1} = 'Licks';
 allData{2,2} = 'Velocity';
