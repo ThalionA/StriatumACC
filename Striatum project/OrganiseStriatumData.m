@@ -17,17 +17,16 @@ opts.ExtraColumnsRule = "ignore";
 opts.EmptyLineRule = "read";
 
 % Import the data
-NeuropixelsDepthData = readtable("/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/RawData/Neuropixels_Depth_Data.csv", opts);
+NeuropixelsDepthData = readtable("/RawData/Neuropixels_Depth_Data.csv", opts);
 
 %% process each mouse
 
 for imouse = 1:num_mice
 
-    load(fullfile('/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/RawData', [num2str(all_mouse_ids(imouse)) '_raw.mat']))
+    filename = ['./RawData/' num2str(all_mouse_ids(imouse)) '_raw.mat'];
+    load(filename);
 
     num_units = size(binned_spikes, 1);
-
-    
 
     % Assign areas to units based on depths
     unit_areas = cell(1, num_units);
@@ -45,6 +44,7 @@ for imouse = 1:num_mice
 
     final_spikes = binned_spikes(units_to_keep, npx_start_frame:npx_end_frame);
     final_areas = unit_areas(units_to_keep);
+    clear binned_spikes
     
     % Correct time
     corrected_vr_time = (VR_times_synched - VR_times_synched(1))*1000;
