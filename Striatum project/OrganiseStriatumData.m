@@ -104,3 +104,46 @@ for imouse = 1:num_mice
     all_data(imouse).average_lick_rate = average_lick_rate;
 
 end
+
+
+%% 
+
+average_DMS_fr_all = {all_data(:).average_DMS_fr};
+average_ACC_fr_all = {all_data(:).average_ACC_fr};
+
+average_lick_rate_all = [all_data(:).average_lick_rate];
+
+median_DMS_fr_animals = cellfun(@median, average_DMS_fr_all);
+median_ACC_fr_animals = cellfun(@median, average_ACC_fr_all);
+
+figure
+my_errorbar_plot([median_ACC_fr_animals', median_DMS_fr_animals'], true)
+xticklabels({'ACC', 'DMS'})
+ylabel('average FR')
+[~, pval] = ttest(median_ACC_fr_animals, median_DMS_fr_animals);
+sigstar([1, 2], pval)
+% save_to_svg(['avg_fr_' num2str(all_mouse_ids(imouse))])
+
+all_DMS_frs = cat(1, average_DMS_fr_all{:});
+all_ACC_frs = cat(1, average_ACC_fr_all{:});
+
+figure
+my_errorbar_plot({all_ACC_frs, all_DMS_frs})
+xticklabels({'ACC', 'DMS'})
+ylabel('average FR')
+[~, pval] = ttest2(all_ACC_frs, all_DMS_frs);
+sigstar([1, 2], pval)
+
+
+figure
+subplot(1, 2, 1)
+scatter(median_ACC_fr_animals, average_lick_rate_all, 'filled', 'MarkerEdgeColor', 'w')
+lsline
+title('ACC')
+xlabel('average FR')
+ylabel('average lick rate')
+subplot(1, 2, 2)
+scatter(median_DMS_fr_animals, average_lick_rate_all, 'filled', 'MarkerEdgeColor', 'w')
+lsline
+title('DMS')
+xlabel('average FR')
