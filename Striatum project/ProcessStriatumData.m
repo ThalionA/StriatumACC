@@ -4,12 +4,17 @@ if ~exist("all_data", 'var')
     load all_data.mat
 end
 
+%%
 n_animals = size(all_data, 2);
-figure
-t = tiledlayout(5, n_animals, "TileIndexing", "columnmajor");
+plot_summary_fig = false;
+
+if plot_summary_fig
+    figure
+    t = tiledlayout(5, n_animals, "TileIndexing", "columnmajor");
+end
 
 for ianimal = 1:n_animals
-    
+
     % cut data per trial
     n_vr_datapoints = length(all_data(ianimal).corrected_vr_time);
     n_npx_datapoints = length(all_data(ianimal).npx_time);
@@ -23,6 +28,7 @@ for ianimal = 1:n_animals
     trialLengths_vr = changeIdx_vr - trialStartIdx_vr + 1;
 
     trialTimes_vr = mat2cell(all_data(ianimal).corrected_vr_time, 1, trialLengths_vr);
+    trial_times_zeroed = cellfun(@(x) x - x(1), trialTimes_vr, UniformOutput=false);
     trialStartTimes_vr = all_data(ianimal).corrected_vr_time(trialStartIdx_vr);
     trialEndTimes_vr = all_data(ianimal).corrected_vr_time(trialEndIdx_vr);
 
@@ -54,42 +60,67 @@ for ianimal = 1:n_animals
     trial_sem_fr_acc = cellfun(@(x) sem(sum(x, 2)), binned_spikes_trials_acc)./trialDurations_vr;
 
     mov_window_size = 5;
+    [~, duration_peaks] = findpeaks(movmean(trialDurations_vr, mov_window_size), 'MinPeakProminence', 5, 'Annotate', 'peaks');
+    trial_licks_change = find(movmean(trial_lick_no, 10) < 20, 1);
+    trial_success_change = find(movmean(trial_success, 10) < 0.5, 1);
 
-    nexttile
-    findpeaks(movmean(trialDurations_vr, mov_window_size), 'MinPeakProminence', 5)
-    title(num2str(all_data(ianimal).mouseid))
-    axis tight
-    ylim([5, 40])
-    ylabel('trial duration (s)')
+    [~, loc1] = min(abs(duration_peaks - trial_licks_change));
+    [~, loc2] = min(abs(duration_peaks - trial_success_change));
+    most_likely_change_duration = mean([duration_peaks(loc1), duration_peaks(loc2)]);
 
-    nexttile
-    plot(movmean(trial_lick_no, mov_window_size))
-    ylabel('lick #')
-    axis tight
-    xline(find(movmean(trial_lick_no, 10) < 20, 1))
+    all_data(ianimal).change_point_mean = mean([trial_licks_change, trial_success_change, most_likely_change_duration]);
 
-    nexttile
-    plot(movmean(trial_success, mov_window_size))
-    ylabel('reward')
-    axis tight
-    ylim([-0.2, 1.2])
-    xline(find(movmean(trial_success, 10) < 0.5, 1))
+    % Bin data in space
+    bin_size = 2; % 2.5cm bins
 
-    nexttile
-    shadedErrorBar(1:n_trials, movmean(trial_average_fr_dms, mov_window_size), movmean(trial_sem_fr_dms, mov_window_size))
-    % plot(movmean(trial_average_fr_dms, mov_window_size))
-    ylabel('DMS fr')
-    axis tight
+    corridor_start_idx = cellfun(@(x) find(x > 6, 1), trial_world);
+    corridor_start_time = cellfun(@(x, y) x(find(y > 6, 1) + 1), trial_times_zeroed, trial_world);
 
-    nexttile
-    shadedErrorBar(1:n_trials, movmean(trial_average_fr_acc, mov_window_size), movmean(trial_sem_fr_acc, mov_window_size))
-    % plot(movmean(trial_average_fr_acc, mov_window_size))
-    ylabel('ACC fr')
-    axis tight
-    
+    for itrial = 1:n_trials
+        
+    end
+
+
+
+    if plot_summary_fig
+
+        nexttile
+        plot(movmean(trialDurations_vr, mov_window_size))
+        xline(duration_peaks)
+        title(num2str(all_data(ianimal).mouseid))
+        axis tight
+        ylim([5, 40])
+        ylabel('trial duration (s)')
+
+        nexttile
+        plot(movmean(trial_lick_no, mov_window_size))
+        ylabel('lick #')
+        axis tight
+        xline(trial_licks_change)
+
+        nexttile
+        plot(movmean(trial_success, mov_window_size))
+        ylabel('reward')
+        axis tight
+        ylim([-0.2, 1.2])
+        xline(trial_success_change)
+
+        nexttile
+        shadedErrorBar(1:n_trials, movmean(trial_average_fr_dms, mov_window_size), movmean(trial_sem_fr_dms, mov_window_size))
+        % plot(movmean(trial_average_fr_dms, mov_window_size))
+        ylabel('DMS fr')
+        axis tight
+
+        nexttile
+        shadedErrorBar(1:n_trials, movmean(trial_average_fr_acc, mov_window_size), movmean(trial_sem_fr_acc, mov_window_size))
+        % plot(movmean(trial_average_fr_acc, mov_window_size))
+        ylabel('ACC fr')
+        axis tight
+
+    end
+
 end
 
-xlabel(t, 'trial #')
-
-
-findchangepts(movmean(trial_success, mov_window_size))
+if plot_summary_fig
+    xlabel(t, 'trial #')
+end
