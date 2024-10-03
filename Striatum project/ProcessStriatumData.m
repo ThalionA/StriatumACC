@@ -90,3 +90,6 @@ for ianimal = 1:n_animals
 end
 
 xlabel(t, 'trial #')
+
+
+findchangepts(movmean(trial_success, mov_window_size))
