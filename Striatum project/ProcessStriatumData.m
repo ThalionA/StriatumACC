@@ -6,12 +6,21 @@ end
 
 %%
 n_animals = size(all_data, 2);
-plot_summary_fig = true;
+plot_summary_fig = false;
 
 if plot_summary_fig
     figure
     t = tiledlayout(7, n_animals, "TileIndexing", "columnmajor");
 end
+
+
+bin_size = 4; % 2.5cm bins
+bin_edges = 0:bin_size:200;
+bin_edges(end) = 202;
+bin_centres = bin_edges(1:end-1) + diff(bin_edges)/2;
+num_bins = numel(bin_centres);
+
+
 
 for ianimal = 1:n_animals
 
@@ -44,11 +53,14 @@ for ianimal = 1:n_animals
     binned_spikes_trials = arrayfun(@(s,e) all_data(ianimal).final_spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
     npx_times_trials = cellfun(@(x) 0:size(x, 2)-1, binned_spikes_trials, 'UniformOutput', false);
 
-    all_data(ianimal).final_spikes_dms = all_data(ianimal).final_spikes(strcmp(all_data(ianimal).final_areas, 'DMS'), :);
-    all_data(ianimal).final_spikes_acc = all_data(ianimal).final_spikes(strcmp(all_data(ianimal).final_areas, 'ACC'), :);
+    is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
+    is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
 
-    binned_spikes_trials_dms = arrayfun(@(s,e) all_data(ianimal).final_spikes_dms(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
-    binned_spikes_trials_acc = arrayfun(@(s,e) all_data(ianimal).final_spikes_acc(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+    final_spikes_dms = all_data(ianimal).final_spikes(is_dms, :);
+    final_spikes_acc = all_data(ianimal).final_spikes(is_acc, :);
+
+    binned_spikes_trials_dms = arrayfun(@(s,e) final_spikes_dms(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+    binned_spikes_trials_acc = arrayfun(@(s,e) final_spikes_acc(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
 
     trial_lick_no = cellfun(@sum, trial_licks);
 
@@ -69,24 +81,69 @@ for ianimal = 1:n_animals
     [~, loc2] = min(abs(duration_peaks - trial_success_change));
     most_likely_change_duration = mean([duration_peaks(loc1), duration_peaks(loc2)]);
 
-    all_data(ianimal).change_point_mean = mean([trial_licks_change, trial_success_change, most_likely_change_duration]);
-
-    % Bin data in space
-    bin_size = 2; % 2.5cm bins
+    all_data(ianimal).change_point_mean = floor(mean([trial_licks_change, trial_success_change, most_likely_change_duration]));
 
     corridor_start_idx_vr = cellfun(@(x) find(x > 6, 1), trial_world);
     corridor_start_time_vr = cellfun(@(x, y) x(find(y > 6, 1) + 1), trial_times_zeroed, trial_world);
-
-    
 
     corridor_start_idx_npx = nan(size(corridor_start_idx_vr));
     binned_spikes_dark = cell(1, n_trials);
     binned_spikes_corridor = cell(1, n_trials);
 
+    trial_position_corridor = cell(1, n_trials);
+    trial_position_dark = cell(1, n_trials);
+
+    trial_licks_corridor = cell(1, n_trials);
+    trial_licks_dark = cell(1, n_trials);
+
+    trial_reward_corridor = cell(1, n_trials);
+    trial_reward_dark = cell(1, n_trials);
+
+    trial_times_corridor = cell(1, n_trials);
+    trial_times_dark = cell(1, n_trials);
+
+
     for itrial = 1:n_trials
         [~, corridor_start_idx_npx(itrial)] = min(abs(npx_times_trials{itrial} - corridor_start_time_vr(itrial)));
         binned_spikes_dark{itrial} = binned_spikes_trials{itrial}(:, 1:corridor_start_idx_npx(itrial)-1);
         binned_spikes_corridor{itrial} = binned_spikes_trials{itrial}(:, corridor_start_idx_npx(itrial):end);
+
+        trial_position_corridor{itrial} = trial_position{itrial}(corridor_start_idx_vr(itrial):end);
+        trial_position_dark{itrial} = trial_position{itrial}(1:corridor_start_idx_vr(itrial)-1);
+
+        trial_licks_corridor{itrial} = trial_licks{itrial}(corridor_start_idx_vr(itrial):end);
+        trial_licks_dark{itrial} = trial_licks{itrial}(1:corridor_start_idx_vr(itrial)-1);
+
+        trial_reward_corridor{itrial} = trial_reward{itrial}(corridor_start_idx_vr(itrial):end);
+        trial_reward_dark{itrial} = trial_reward{itrial}(1:corridor_start_idx_vr(itrial)-1);
+
+        trial_times_corridor{itrial} = trial_times_zeroed{itrial}(corridor_start_idx_vr(itrial):end);
+        trial_times_dark{itrial} = trial_times_zeroed{itrial}(1:corridor_start_idx_vr(itrial)-1);
+
+        % Bin positions
+        [~, ~, bin_idx] = histcounts(trial_position_corridor{itrial}, bin_edges);
+
+        spatial_binned_licks{itrial} = nan(1, num_bins);
+        spatial_binned_durations{itrial} = nan(1, num_bins);
+
+        trial_times_corridor_zeroed = trial_times_corridor{itrial} - trial_times_corridor{itrial}(1);
+        % Bin data in space
+        for ibin = 1:num_bins
+            idx_in_bin = (bin_idx == ibin);
+            if any(idx_in_bin)
+                
+
+                % Compute total licks
+                spatial_binned_licks{itrial}(ibin) = sum(trial_licks_corridor{itrial}(idx_in_bin));
+                bin_times = trial_times_corridor_zeroed(idx_in_bin);
+                spatial_binned_durations{itrial}(ibin) = (bin_times(end) - bin_times(1))/1000;
+
+                npx_bin_start_idx = floor(bin_times(1))
+                binned_spikes_corridor{itrial}
+            end
+        end
+
+
     end
 
     fr_dark_trials = cellfun(@(x) sum(x, 2)/(size(x, 2)/1000), binned_spikes_dark, 'UniformOutput', false);
@@ -95,7 +152,7 @@ for ianimal = 1:n_animals
     fr_corridor_trials = cellfun(@(x) sum(x, 2)/(size(x, 2)/1000), binned_spikes_corridor, 'UniformOutput', false);
     fr_corridor_trials = cat(1, [fr_corridor_trials{:}]);
 
-    
+
 
 
     if plot_summary_fig
