@@ -6,11 +6,11 @@ end
 
 %%
 n_animals = size(all_data, 2);
-plot_summary_fig = false;
+plot_summary_fig = true;
 
 if plot_summary_fig
     figure
-    t = tiledlayout(5, n_animals, "TileIndexing", "columnmajor");
+    t = tiledlayout(7, n_animals, "TileIndexing", "columnmajor");
 end
 
 for ianimal = 1:n_animals
@@ -42,6 +42,7 @@ for ianimal = 1:n_animals
     npxEndIdx = interp1(all_data(ianimal).npx_time, 1:n_npx_datapoints, trialEndTimes_vr, 'nearest', 'extrap');
 
     binned_spikes_trials = arrayfun(@(s,e) all_data(ianimal).final_spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+    npx_times_trials = cellfun(@(x) 0:size(x, 2)-1, binned_spikes_trials, 'UniformOutput', false);
 
     all_data(ianimal).final_spikes_dms = all_data(ianimal).final_spikes(strcmp(all_data(ianimal).final_areas, 'DMS'), :);
     all_data(ianimal).final_spikes_acc = all_data(ianimal).final_spikes(strcmp(all_data(ianimal).final_areas, 'ACC'), :);
@@ -73,13 +74,28 @@ for ianimal = 1:n_animals
     % Bin data in space
     bin_size = 2; % 2.5cm bins
 
-    corridor_start_idx = cellfun(@(x) find(x > 6, 1), trial_world);
-    corridor_start_time = cellfun(@(x, y) x(find(y > 6, 1) + 1), trial_times_zeroed, trial_world);
+    corridor_start_idx_vr = cellfun(@(x) find(x > 6, 1), trial_world);
+    corridor_start_time_vr = cellfun(@(x, y) x(find(y > 6, 1) + 1), trial_times_zeroed, trial_world);
+
+    
+
+    corridor_start_idx_npx = nan(size(corridor_start_idx_vr));
+    binned_spikes_dark = cell(1, n_trials);
+    binned_spikes_corridor = cell(1, n_trials);
 
     for itrial = 1:n_trials
-        
+        [~, corridor_start_idx_npx(itrial)] = min(abs(npx_times_trials{itrial} - corridor_start_time_vr(itrial)));
+        binned_spikes_dark{itrial} = binned_spikes_trials{itrial}(:, 1:corridor_start_idx_npx(itrial)-1);
+        binned_spikes_corridor{itrial} = binned_spikes_trials{itrial}(:, corridor_start_idx_npx(itrial):end);
     end
 
+    fr_dark_trials = cellfun(@(x) sum(x, 2)/(size(x, 2)/1000), binned_spikes_dark, 'UniformOutput', false);
+    fr_dark_trials = cat(1, [fr_dark_trials{:}]);
+
+    fr_corridor_trials = cellfun(@(x) sum(x, 2)/(size(x, 2)/1000), binned_spikes_corridor, 'UniformOutput', false);
+    fr_corridor_trials = cat(1, [fr_corridor_trials{:}]);
+
+    
 
 
     if plot_summary_fig
@@ -117,6 +133,19 @@ for ianimal = 1:n_animals
         ylabel('ACC fr')
         axis tight
 
+        nexttile
+        shadedErrorBar(1:n_trials, mean(fr_corridor_trials), sem(fr_corridor_trials))
+        axis tight
+        xlabel('trial no')
+        ylabel('firing rate')
+        title('corridor')
+
+        nexttile
+        shadedErrorBar(1:n_trials, mean(fr_dark_trials), sem(fr_dark_trials))
+        axis tight
+        xlabel('trial no')
+        ylabel('firing rate')
+        title('dark')
     end
 
 end
