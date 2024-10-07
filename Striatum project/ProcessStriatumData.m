@@ -394,6 +394,7 @@ figure
 t = tiledlayout(minfactor, 1);
 for iFactor = 1:minfactor
     nexttile
+    shadedErrorBar(1:n_trials-1, movmean(best_mdl.u{3}(:, iFactor), 10), movstd(best_mdl.u{3}(:, iFactor), 10)/sqrt(10))
     scatter(1:n_trials-1, best_mdl.u{3}(:, iFactor))
     xline(change_point_mean)
     linkaxes
@@ -452,7 +453,8 @@ figure
 t = tiledlayout(maxNumComponents, 1);
 for iFactor = 1:maxNumComponents
     nexttile
-    scatter(1:n_trials-1, H(iFactor, :))
+    shadedErrorBar(1:n_trials-1, movmean(H(iFactor, :), 10), movstd(H(iFactor, :), 10)/sqrt(10))
+    % plot(1:n_trials-1, movmean(H(iFactor, :), 10))
     xline(change_point_mean)
     linkaxes
     axis tight
