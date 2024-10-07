@@ -65,23 +65,6 @@ for imouse = 1:num_mice
     all_data(imouse).vr_trial = VR_data(7, :);
 
 
-    % Bin in space (2.5cm)
-
-
-    % Bin in time (?)
-
-
-    % Cut in trials
-
-
-    % Smooth spikes
-    
-
-    % Lick-triggered average
-
-
-    % Reward-triggered average
-
     % Simple processing for average firing rates across entire experiment
     average_firing_rates = sum(final_spikes, 2)/((corrected_vr_time(end)-corrected_vr_time(1))/1000);
     average_DMS_fr = average_firing_rates(strcmp(final_areas, 'DMS'));
