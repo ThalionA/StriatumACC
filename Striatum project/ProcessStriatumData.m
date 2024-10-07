@@ -4,7 +4,9 @@ if ~exist("all_data", 'var')
     load all_data.mat
 end
 
-%%
+%% Run analysis
+clearvars -except all_data
+
 n_animals = size(all_data, 2);
 plot_summary_fig = false;
 
@@ -13,16 +15,20 @@ if plot_summary_fig
     t = tiledlayout(7, n_animals, "TileIndexing", "columnmajor");
 end
 
+reward_zone_start_cm = 125; % in cm
+reward_zone_start_au = 100; 
 
-bin_size = 4; % 2.5cm bins
+
+bin_size = 4; % x1.25 = cm
 bin_edges = 0:bin_size:200;
 bin_edges(end) = 202;
 bin_centres = bin_edges(1:end-1) + diff(bin_edges)/2;
 num_bins = numel(bin_centres);
 
+reward_zone_start_bins = reward_zone_start_au/bin_size;
 
 
-for ianimal = 1:n_animals
+for ianimal = 2
 
     % cut data per trial
     n_vr_datapoints = length(all_data(ianimal).corrected_vr_time);
@@ -50,11 +56,22 @@ for ianimal = 1:n_animals
     npxStartIdx = interp1(all_data(ianimal).npx_time, 1:n_npx_datapoints, trialStartTimes_vr, 'nearest', 'extrap');
     npxEndIdx = interp1(all_data(ianimal).npx_time, 1:n_npx_datapoints, trialEndTimes_vr, 'nearest', 'extrap');
 
-    binned_spikes_trials = arrayfun(@(s,e) all_data(ianimal).final_spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
-    npx_times_trials = cellfun(@(x) 0:size(x, 2)-1, binned_spikes_trials, 'UniformOutput', false);
+    is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
+    is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
+
+    temp_final_spikes = all_data(ianimal).final_spikes;
+    temp_final_spikes(1:sum(is_dms), :) = all_data(ianimal).final_spikes(is_dms, :);
+    temp_final_spikes(sum(is_dms)+1:end, :) = all_data(ianimal).final_spikes(is_acc, :);
+
+    all_data(ianimal).final_spikes = temp_final_spikes;
+    all_data(ianimal).final_areas(1:sum(is_dms)) = deal({'DMS'});
+    all_data(ianimal).final_areas(sum(is_dms)+1:end) = deal({'ACC'});
 
     is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
     is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
+
+    binned_spikes_trials = arrayfun(@(s,e) all_data(ianimal).final_spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+    npx_times_trials = cellfun(@(x) 0:size(x, 2)-1, binned_spikes_trials, 'UniformOutput', false);
 
     final_spikes_dms = all_data(ianimal).final_spikes(is_dms, :);
     final_spikes_acc = all_data(ianimal).final_spikes(is_acc, :);
@@ -81,29 +98,32 @@ for ianimal = 1:n_animals
     [~, loc2] = min(abs(duration_peaks - trial_success_change));
     most_likely_change_duration = mean([duration_peaks(loc1), duration_peaks(loc2)]);
 
-    all_data(ianimal).change_point_mean = floor(mean([trial_licks_change, trial_success_change, most_likely_change_duration]));
+    change_point_mean = floor(mean([trial_licks_change, trial_success_change, most_likely_change_duration]));
 
     corridor_start_idx_vr = cellfun(@(x) find(x > 6, 1), trial_world);
     corridor_start_time_vr = cellfun(@(x, y) x(find(y > 6, 1) + 1), trial_times_zeroed, trial_world);
 
     corridor_start_idx_npx = nan(size(corridor_start_idx_vr));
-    binned_spikes_dark = cell(1, n_trials);
-    binned_spikes_corridor = cell(1, n_trials);
+    binned_spikes_dark = cell(1, n_trials-1);
+    binned_spikes_corridor = cell(1, n_trials-1);
 
-    trial_position_corridor = cell(1, n_trials);
-    trial_position_dark = cell(1, n_trials);
+    trial_position_corridor = cell(1, n_trials-1);
+    trial_position_dark = cell(1, n_trials-1);
 
-    trial_licks_corridor = cell(1, n_trials);
-    trial_licks_dark = cell(1, n_trials);
+    trial_licks_corridor = cell(1, n_trials-1);
+    trial_licks_dark = cell(1, n_trials-1);
 
-    trial_reward_corridor = cell(1, n_trials);
-    trial_reward_dark = cell(1, n_trials);
+    trial_reward_corridor = cell(1, n_trials-1);
+    trial_reward_dark = cell(1, n_trials-1);
 
-    trial_times_corridor = cell(1, n_trials);
-    trial_times_dark = cell(1, n_trials);
+    trial_times_corridor = cell(1, n_trials-1);
+    trial_times_dark = cell(1, n_trials-1);
+
+    spatial_binned_licks = nan(n_trials-1, num_bins);
+    spatial_binned_durations = nan(n_trials-1, num_bins);
 
 
-    for itrial = 1:n_trials
+    for itrial = 1:n_trials-1
         [~, corridor_start_idx_npx(itrial)] = min(abs(npx_times_trials{itrial} - corridor_start_time_vr(itrial)));
         binned_spikes_dark{itrial} = binned_spikes_trials{itrial}(:, 1:corridor_start_idx_npx(itrial)-1);
         binned_spikes_corridor{itrial} = binned_spikes_trials{itrial}(:, corridor_start_idx_npx(itrial):end);
@@ -123,25 +143,30 @@ for ianimal = 1:n_animals
         % Bin positions
         [~, ~, bin_idx] = histcounts(trial_position_corridor{itrial}, bin_edges);
 
-        spatial_binned_licks{itrial} = nan(1, num_bins);
-        spatial_binned_durations{itrial} = nan(1, num_bins);
+
 
         trial_times_corridor_zeroed = trial_times_corridor{itrial} - trial_times_corridor{itrial}(1);
         % Bin data in space
         for ibin = 1:num_bins
             idx_in_bin = (bin_idx == ibin);
             if any(idx_in_bin)
-                
+
 
                 % Compute total licks
-                spatial_binned_licks{itrial}(ibin) = sum(trial_licks_corridor{itrial}(idx_in_bin));
+                spatial_binned_licks(itrial, ibin) = sum(trial_licks_corridor{itrial}(idx_in_bin));
                 bin_times = trial_times_corridor_zeroed(idx_in_bin);
-                spatial_binned_durations{itrial}(ibin) = (bin_times(end) - bin_times(1))/1000;
+                spatial_binned_durations(itrial, ibin) = (bin_times(end) - bin_times(1))/1000;
 
-                npx_bin_start_idx = floor(bin_times(1))
-                binned_spikes_corridor{itrial}
+                [~, npx_bin_start_idx] = min(abs(bin_times(1) - (0:size(binned_spikes_corridor{itrial}, 2)-1)));
+                [~, npx_bin_end_idx] = min(abs(bin_times(end) - (0:size(binned_spikes_corridor{itrial}, 2)-1)));
+                spatial_binned_spikes{itrial}(:, ibin) = sum(binned_spikes_corridor{itrial}(:, npx_bin_start_idx:npx_bin_end_idx), 2);
+                spatial_binned_spikes{itrial}(:, ibin) = sum(binned_spikes_corridor{itrial}(:, npx_bin_start_idx:npx_bin_end_idx), 2);
+
             end
         end
+
+        spatial_binned_firing_rates{itrial} = spatial_binned_spikes{itrial}./spatial_binned_durations(itrial, :);
+
 
 
     end
@@ -152,6 +177,7 @@ for ianimal = 1:n_animals
     fr_corridor_trials = cellfun(@(x) sum(x, 2)/(size(x, 2)/1000), binned_spikes_corridor, 'UniformOutput', false);
     fr_corridor_trials = cat(1, [fr_corridor_trials{:}]);
 
+    spatial_binned_velocities = (bin_size * 1.25)./spatial_binned_durations;
 
 
 
@@ -180,13 +206,11 @@ for ianimal = 1:n_animals
 
         nexttile
         shadedErrorBar(1:n_trials, movmean(trial_average_fr_dms, mov_window_size), movmean(trial_sem_fr_dms, mov_window_size))
-        % plot(movmean(trial_average_fr_dms, mov_window_size))
         ylabel('DMS fr')
         axis tight
 
         nexttile
         shadedErrorBar(1:n_trials, movmean(trial_average_fr_acc, mov_window_size), movmean(trial_sem_fr_acc, mov_window_size))
-        % plot(movmean(trial_average_fr_acc, mov_window_size))
         ylabel('ACC fr')
         axis tight
 
@@ -210,3 +234,175 @@ end
 if plot_summary_fig
     xlabel(t, 'trial #')
 end
+
+nana = [spatial_binned_firing_rates{:}];
+spatial_binned_fr_all = reshape(nana, [size(spatial_binned_firing_rates{1}, 1), num_bins, n_trials-1]);
+mean_spatial_binned_fr = mean(spatial_binned_fr_all, 3);
+sem_spatial_binned_fr = sem(spatial_binned_fr_all, 3);
+
+%%
+
+
+figure
+imagesc(mean_spatial_binned_fr)
+yline(sum(is_dms)+0.5, 'r', 'LineWidth', 2)
+
+mean_spatial_binned_fr_engaged = mean(spatial_binned_fr_all(:, :, 1:change_point_mean), 3);
+sem_spatial_binned_fr_engaged = sem(spatial_binned_fr_all(:, :, 1:change_point_mean), 3);
+
+mean_spatial_binned_fr_disengaged = mean(spatial_binned_fr_all(:, :, change_point_mean+1:end), 3);
+sem_spatial_binned_fr_disengaged = sem(spatial_binned_fr_all(:, :, change_point_mean+1:end), 3);
+
+figure
+for iunit = 1:size(mean_spatial_binned_fr, 1)
+    shadedErrorBar(1:num_bins, mean_spatial_binned_fr_engaged(iunit, :), sem_spatial_binned_fr_engaged(iunit, :), 'lineProps', '-b')
+    hold on
+    shadedErrorBar(1:num_bins, mean_spatial_binned_fr_disengaged(iunit, :), sem_spatial_binned_fr_disengaged(iunit, :), 'lineProps', '-r')
+    shadedErrorBar(1:num_bins, mean_spatial_binned_fr(iunit, :), sem_spatial_binned_fr(iunit, :))
+    title(num2str(iunit))
+    hold off
+    legend({'engaged', 'disengaged', 'all'})
+    pause
+end
+
+%% PCA
+
+spatial_binned_fr_reshaped = spatial_binned_fr_all(:, :);
+num_components = 3;
+
+[coeff,score,latent,tsquared,explained,mu] = pca(spatial_binned_fr_reshaped', "NumComponents", num_components);
+
+% figure
+% plot(cumsum(explained))
+% ylabel('explained variance (%)')
+% xlabel('component #')
+
+score_reshaped = reshape(score, [num_bins, n_trials-1, num_components]);
+mean_score_early = squeeze(mean(score_reshaped(:, 1:3, :), 2));
+mean_score_engaged = squeeze(mean(score_reshaped(:, 4:change_point_mean, :), 2));
+mean_score_disengaged = squeeze(mean(score_reshaped(:, change_point_mean+1:end, :), 2));
+
+saturation = linspace(0.1, 1, num_bins)';  % Saturation from 0.1 to 1
+
+% Define base hues for each condition (H values in HSV)
+H_early = 0.6667;     % Green
+H_engaged = 0.3333;   % Blue
+H_disengaged = 0;     % Red
+
+% Create HSV color arrays for each condition
+HSV_early = [H_early * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_early = hsv2rgb(HSV_early);
+
+HSV_engaged = [H_engaged * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_engaged = hsv2rgb(HSV_engaged);
+
+HSV_disengaged = [H_disengaged * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_disengaged = hsv2rgb(HSV_disengaged);
+
+
+figure
+hold on
+
+if num_components == 3
+
+    % Plot early condition
+    x = mean_score_early(:,1);
+    y = mean_score_early(:,2);
+    z = mean_score_early(:,3);
+    for i = 1:length(x)-1
+        line([x(i), x(i+1)], [y(i), y(i+1)], [z(i), z(i+1)], ...
+             'Color', colors_early(i,:), 'LineWidth', 2);
+    end
+    
+    % Plot engaged condition
+    x = mean_score_engaged(:,1);
+    y = mean_score_engaged(:,2);
+    z = mean_score_engaged(:,3);
+    for i = 1:length(x)-1
+        line([x(i), x(i+1)], [y(i), y(i+1)], [z(i), z(i+1)], ...
+             'Color', colors_engaged(i,:), 'LineWidth', 2);
+    end
+    
+    % Plot disengaged condition
+    x = mean_score_disengaged(:,1);
+    y = mean_score_disengaged(:,2);
+    z = mean_score_disengaged(:,3);
+    for i = 1:length(x)-1
+        line([x(i), x(i+1)], [y(i), y(i+1)], [z(i), z(i+1)], ...
+             'Color', colors_disengaged(i,:), 'LineWidth', 2);
+    end
+    hold off
+elseif num_components == 2
+    scatter(mean_score_early(:,1), mean_score_early(:,2), ...
+        75, colors_early, 'filled', 'MarkerEdgeColor', 'k')
+    scatter(mean_score_engaged(:,1), mean_score_engaged(:,2), ...
+        75, colors_engaged, 'filled', 'MarkerEdgeColor', 'k')
+    scatter(mean_score_disengaged(:,1), mean_score_disengaged(:,2), ...
+        75, colors_disengaged, 'filled', 'MarkerEdgeColor', 'k')
+    hold off
+end
+
+%% Tensor Component Analysis
+
+data = tensor(spatial_binned_fr_all);
+maxnFactors = 10;
+nfits = 5;
+err = nan(maxnFactors, nfits);
+opts.maxiters = 200;
+opts.printitn = 0;
+
+all_mdls = cell(maxnFactors, nfits);
+
+for inFactor = 1:maxnFactors
+    nFactors = inFactor;
+    for iFit = 1:nfits
+        all_mdls{inFactor, iFit} = cp_nmu(data, nFactors, opts);
+        err(inFactor, iFit) = norm(full(all_mdls{inFactor, iFit}) - data)/norm(data);
+
+        fprintf('factor %d/%d, fit %d/%d \n', inFactor, maxnFactors, iFit, nfits)
+    end
+end
+
+minfactor = 10;
+[~, min_mdl_idx] = min(err(minfactor, :));
+best_mdl = all_mdls{minfactor, min_mdl_idx};
+
+
+figure
+t = tiledlayout(minfactor, 1);
+for iFactor = 1:minfactor
+    nexttile
+    bar(best_mdl.u{1}(:, iFactor))
+    xline(sum(is_dms))
+    axis tight
+    linkaxes
+end
+xlabel(t, 'unit #')
+
+figure
+t = tiledlayout(minfactor, 1);
+for iFactor = 1:minfactor
+    nexttile
+    plot(best_mdl.u{2}(:, iFactor))
+    xline(reward_zone_start_bins)
+    axis tight
+    linkaxes
+end
+xlabel(t, 'spatial bin')
+
+figure
+t = tiledlayout(minfactor, 1);
+for iFactor = 1:minfactor
+    nexttile
+    scatter(1:n_trials-1, best_mdl.u{3}(:, iFactor))
+    xline(change_point_mean)
+    linkaxes
+    axis tight
+end
+xlabel(t, 'trial #')
+
+
+%% Tucker decomposition
+
+tucker_model = tucker_als(data, [10, 5, 4]);
+
