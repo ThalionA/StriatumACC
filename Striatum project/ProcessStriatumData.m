@@ -345,7 +345,7 @@ end
 %% Tensor Component Analysis
 
 data = tensor(spatial_binned_fr_all);
-maxnFactors = 10;
+maxnFactors = 20;
 nfits = 5;
 err = nan(maxnFactors, nfits);
 opts.maxiters = 200;
@@ -362,6 +362,9 @@ for inFactor = 1:maxnFactors
         fprintf('factor %d/%d, fit %d/%d \n', inFactor, maxnFactors, iFit, nfits)
     end
 end
+
+figure
+plot(mean(err, 2), '-o')
 
 minfactor = 10;
 [~, min_mdl_idx] = min(err(minfactor, :));
@@ -395,7 +398,7 @@ t = tiledlayout(minfactor, 1);
 for iFactor = 1:minfactor
     nexttile
     shadedErrorBar(1:n_trials-1, movmean(best_mdl.u{3}(:, iFactor), 10), movstd(best_mdl.u{3}(:, iFactor), 10)/sqrt(10))
-    scatter(1:n_trials-1, best_mdl.u{3}(:, iFactor))
+    % scatter(1:n_trials-1, best_mdl.u{3}(:, iFactor))
     xline(change_point_mean)
     linkaxes
     axis tight
@@ -407,6 +410,297 @@ xlabel(t, 'trial #')
 
 tucker_model = tucker_als(data, [10, 5, 4]);
 
+%% TCA with cross validation
+
+% Assume data tensor of size (neurons x spatial bins x trials)
+data_full = spatial_binned_fr_all;
+
+% Assuming data_full is your original data tensor
+[num_neurons, num_bins, num_trials] = size(data_full);
+
+% Z-score the data
+data_reshaped = reshape(data_full, num_neurons, []);
+data_zscored_reshaped = zscore(data_reshaped, 0, 2);
+data_zscored = reshape(data_zscored_reshaped, num_neurons, num_bins, num_trials);
+
+
+% Apply min-max scaling to each neuron
+data_min = min(data_reshaped, [], 2);
+data_max = max(data_reshaped, [], 2);
+
+data_scaled = (data_reshaped - data_min) ./ (data_max - data_min);
+
+% Replace NaNs resulting from division by zero (if any) with zeros
+data_scaled(isnan(data_scaled)) = 0;
+
+% Reshape back to original tensor shape
+data_scaled = reshape(data_scaled, num_neurons, num_bins, num_trials);
+
+data_in = data_zscored;
+
+K = 5;  % Number of folds
+c = cvpartition(num_trials, "KFold", K);
+
+maxNumFactors = 10;  % Maximum number of factors to test
+cv_errors = zeros(maxNumFactors, K);  % To store cross-validation errors
+
+options = struct('maxiters', 200, 'tol', 1e-6, 'printitn', 0, 'stop_orth', 10);
+
+for nFactors = 1:maxNumFactors
+    fprintf('Testing %d factors...\n', nFactors);
+    for ifold = 1:K
+        fprintf('  Fold %d/%d\n', ifold, K);
+        
+        % Split data into training and validation sets
+        test_idx = c.test(ifold);
+        train_idx = c.training(ifold);
+        
+        data_train = tensor(data_in(:, :, train_idx));
+        data_test = tensor(data_in(:, :, test_idx));
+        
+        % Fit the model on training data
+        
+        P = cp_orth_als(data_train, nFactors, options);
+        
+        % Extract factor matrices
+        A = P.U{1};  % Neurons factors (size I x R)
+        B = P.U{2};  % Spatial bins factors (size J x R)
+        
+        % Fit trial factors for validation data
+        % Unfold validation data along mode-3 (trials)
+        data_test_unfold = tenmat(data_test, 3);  % Size: num_test_trials x (I*J)
+        AB_kr = khatrirao(A, B);  % Khatri-Rao product (size (I*J) x R)
+        
+        % Initialize C_test
+        num_test_trials = sum(test_idx);
+        C_test = zeros(num_test_trials, nFactors);  % Size: num_test_trials x R
+        
+        % Solve for C_test using non-negative least squares
+        for t = 1:num_test_trials
+            data_vec = data_test_unfold.data(t, :)';  % Size: (I*J) x 1
+            C_test(t, :) = lsqnonneg(AB_kr, data_vec)';  % Transpose to match dimensions
+        end
+        
+        % Construct the model for validation data
+        P_test = ktensor({A, B, C_test});
+        
+        % Compute reconstruction error on validation data
+        error = norm(data_test - tensor(P_test))^2 / norm(data_test)^2;
+        cv_errors(nFactors, ifold) = error;
+    end
+end
+
+mean_cv_errors = mean(cv_errors, 2);
+sem_cv_errors = sem(cv_errors, 2);
+
+% Plotting
+figure
+shadedErrorBar(1:maxNumFactors, mean_cv_errors, sem_cv_errors)
+xlabel('Number of Factors');
+ylabel('Mean CV Reconstruction Error');
+title('Cross-Validation Error vs. Number of Factors');
+
+[~, best_nFactors] = min(mean_cv_errors);
+
+best_mdl = cp_orth_als(tensor(data_in), best_nFactors, options);
+
+figure
+t = tiledlayout(best_nFactors, 1);
+for iFactor = 1:best_nFactors
+    nexttile
+    bar(best_mdl.u{1}(:, iFactor))
+    xline(sum(is_dms))
+    axis tight
+    linkaxes
+end
+xlabel(t, 'unit #')
+
+figure
+t = tiledlayout(best_nFactors, 1);
+for iFactor = 1:best_nFactors
+    nexttile
+    plot(best_mdl.u{2}(:, iFactor))
+    xline(reward_zone_start_bins)
+    axis tight
+    linkaxes
+end
+xlabel(t, 'spatial bin')
+
+figure
+t = tiledlayout(best_nFactors, 1);
+for iFactor = 1:best_nFactors
+    nexttile
+    shadedErrorBar(1:n_trials-1, movmean(best_mdl.u{3}(:, iFactor), 10), movstd(best_mdl.u{3}(:, iFactor), 10)/sqrt(10))
+    xline(change_point_mean)
+    linkaxes
+    axis tight
+end
+xlabel(t, 'trial #')
+
+
+%% Higher Order SVD
+
+% Data Preparation
+data_full = spatial_binned_fr_all;
+
+% Assuming data_full is your original data tensor
+[num_neurons, num_bins, num_trials] = size(data_full);
+
+% Z-score the data
+data_reshaped = reshape(data_full, num_neurons, []);
+data_zscored_reshaped = zscore(data_reshaped, 0, 2);
+data_zscored = reshape(data_zscored_reshaped, num_neurons, num_bins, num_trials);
+data_tensor = tensor(data_zscored);
+
+% Cross-Validation with HOSVD
+
+K = 5;  % Number of folds
+num_trials = size(data_zscored, 3);
+c = cvpartition(num_trials, 'KFold', K);
+
+candidate_ranks_neurons = 1:10;
+candidate_ranks_bins = 1:3;
+candidate_ranks_trials = 1:3;
+
+num_ranks_neurons = length(candidate_ranks_neurons);
+num_ranks_bins = length(candidate_ranks_bins);
+num_ranks_trials = length(candidate_ranks_trials);
+cv_errors_hosvd = zeros(num_ranks_neurons, num_ranks_bins, num_ranks_trials, K);
+
+for idx_r1 = 1:num_ranks_neurons
+    r1 = candidate_ranks_neurons(idx_r1);
+    for idx_r2 = 1:num_ranks_bins
+        r2 = candidate_ranks_bins(idx_r2);
+        for idx_r3 = 1:num_ranks_trials
+            r3 = candidate_ranks_trials(idx_r3);
+            fprintf('Testing ranks [%d %d %d]...\n', r1, r2, r3);
+            for ifold = 1:K
+                fprintf('  Fold %d/%d\n', ifold, K);
+
+                % Split data into training and validation sets
+                test_idx = c.test(ifold);
+                train_idx = c.training(ifold);
+
+                % data_train = data_tensor(:, :, train_idx);
+                data_train = tensor(data_zscored(:, :, train_idx));
+
+                % data_test = data_tensor(:, :, test_idx);
+                data_test = tensor(data_zscored(:, :, test_idx));
+
+                % Perform HOSVD on training data
+                [U1_full, ~, ~] = svd(double(tenmat(data_train, 1)), 'econ');
+                [U2_full, ~, ~] = svd(double(tenmat(data_train, 2)), 'econ');
+                [U3_full, ~, ~] = svd(double(tenmat(data_train, 3)), 'econ');
+
+                % Truncate factor matrices
+                U1_r = U1_full(:, 1:r1);
+                U2_r = U2_full(:, 1:r2);
+                U3_r = U3_full(:, 1:r3);
+
+                % Compute core tensor for training data
+                core_train = ttm(data_train, {U1_r', U2_r', U3_r'}, [1, 2, 3]);
+
+                % Initialize reconstruction error for this fold
+                num_test_trials = sum(test_idx);
+                reconstruction_error = zeros(num_test_trials, 1);
+
+                % Process each validation trial individually
+                for t = 1:num_test_trials
+                    % Extract the t-th validation trial
+                    X_t = data_test(:, :, t);
+
+                    % Project X_t onto U1_r and U2_r
+                    Z_t = ttm(tensor(X_t), {U1_r', U2_r'}, [1, 2]);
+
+                    % Reconstruct X_t
+                    X_t_hat = ttm(Z_t, {U1_r, U2_r}, [1, 2]);
+
+                    % Compute reconstruction error for trial t
+                    error_t = norm(X_t - X_t_hat)^2 / norm(X_t)^2;
+                    reconstruction_error(t) = error_t;
+                end
+
+                % Average reconstruction error over validation trials
+                error = mean(reconstruction_error);
+                cv_errors_hosvd(idx_r1, idx_r2, idx_r3, ifold) = error;
+            end
+        end
+    end
+end
+
+% Aggregate and select optimal ranks
+mean_cv_errors_hosvd = mean(cv_errors_hosvd, 4);
+[min_error, min_idx] = min(mean_cv_errors_hosvd(:));
+[idx_r1_best, idx_r2_best, idx_r3_best] = ind2sub(size(mean_cv_errors_hosvd), min_idx);
+optimalRank = [candidate_ranks_neurons(idx_r1_best), candidate_ranks_bins(idx_r2_best), candidate_ranks_trials(idx_r3_best)];
+fprintf('Optimal ranks: [%d %d %d]\n', optimalRank);
+
+% Plotting mean CV errors
+fixed_r3_idx = idx_r3_best;
+errors_fixed_r3 = squeeze(mean_cv_errors_hosvd(:, :, fixed_r3_idx));
+
+figure;
+imagesc(candidate_ranks_bins, candidate_ranks_neurons, errors_fixed_r3);
+colorbar;
+xlabel('Rank r2 (Spatial Bins)');
+ylabel('Rank r1 (Neurons)');
+title(['Mean CV Error (Fixed r3 = ', num2str(candidate_ranks_trials(fixed_r3_idx)), ')']);
+
+% Fit Final Model and Plot Factors
+
+% Perform HOSVD on full data
+[U1_full, ~, ~] = svd(double(tenmat(data_tensor, 1)), 'econ');
+[U2_full, ~, ~] = svd(double(tenmat(data_tensor, 2)), 'econ');
+[U3_full, ~, ~] = svd(double(tenmat(data_tensor, 3)), 'econ');
+
+% Truncate factor matrices
+r1 = optimalRank(1);
+r2 = optimalRank(2);
+r3 = optimalRank(3);
+
+U1_opt = U1_full(:, 1:r1);
+U2_opt = U2_full(:, 1:r2);
+U3_opt = U3_full(:, 1:r3);
+
+% Compute core tensor
+core_opt = ttm(data_tensor, {U1_opt', U2_opt', U3_opt'}, [1, 2, 3]);
+
+% Plot Neuron Factors
+figure;
+tiledlayout(r1, 1);
+for i = 1:r1
+    nexttile;
+    bar(U1_opt(:, i));
+    title(['Neuron Factor ', num2str(i)]);
+    xlabel('Neuron #');
+    ylabel('Loading');
+    axis tight;
+end
+
+% Plot Spatial Bin Factors
+figure;
+tiledlayout(r2, 1);
+for i = 1:r2
+    nexttile;
+    plot(U2_opt(:, i));
+    title(['Spatial Bin Factor ', num2str(i)]);
+    xlabel('Spatial Bin #');
+    ylabel('Loading');
+    axis tight;
+end
+
+% Plot Trial Factors
+figure;
+tiledlayout(r3, 1);
+for i = 1:r3
+    nexttile;
+    plot(U3_opt(:, i));
+    title(['Trial Factor ', num2str(i)]);
+    xlabel('Trial #');
+    ylabel('Loading');
+    axis tight;
+end
+
 %% NMF on licks and velocity
 
 
@@ -417,16 +711,16 @@ data_matrix_nonneg = max(spatial_binned_velocities, 0)';
 maxNumComponents = 5;
 reconstruction_errors = zeros(maxNumComponents, 1);
 
-for k = 1:maxNumComponents
-    fprintf('Testing %d components...\n', k);
-    [W, H] = nnmf(data_matrix_nonneg, k, 'algorithm', 'mult');
+for ifold = 1:maxNumComponents
+    fprintf('Testing %d components...\n', ifold);
+    [W, H] = nnmf(data_matrix_nonneg, ifold, 'algorithm', 'mult');
     
     % Reconstruct data
     data_reconstructed = W * H;
     
     % Compute reconstruction error
     error = norm(data_matrix_nonneg - data_reconstructed, 'fro')^2 / norm(data_matrix_nonneg, 'fro')^2;
-    reconstruction_errors(k) = error;
+    reconstruction_errors(ifold) = error;
 end
 
 % Plot reconstruction error vs. number of components
