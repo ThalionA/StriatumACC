@@ -406,3 +406,56 @@ xlabel(t, 'trial #')
 
 tucker_model = tucker_als(data, [10, 5, 4]);
 
+%% NMF on licks and velocity
+
+
+% Ensure data is non-negative
+data_matrix_nonneg = max(spatial_binned_velocities, 0)';
+
+% Choose a range of components to test
+maxNumComponents = 5;
+reconstruction_errors = zeros(maxNumComponents, 1);
+
+for k = 1:maxNumComponents
+    fprintf('Testing %d components...\n', k);
+    [W, H] = nnmf(data_matrix_nonneg, k, 'algorithm', 'mult');
+    
+    % Reconstruct data
+    data_reconstructed = W * H;
+    
+    % Compute reconstruction error
+    error = norm(data_matrix_nonneg - data_reconstructed, 'fro')^2 / norm(data_matrix_nonneg, 'fro')^2;
+    reconstruction_errors(k) = error;
+end
+
+% Plot reconstruction error vs. number of components
+figure;
+plot(1:maxNumComponents, reconstruction_errors, 'o-');
+xlabel('Number of Components');
+ylabel('Normalized Reconstruction Error');
+title('NMF Reconstruction Error');
+grid on;
+
+figure
+t = tiledlayout(maxNumComponents, 1);
+for iFactor = 1:maxNumComponents
+    nexttile
+    plot(W(:, iFactor))
+    xline(reward_zone_start_bins)
+    axis tight
+    linkaxes
+end
+xlabel(t, 'spatial bin')
+title(t, 'lick factors - positions')
+
+figure
+t = tiledlayout(maxNumComponents, 1);
+for iFactor = 1:maxNumComponents
+    nexttile
+    scatter(1:n_trials-1, H(iFactor, :))
+    xline(change_point_mean)
+    linkaxes
+    axis tight
+end
+xlabel(t, 'trial #')
+title(t, 'lick factors - trials')
