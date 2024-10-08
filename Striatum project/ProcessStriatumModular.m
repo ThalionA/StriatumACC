@@ -58,6 +58,10 @@ for ianimal = 1:n_animals
 
     % Separate dark and corridor periods
     [darkData, corridorData] = separate_dark_and_corridor_periods(trialData, binned_spikes_trials, npx_times_trials);
+    trial_lick_positions = cellfun(@(x, y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
+    
+    trial_lick_precisions = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
+    figure; subplot(2, 1, 1); plot(trial_lick_precisions); subplot(2, 1, 2); plot(trial_metrics.trial_lick_no)
 
     % Perform spatial binning
     spatial_binned_data = spatial_binning(corridorData, bin_edges, num_bins);
@@ -66,15 +70,13 @@ for ianimal = 1:n_animals
     temp_bin_edges = 1:temporal_bin_duration:5001;
     num_temp_bins = numel(temp_bin_edges) - 1;
 
-    
-
     n_units = size(darkData.binned_spikes{1}, 1);
 
     temp_binned_dark_spikes = nan(n_units, num_temp_bins, trialData.n_trials-1);
 
     for itrial = 1:trialData.n_trials
         [~, ~, bin_idx] = histcounts(1:length(darkData.binned_spikes{itrial}), temp_bin_edges);
-        for ibin = 1:num_bins
+        for ibin = 1:num_temp_bins
             idx_in_bin = (bin_idx == ibin);
             if any(idx_in_bin)
                 % Compute total licks
@@ -89,11 +91,18 @@ for ianimal = 1:n_animals
     spatial_binned_fr_all = cat(3, spatial_binned_data.firing_rates{:});
     spatial_binned_fr_all = spatial_binned_fr_all(:, :, 1:trialData.n_trials-1);
 
+    z_spatial_binned_fr_all = zscore(spatial_binned_fr_all, [], [2, 3]);
+
     % Run TCA with cross-validation
     xlines_to_plot = [sum(is_dms), reward_zone_start_bins, change_point_mean];
     % tca_with_cv(spatial_binned_fr_all, 'cp_orth_als', 'z-score', 5, 8, 100, xlines_to_plot);
 
-    plot_striatum_pca(spatial_binned_fr_all, 3, change_point_mean, temp_binned_dark_fr)
+    % plot_striatum_pca(spatial_binned_fr_all, 3, change_point_mean, temp_binned_dark_fr)
+
+    spatial_binned_fr_reshaped = spatial_binned_fr_all(:, :);
+    [~, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", 3, "Centered", true);
+    score_reshaped = permute(reshape(score, [num_bins, trialData.n_trials-1, 3]), [3, 1, 2]);
+    % trial_population_variances = estimate_trialwise_variance(score_reshaped, change_point_mean);
 
     fprintf('Done with animal %d\n', ianimal);
 end
