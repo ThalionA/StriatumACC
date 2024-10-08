@@ -62,11 +62,12 @@ for ianimal = 1:n_animals
     
     trial_lick_precisions = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
     trial_lick_precisions = trial_lick_precisions/max(trial_lick_precisions);
+    trial_lick_fractions = cellfun(@(x) sum((x > reward_zone_start_au - 20) & x < reward_zone_start_au + 25)/sum(x>0), trial_lick_positions); 
     figure
     subplot(2, 1, 1)
-    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_precisions, 5), movstd(trial_lick_precisions, 5)/std(5))
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, 5, 'omitmissing'), movstd(trial_lick_fractions, 5, [], 1, 'omitmissing')/std(5))
     xline(change_point_mean)
-    ylabel('norm lick error')
+    ylabel('precise lick fraction')
     subplot(2, 1, 2)
     shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, 5), movstd(trial_metrics.trial_lick_no, 5)/std(5))
     ylabel('lick no')
