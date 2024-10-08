@@ -1,0 +1,151 @@
+function plot_striatum_pca(data, num_components, change_point_mean, dark_data)
+
+if nargin < 2
+    num_components = 3;
+end
+
+[~, num_bins, n_trials] = size(data);
+
+spatial_binned_fr_reshaped = data(:, :);
+
+[coeff, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", num_components);
+
+figure
+plot(cumsum(explained))
+ylabel('explained variance (%)')
+xlabel('component #')
+
+score_reshaped = reshape(score, [num_bins, n_trials, num_components]);
+
+mean_score_early = squeeze(mean(score_reshaped(:, 1:3, :), 2));
+mean_score_engaged = squeeze(mean(score_reshaped(:, 4:change_point_mean, :), 2));
+mean_score_disengaged = squeeze(mean(score_reshaped(:, change_point_mean+1:end, :), 2));
+
+saturation = linspace(0.1, 1, num_bins)';  % Saturation from 0.1 to 1
+
+% Define base hues for each condition (H values in HSV)
+H_early = 0.6667;     % Green
+H_engaged = 0.3333;   % Blue
+H_disengaged = 0;     % Red
+
+% Create HSV color arrays for each condition
+HSV_early = [H_early * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_early = hsv2rgb(HSV_early);
+
+HSV_engaged = [H_engaged * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_engaged = hsv2rgb(HSV_engaged);
+
+HSV_disengaged = [H_disengaged * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_disengaged = hsv2rgb(HSV_disengaged);
+
+
+figure
+hold on
+
+if num_components == 3
+
+    if nargin > 3
+        subplot(1, 2, 1)
+    end
+
+    % Plot early condition
+    x = mean_score_early(:,1);
+    y = mean_score_early(:,2);
+    z = mean_score_early(:,3);
+    for ii = 1:length(x)-1
+        line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+            'Color', colors_early(ii,:), 'LineWidth', 2);
+    end
+
+    % Plot engaged condition
+    x = mean_score_engaged(:,1);
+    y = mean_score_engaged(:,2);
+    z = mean_score_engaged(:,3);
+    for ii = 1:length(x)-1
+        line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+            'Color', colors_engaged(ii,:), 'LineWidth', 2);
+    end
+
+    % Plot disengaged condition
+    x = mean_score_disengaged(:,1);
+    y = mean_score_disengaged(:,2);
+    z = mean_score_disengaged(:,3);
+    for ii = 1:length(x)-1
+        line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+            'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+    end
+    hold off
+
+    if nargin > 3
+        subplot(1, 2, 2)
+
+        hold on
+        dark_nbins = size(dark_data, 2);
+        dark_data_resh = dark_data(:, :);
+
+        dark_scores = dark_data_resh'*coeff;
+        dark_scores_resh = reshape(dark_scores, [dark_nbins, n_trials, num_components]);
+
+        mean_dark_score_early = squeeze(mean(dark_scores_resh(:, 1:3, :), 2));
+        mean_dark_score_engaged = squeeze(mean(dark_scores_resh(:, 4:change_point_mean, :), 2));
+        mean_dark_score_disengaged = squeeze(mean(dark_scores_resh(:, change_point_mean+1:end, :), 2));
+
+        % Plot early condition
+        x = mean_dark_score_early(:,1);
+        y = mean_dark_score_early(:,2);
+        z = mean_dark_score_early(:,3);
+        for ii = 1:length(x)-1
+            line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+                'Color', colors_early(ii,:), 'LineWidth', 2);
+        end
+
+        % Plot engaged condition
+        x = mean_dark_score_engaged(:,1);
+        y = mean_dark_score_engaged(:,2);
+        z = mean_dark_score_engaged(:,3);
+        for ii = 1:length(x)-1
+            line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+                'Color', colors_engaged(ii,:), 'LineWidth', 2);
+        end
+
+        % Plot disengaged condition
+        x = mean_dark_score_disengaged(:,1);
+        y = mean_dark_score_disengaged(:,2);
+        z = mean_dark_score_disengaged(:,3);
+        for ii = 1:length(x)-1
+            line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+                'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+        end
+        hold off
+        linkaxes
+
+    end
+
+elseif num_components == 2
+    % Plot early condition
+    x = mean_score_early(:,1);
+    y = mean_score_early(:,2);
+    for ii = 1:length(x)-1
+        line([x(ii), x(ii+1)], [y(ii), y(ii+1)], ...
+            'Color', colors_early(ii,:), 'LineWidth', 2);
+    end
+
+    % Plot engaged condition
+    x = mean_score_engaged(:,1);
+    y = mean_score_engaged(:,2);
+    for ii = 1:length(x)-1
+        line([x(ii), x(ii+1)], [y(ii), y(ii+1)], ...
+            'Color', colors_engaged(ii,:), 'LineWidth', 2);
+    end
+
+    % Plot disengaged condition
+    x = mean_score_disengaged(:,1);
+    y = mean_score_disengaged(:,2);
+    for ii = 1:length(x)-1
+        line([x(ii), x(ii+1)], [y(ii), y(ii+1)], ...
+            'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+    end
+    hold off
+end
+
+title(sprintf('explained variance = %.2f%', cumsum(explained(1:num_components))))
