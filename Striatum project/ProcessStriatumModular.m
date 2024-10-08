@@ -61,7 +61,16 @@ for ianimal = 1:n_animals
     trial_lick_positions = cellfun(@(x, y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
     
     trial_lick_precisions = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
-    figure; subplot(2, 1, 1); plot(trial_lick_precisions); subplot(2, 1, 2); plot(trial_metrics.trial_lick_no)
+    trial_lick_precisions = trial_lick_precisions/max(trial_lick_precisions);
+    figure
+    subplot(2, 1, 1)
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_precisions, 5), movstd(trial_lick_precisions, 5)/std(5))
+    xline(change_point_mean)
+    ylabel('norm lick error')
+    subplot(2, 1, 2)
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, 5), movstd(trial_metrics.trial_lick_no, 5)/std(5))
+    ylabel('lick no')
+    xline(change_point_mean)
 
     % Perform spatial binning
     spatial_binned_data = spatial_binning(corridorData, bin_edges, num_bins);
