@@ -8,12 +8,12 @@ end
 
 spatial_binned_fr_reshaped = data(:, :);
 
-[coeff, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", num_components);
+[coeff, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", num_components, "Centered", true);
 
-figure
-plot(cumsum(explained))
-ylabel('explained variance (%)')
-xlabel('component #')
+% figure
+% plot(cumsum(explained))
+% ylabel('explained variance (%)')
+% xlabel('component #')
 
 score_reshaped = reshape(score, [num_bins, n_trials, num_components]);
 
@@ -45,7 +45,7 @@ hold on
 if num_components == 3
 
     if nargin > 3
-        subplot(1, 2, 1)
+        ax1 = subplot(1, 2, 1);
     end
 
     % Plot early condition
@@ -75,9 +75,14 @@ if num_components == 3
             'Color', colors_disengaged(ii,:), 'LineWidth', 2);
     end
     hold off
+    rotate3d on
+    view(-25, 45)
+    xlabel('PC1')
+    ylabel('PC2')
+    ylabel('PC3')
 
     if nargin > 3
-        subplot(1, 2, 2)
+        ax2 = subplot(1, 2, 2);
 
         hold on
         dark_nbins = size(dark_data, 2);
@@ -117,8 +122,15 @@ if num_components == 3
                 'Color', colors_disengaged(ii,:), 'LineWidth', 2);
         end
         hold off
-        linkaxes
+        rotate3d on
 
+        view(-25, 45)
+
+        xlabel('PC1')
+        ylabel('PC2')
+        ylabel('PC3')
+
+        linkaxes
     end
 
 elseif num_components == 2
