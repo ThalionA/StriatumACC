@@ -2,3 +2,5 @@
 *.asv
 *.mat
 .DS_Store
+*.pptx
+*.png
