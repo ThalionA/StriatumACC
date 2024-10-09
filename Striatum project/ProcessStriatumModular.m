@@ -107,7 +107,7 @@ for ianimal = 1:n_animals
 
     % Run TCA with cross-validation
     xlines_to_plot = [sum(is_dms), reward_zone_start_bins, change_point_mean];
-    tca_with_cv(spatial_binned_fr_all, 'cp_nmu', 'none', 5, 10, 100, xlines_to_plot);
+    % tca_with_cv(spatial_binned_fr_all, 'cp_nmu', 'none', 5, 10, 100, xlines_to_plot);
 
     % plot_striatum_pca(spatial_binned_fr_all, 3, change_point_mean, temp_binned_dark_fr)
 
@@ -116,5 +116,35 @@ for ianimal = 1:n_animals
     score_reshaped = permute(reshape(score, [num_bins, trialData.n_trials-1, 3]), [3, 1, 2]);
     % trial_population_variances = estimate_trialwise_variance(score_reshaped, change_point_mean);
 
+
+    % Cross area pairwise correlations
+    DMS_data = spatial_binned_fr_all(is_dms, :, :);
+    ACC_data = spatial_binned_fr_all(is_acc, :, :);
+    n_neurons_DMS = sum(is_dms);
+    n_neurons_ACC = sum(is_acc);
+    
+    all_cross_area_correlations = nan(trialData.n_trials-1, n_neurons_DMS, n_neurons_ACC);
+    for itrial = 1:trialData.n_trials-1
+        % Get trial data
+        DMS_trial = squeeze(DMS_data(:, :, itrial)); % [n_neurons_DMS x n_spatial_bins]
+        ACC_trial = squeeze(ACC_data(:, :, itrial)); % [n_neurons_ACC x n_spatial_bins]
+    
+        % Compute mean firing rates
+        for iNeuron_DMS = 1:n_neurons_DMS
+            for iNeuron_ACC = 1:n_neurons_ACC
+                all_cross_area_correlations(itrial, iNeuron_DMS, iNeuron_ACC) = corr(DMS_trial(iNeuron_DMS, :)', ACC_trial(iNeuron_ACC, :)');
+            end
+        end
+        
+    end
+    mean_cross_area_corr = squeeze(mean(all_cross_area_correlations, [2, 3], 'omitmissing'));
+
+    figure
+    scatter(mean_cross_area_corr, trial_lick_fractions(1:end-1))
+    xlabel('cross-area correlation')
+    ylabel('precise lick fraction')
+    lsline
+
     fprintf('Done with animal %d\n', ianimal);
+
 end
