@@ -54,22 +54,32 @@ function tca_with_cv(data, tca_type, normalisation_to_apply, cross_validation_fo
     
             data_train = tensor(data_in(:, :, train_idx));
             data_test = tensor(data_in(:, :, test_idx));
-    
-            % Choose TCA method based on input
-            switch lower(tca_type)
-                case 'cp_als'
-                    P = cp_als(data_train, nFactors, options);
-                case 'cp_nmu'
-                    P = cp_nmu(data_train, nFactors, options);
-                case 'cp_orth_als'
-                    P = cp_orth_als(data_train, nFactors, options);
-                otherwise
-                    error('Unknown TCA method');
+
+            min_error = Inf;
+            num_initializations = 5; % Number of times to fit the model per fold
+            for init = 1:num_initializations
+
+                % Choose TCA method based on input
+                switch lower(tca_type)
+                    case 'cp_als'
+                        P = cp_als(data_train, nFactors, options);
+                    case 'cp_nmu'
+                        P = cp_nmu(data_train, nFactors, options);
+                    case 'cp_orth_als'
+                        P = cp_orth_als(data_train, nFactors, options);
+                    otherwise
+                        error('Unknown TCA method');
+                end
+                train_error = norm(data_train - tensor(P))^2 / norm(data_train)^2;
+                if train_error < min_error
+                    min_error = train_error;
+                    best_P = P;
+                end
             end
     
             % Extract factor matrices
-            A = P.U{1};  % Neurons factors
-            B = P.U{2};  % Spatial bins factors
+            A = best_P.U{1};  % Neurons factors
+            B = best_P.U{2};  % Spatial bins factors
     
             % Fit trial factors for validation data
             data_test_unfold = tenmat(data_test, 3);  % Unfold along trials
@@ -120,15 +130,26 @@ function tca_with_cv(data, tca_type, normalisation_to_apply, cross_validation_fo
     [~, best_nFactors] = min(mean_cv_errors(2:end));
     best_nFactors = best_nFactors + 1;
     
-    % Fit the final model using the best number of factors
-    switch lower(tca_type)
-        case 'cp_als'
-            best_mdl = cp_als(tensor(data_in), best_nFactors, options);
-        case 'cp_nmu'
-            best_mdl = cp_nmu(tensor(data_in), best_nFactors, options);
-        case 'cp_orth_als'
-            best_mdl = cp_orth_als(tensor(data_in), best_nFactors, options);
+    num_initializations = 10; % Number of times to fit the final model
+    best_error = Inf;
+    for init = 1:num_initializations
+            % Fit the final model using the best number of factors
+            switch lower(tca_type)
+                case 'cp_als'
+                    P = cp_als(tensor(data_in), best_nFactors, options);
+                case 'cp_nmu'
+                    P = cp_nmu(tensor(data_in), best_nFactors, options);
+                case 'cp_orth_als'
+                    P = cp_orth_als(tensor(data_in), best_nFactors, options);
+            end
+        total_error = norm(tensor(data_in) - tensor(P))^2 / norm(tensor(data_in))^2;
+        if total_error < best_error
+            best_error = total_error;
+            best_mdl = P;
+        end
     end
+
+
 
     % Compute variance explained by each component and reorder
     component_contributions = zeros(best_nFactors, 1);
@@ -178,6 +199,7 @@ function tca_with_cv(data, tca_type, normalisation_to_apply, cross_validation_fo
         linkaxes
     end
     xlabel(t, 'Neuron #');
+    title(t, tca_type)
     
     % Plot spatial factors
     figure
@@ -195,6 +217,7 @@ function tca_with_cv(data, tca_type, normalisation_to_apply, cross_validation_fo
         linkaxes
     end
     xlabel(t, 'Spatial Bin');
+    title(t, tca_type)
     
     % Plot trial factors
     figure
@@ -213,4 +236,6 @@ function tca_with_cv(data, tca_type, normalisation_to_apply, cross_validation_fo
         linkaxes
     end
     xlabel(t, 'Trial #')
+    title(t, tca_type)
+    
 end
