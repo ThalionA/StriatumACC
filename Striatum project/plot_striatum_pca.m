@@ -9,11 +9,17 @@ end
 spatial_binned_fr_reshaped = data(:, :);
 
 [coeff, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", num_components, "Centered", true);
-
-% figure
-% plot(cumsum(explained))
-% ylabel('explained variance (%)')
-% xlabel('component #')
+cumsum_explained = cumsum(explained);
+figure
+plot(cumsum_explained)
+ylabel('explained variance (%)')
+xlabel('component #')
+hold on
+idx_90 = find(cumsum_explained >= 90, 1);
+% Add a vertical dotted line from (idx_90, 0) to (idx_90, cumsum_explained(idx_90))
+plot([idx_90, idx_90], [0, cumsum_explained(idx_90)], '--', 'Color', [0.6 0.6 0.6]);
+% Add a horizontal dotted line from (0, 90) to (idx_90, 90)
+plot([0, idx_90], [90, 90], '--', 'Color', [0.6 0.6 0.6]);
 
 score_reshaped = reshape(score, [num_bins, n_trials, num_components]);
 
@@ -79,7 +85,7 @@ if num_components == 3
     view(-25, 45)
     xlabel('PC1')
     ylabel('PC2')
-    ylabel('PC3')
+    zlabel('PC3')
 
     if nargin > 3
         ax2 = subplot(1, 2, 2);
@@ -128,7 +134,7 @@ if num_components == 3
 
         xlabel('PC1')
         ylabel('PC2')
-        ylabel('PC3')
+        zlabel('PC3')
 
         linkaxes
     end
