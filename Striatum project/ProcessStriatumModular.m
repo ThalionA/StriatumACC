@@ -60,27 +60,29 @@ for ianimal = 1:n_animals
     [darkData, corridorData] = separate_dark_and_corridor_periods(trialData, binned_spikes_trials, npx_times_trials);
     trial_lick_positions = cellfun(@(x, y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
     
+    % Calculate lick performance
     trial_lick_precisions = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
     trial_lick_precisions = trial_lick_precisions/max(trial_lick_precisions);
     trial_lick_fractions = cellfun(@(x) sum((x > reward_zone_start_au - 20) & x < reward_zone_start_au + 25)/sum(x>0), trial_lick_positions); 
-    figure
-    subplot(2, 1, 1)
-    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, 5, 'omitmissing'), movstd(trial_lick_fractions, 5, [], 1, 'omitmissing')/std(5))
-    xline(change_point_mean)
-    ylabel('precise lick fraction')
-    subplot(2, 1, 2)
-    shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, 5), movstd(trial_metrics.trial_lick_no, 5)/std(5))
-    ylabel('lick no')
-    xline(change_point_mean)
+    % figure
+    % subplot(2, 1, 1)
+    % shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, 5, 'omitmissing'), movstd(trial_lick_fractions, 5, [], 1, 'omitmissing')/std(5))
+    % xline(change_point_mean)
+    % ylabel('precise lick fraction')
+    % subplot(2, 1, 2)
+    % shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, 5), movstd(trial_metrics.trial_lick_no, 5)/std(5))
+    % ylabel('lick no')
+    % xline(change_point_mean)
 
     % Perform spatial binning
     spatial_binned_data = spatial_binning(corridorData, bin_edges, num_bins);
 
-    temporal_bin_duration = 100;
+    n_units = size(darkData.binned_spikes{1}, 1);
+
+    % Bin dark data in bins
+    temporal_bin_duration = 100; % in ms
     temp_bin_edges = 1:temporal_bin_duration:5001;
     num_temp_bins = numel(temp_bin_edges) - 1;
-
-    n_units = size(darkData.binned_spikes{1}, 1);
 
     temp_binned_dark_spikes = nan(n_units, num_temp_bins, trialData.n_trials-1);
 
@@ -105,7 +107,7 @@ for ianimal = 1:n_animals
 
     % Run TCA with cross-validation
     xlines_to_plot = [sum(is_dms), reward_zone_start_bins, change_point_mean];
-    % tca_with_cv(spatial_binned_fr_all, 'cp_orth_als', 'z-score', 5, 8, 100, xlines_to_plot);
+    tca_with_cv(spatial_binned_fr_all, 'cp_nmu', 'none', 5, 10, 100, xlines_to_plot);
 
     % plot_striatum_pca(spatial_binned_fr_all, 3, change_point_mean, temp_binned_dark_fr)
 
