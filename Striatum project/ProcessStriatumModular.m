@@ -41,15 +41,19 @@ for ianimal = 1:n_animals
 
     % Compute firing rates for DMS and ACC
     is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
+    is_dls = strcmp(all_data(ianimal).final_areas, 'DLS');
     is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
 
     final_spikes_dms = all_data(ianimal).final_spikes(is_dms, :);
+    final_spikes_dls = all_data(ianimal).final_spikes(is_dls, :);
     final_spikes_acc = all_data(ianimal).final_spikes(is_acc, :);
 
     binned_spikes_trials_dms = arrayfun(@(s,e) final_spikes_dms(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+    binned_spikes_trials_dls = arrayfun(@(s,e) final_spikes_dls(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
     binned_spikes_trials_acc = arrayfun(@(s,e) final_spikes_acc(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
 
     [trial_average_fr_dms, trial_sem_fr_dms] = compute_firing_rates(binned_spikes_trials_dms, trialData.trialDurations_vr);
+    [trial_average_fr_dls, trial_sem_fr_dls] = compute_firing_rates(binned_spikes_trials_dls, trialData.trialDurations_vr);
     [trial_average_fr_acc, trial_sem_fr_acc] = compute_firing_rates(binned_spikes_trials_acc, trialData.trialDurations_vr);
 
     % Find change points
@@ -61,18 +65,21 @@ for ianimal = 1:n_animals
     trial_lick_positions = cellfun(@(x, y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
     
     % Calculate lick performance
-    trial_lick_precisions = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
-    trial_lick_precisions = trial_lick_precisions/max(trial_lick_precisions);
-    trial_lick_fractions = cellfun(@(x) sum((x > reward_zone_start_au - 20) & x < reward_zone_start_au + 25)/sum(x>0), trial_lick_positions); 
-    % figure
-    % subplot(2, 1, 1)
-    % shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, 5, 'omitmissing'), movstd(trial_lick_fractions, 5, [], 1, 'omitmissing')/std(5))
-    % xline(change_point_mean)
-    % ylabel('precise lick fraction')
-    % subplot(2, 1, 2)
-    % shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, 5), movstd(trial_metrics.trial_lick_no, 5)/std(5))
-    % ylabel('lick no')
-    % xline(change_point_mean)
+    trial_lick_errors = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
+    trial_lick_fractions = cellfun(@(x) (sum((x > reward_zone_start_au - 20) & x < reward_zone_start_au) + 1)/(sum(x > 0 & x < reward_zone_start_au)+1), trial_lick_positions); 
+    figure
+    subplot(3, 1, 1)
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, mov_window_size, 'omitmissing'), movstd(trial_lick_fractions, 5, [], 2, 'omitmissing')/sqrt(mov_window_size))
+    xline(change_point_mean)
+    ylabel('precise lick fraction')
+    subplot(3, 1, 2)
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_errors, mov_window_size, 'omitmissing'), movstd(trial_lick_errors, 5, [], 2, 'omitmissing')/sqrt(mov_window_size))
+    xline(change_point_mean)
+    ylabel('lick error')
+    subplot(3, 1, 3)
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, mov_window_size), movstd(trial_metrics.trial_lick_no, 5)/sqrt(mov_window_size))
+    ylabel('lick no')
+    xline(change_point_mean)
 
     % Perform spatial binning
     spatial_binned_data = spatial_binning(corridorData, bin_edges, num_bins);
@@ -119,30 +126,51 @@ for ianimal = 1:n_animals
 
     % Cross area pairwise correlations
     DMS_data = spatial_binned_fr_all(is_dms, :, :);
+    DLS_data = spatial_binned_fr_all(is_dls, :, :);
     ACC_data = spatial_binned_fr_all(is_acc, :, :);
     n_neurons_DMS = sum(is_dms);
+    n_neurons_DLS = sum(is_dls);
     n_neurons_ACC = sum(is_acc);
     
-    all_cross_area_correlations = nan(trialData.n_trials-1, n_neurons_DMS, n_neurons_ACC);
+    all_cross_area_correlations_DMSACC = nan(trialData.n_trials-1, n_neurons_DMS, n_neurons_ACC);
+    all_cross_area_correlations_DMSDLS = nan(trialData.n_trials-1, n_neurons_DMS, n_neurons_DLS);
+
     for itrial = 1:trialData.n_trials-1
         % Get trial data
         DMS_trial = squeeze(DMS_data(:, :, itrial)); % [n_neurons_DMS x n_spatial_bins]
+        DLS_trial = squeeze(DLS_data(:, :, itrial)); % [n_neurons_DMS x n_spatial_bins]
         ACC_trial = squeeze(ACC_data(:, :, itrial)); % [n_neurons_ACC x n_spatial_bins]
     
         % Compute mean firing rates
         for iNeuron_DMS = 1:n_neurons_DMS
             for iNeuron_ACC = 1:n_neurons_ACC
-                all_cross_area_correlations(itrial, iNeuron_DMS, iNeuron_ACC) = corr(DMS_trial(iNeuron_DMS, :)', ACC_trial(iNeuron_ACC, :)');
+                all_cross_area_correlations_DMSACC(itrial, iNeuron_DMS, iNeuron_ACC) = corr(DMS_trial(iNeuron_DMS, :)', ACC_trial(iNeuron_ACC, :)');
             end
+
+            for iNeuronDLS = 1:n_neurons_DLS
+                all_cross_area_correlations_DMSDLS(itrial, iNeuron_DMS, iNeuronDLS) = corr(DMS_trial(iNeuron_DMS, :)', DLS_trial(iNeuronDLS, :)');
+            end
+
         end
         
     end
-    mean_cross_area_corr = squeeze(mean(all_cross_area_correlations, [2, 3], 'omitmissing'));
+    mean_cross_area_corr_DMSACC = squeeze(mean(all_cross_area_correlations_DMSACC, [2, 3], 'omitmissing'));
+    mean_cross_area_corr_DMSDLS = squeeze(mean(all_cross_area_correlations_DMSDLS, [2, 3], 'omitmissing'));
 
     figure
-    scatter(mean_cross_area_corr, trial_lick_fractions(1:end-1))
+    subplot(1, 2, 1)
+    scatter(mean_cross_area_corr_DMSDLS, trial_lick_fractions(1:end-1))
     xlabel('cross-area correlation')
     ylabel('precise lick fraction')
+    title('DMS-DLS')
+    axis tight
+    lsline
+    subplot(1, 2, 2)
+    scatter(mean_cross_area_corr_DMSACC, trial_lick_fractions(1:end-1))
+    xlabel('cross-area correlation')
+    ylabel('precise lick fraction')
+    title('DMS-ACC')
+    axis tight
     lsline
 
     fprintf('Done with animal %d\n', ianimal);
