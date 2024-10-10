@@ -1,4 +1,4 @@
-all_mouse_ids = [523, 614, 727, 730, 823];
+all_mouse_ids = [523, 614, 624, 727, 730];
 num_mice = numel(all_mouse_ids);
 
 %% import the depth data
@@ -34,6 +34,7 @@ for imouse = 1:num_mice
     depths = NeuropixelsDepthData(NeuropixelsDepthData.MouseID == all_mouse_ids(imouse), :);
 
     unit_areas(goodcluster2(:, 2) >= depths.DMSStart & goodcluster2(:, 2) <= depths.DMSEnd) = {'DMS'};
+    unit_areas(goodcluster2(:, 2) >= depths.DLSStart & goodcluster2(:, 2) <= depths.DLSEnd) = {'DLS'};
     unit_areas(goodcluster2(:, 2) >= depths.ACCStart & goodcluster2(:, 2) <= depths.ACCEnd) = {'ACC'};
 
     units_to_keep = cellfun(@(x) ~isempty(x), unit_areas);
@@ -68,54 +69,52 @@ for imouse = 1:num_mice
     % Simple processing for average firing rates across entire experiment
     average_firing_rates = sum(final_spikes, 2)/((corrected_vr_time(end)-corrected_vr_time(1))/1000);
     average_DMS_fr = average_firing_rates(strcmp(final_areas, 'DMS'));
+    average_DLS_fr = average_firing_rates(strcmp(final_areas, 'DLS'));
     average_ACC_fr = average_firing_rates(strcmp(final_areas, 'ACC'));
 
     % Simple average lick rate
     average_lick_rate = sum(corrected_licks)/((corrected_vr_time(end)-corrected_vr_time(1))/1000);
 
-    % figure
-    % my_errorbar_plot({average_ACC_fr, average_DMS_fr})
-    % xticklabels({'ACC', 'DMS'})
-    % ylabel('average FR')
-    % [~, pval] = ttest2(average_ACC_fr, average_DMS_fr);
-    % sigstar([1, 2], pval)
-    % save_to_svg(['avg_fr_' num2str(all_mouse_ids(imouse))])
-
     all_data(imouse).avg_fr_all = average_firing_rates;
     all_data(imouse).average_DMS_fr = average_DMS_fr;
+    all_data(imouse).average_DLS_fr = average_DLS_fr;
     all_data(imouse).average_ACC_fr = average_ACC_fr;
     all_data(imouse).average_lick_rate = average_lick_rate;
 
+    fprintf('Done with animal %d\n', imouse)
 end
 
 
 %% 
 
 average_DMS_fr_all = {all_data(:).average_DMS_fr};
+average_DLS_fr_all = {all_data(:).average_DLS_fr};
 average_ACC_fr_all = {all_data(:).average_ACC_fr};
 
 average_lick_rate_all = [all_data(:).average_lick_rate];
 
 median_DMS_fr_animals = cellfun(@median, average_DMS_fr_all);
+median_DLS_fr_animals = cellfun(@median, average_DLS_fr_all);
 median_ACC_fr_animals = cellfun(@median, average_ACC_fr_all);
 
 figure
-my_errorbar_plot([median_ACC_fr_animals', median_DMS_fr_animals'], true)
-xticklabels({'ACC', 'DMS'})
+my_errorbar_plot([median_DMS_fr_animals', median_DLS_fr_animals', median_ACC_fr_animals'], true)
+xticklabels({'DMS', 'DLS', 'ACC'})
 ylabel('average FR')
-[~, pval] = ttest(median_ACC_fr_animals, median_DMS_fr_animals);
-sigstar([1, 2], pval)
+% [~, pval] = ttest(median_ACC_fr_animals, median_DMS_fr_animals);
+% sigstar([1, 2], pval)
 % save_to_svg(['avg_fr_' num2str(all_mouse_ids(imouse))])
 
 all_DMS_frs = cat(1, average_DMS_fr_all{:});
+all_DLS_frs = cat(1, average_DLS_fr_all{:});
 all_ACC_frs = cat(1, average_ACC_fr_all{:});
 
 figure
-my_errorbar_plot({all_ACC_frs, all_DMS_frs})
-xticklabels({'ACC', 'DMS'})
+my_errorbar_plot({all_DMS_frs, all_DLS_frs, all_ACC_frs})
+xticklabels({'DMS', 'DLS', 'ACC'})
 ylabel('average FR')
-[~, pval] = ttest2(all_ACC_frs, all_DMS_frs);
-sigstar([1, 2], pval)
+% [~, pval] = ttest2(all_ACC_frs, all_DMS_frs);
+% sigstar([1, 2], pval)
 
 
 figure
