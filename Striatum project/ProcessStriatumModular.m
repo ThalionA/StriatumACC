@@ -116,7 +116,7 @@ for ianimal = 1:n_animals
     xlines_to_plot = [sum(is_dms), reward_zone_start_bins, change_point_mean];
     % tca_with_cv(spatial_binned_fr_all, 'cp_nmu', 'none', 5, 10, 100, xlines_to_plot);
 
-    % plot_striatum_pca(spatial_binned_fr_all, 3, change_point_mean, temp_binned_dark_fr)
+    plot_striatum_pca(spatial_binned_fr_all, 3, change_point_mean, temp_binned_dark_fr)
 
     spatial_binned_fr_reshaped = spatial_binned_fr_all(:, :);
     [~, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", 3, "Centered", true);
