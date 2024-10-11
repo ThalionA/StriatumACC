@@ -15,7 +15,7 @@ spatial_binned_fr_reshaped = data(:, :);
 [coeff, score, ~, ~, explained, ~] = pca(spatial_binned_fr_reshaped', "NumComponents", num_components, "Centered", true);
 cumsum_explained = cumsum(explained);
 figure
-plot(cumsum_explained)
+plot(cumsum_explained, 'LineWidth', 1)
 ylabel('explained variance (%)')
 xlabel('component #')
 hold on
@@ -24,6 +24,7 @@ idx_90 = find(cumsum_explained >= 90, 1);
 plot([idx_90, idx_90], [0, cumsum_explained(idx_90)], '--', 'Color', [0.6 0.6 0.6]);
 % Add a horizontal dotted line from (0, 90) to (idx_90, 90)
 plot([0, idx_90], [90, 90], '--', 'Color', [0.6 0.6 0.6]);
+axis tight
 
 score_reshaped = reshape(score, [num_bins, n_trials, num_components]);
 
@@ -106,6 +107,7 @@ if num_components == 3
     end
     hold off
     rotate3d on
+    grid on
     view(-25, 45)
     xlabel('PC1')
     ylabel('PC2')
@@ -125,7 +127,7 @@ if num_components == 3
         mean_dark_score_engaged = squeeze(mean(dark_scores_resh(:, 4:change_point_mean-10, :), 2));
         mean_dark_score_expert = squeeze(mean(dark_scores_resh(:, change_point_mean-9:change_point_mean, :), 2));
         if change_point_mean < size(data, 3)
-            mean_dark_score_disengaged = squeeze(mean(dark_scores_resh(:, change_point_mean+1:end, :), 2));
+            mean_dark_score_disengaged = squeeze(mean(dark_scores_resh(:, change_point_mean+1:change_point_mean+50, :), 2));
         end
         
         % Plot early condition
@@ -167,7 +169,7 @@ if num_components == 3
         end
         hold off
         rotate3d on
-
+        grid on
         view(-25, 45)
 
         xlabel('PC1')
@@ -204,4 +206,4 @@ elseif num_components == 2
     hold off
 end
 
-title(sprintf('explained variance = %.2f%', cumsum(explained(1:num_components))))
+title(sprintf('explained variance = %.2f%', cumsum_explained(num_components)))
