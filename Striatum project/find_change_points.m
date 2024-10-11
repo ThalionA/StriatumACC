@@ -5,6 +5,11 @@ function change_point_mean = find_change_points(trialDurations_vr, trial_metrics
     trial_licks_change = find(movmean(trial_metrics.trial_lick_no, 10) < 20, 1);
     trial_success_change = find(movmean(trial_metrics.trial_success, 10) < 0.5, 1);
 
+    if isempty(trial_success_change) && isempty(trial_licks_change)
+        change_point_mean = nan;
+        return
+    end
+
     [~, loc1] = min(abs(duration_peaks - trial_licks_change));
     [~, loc2] = min(abs(duration_peaks - trial_success_change));
     most_likely_change_duration = mean([duration_peaks(loc1), duration_peaks(loc2)]);
