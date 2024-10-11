@@ -4,6 +4,10 @@ if nargin < 2
     num_components = 3;
 end
 
+if isnan(change_point_mean)
+    change_point_mean = size(data, 3);
+end
+
 [~, num_bins, n_trials] = size(data);
 
 spatial_binned_fr_reshaped = data(:, :);
@@ -24,15 +28,19 @@ plot([0, idx_90], [90, 90], '--', 'Color', [0.6 0.6 0.6]);
 score_reshaped = reshape(score, [num_bins, n_trials, num_components]);
 
 mean_score_early = squeeze(mean(score_reshaped(:, 1:3, :), 2));
-mean_score_engaged = squeeze(mean(score_reshaped(:, 4:change_point_mean, :), 2));
-mean_score_disengaged = squeeze(mean(score_reshaped(:, change_point_mean+1:end, :), 2));
+mean_score_engaged = squeeze(mean(score_reshaped(:, 4:change_point_mean-10, :), 2));
+mean_score_expert = squeeze(mean(score_reshaped(:, change_point_mean-9:change_point_mean, :), 2));
+if change_point_mean < size(data, 3)
+    mean_score_disengaged = squeeze(mean(score_reshaped(:, change_point_mean+1:change_point_mean + 50, :), 2));
+end
 
 saturation = linspace(0.1, 1, num_bins)';  % Saturation from 0.1 to 1
 
 % Define base hues for each condition (H values in HSV)
-H_early = 0.6667;     % Green
-H_engaged = 0.3333;   % Blue
-H_disengaged = 0;     % Red
+H_early = 0.6667;    % Blue
+H_engaged = 0.1667;  % Yellow
+H_expert = 0.333;    % Green
+H_disengaged = 0;    % Red
 
 % Create HSV color arrays for each condition
 HSV_early = [H_early * ones(num_bins,1), saturation, ones(num_bins,1)];
@@ -40,6 +48,9 @@ colors_early = hsv2rgb(HSV_early);
 
 HSV_engaged = [H_engaged * ones(num_bins,1), saturation, ones(num_bins,1)];
 colors_engaged = hsv2rgb(HSV_engaged);
+
+HSV_expert = [H_expert * ones(num_bins,1), saturation, ones(num_bins,1)];
+colors_expert = hsv2rgb(HSV_expert);
 
 HSV_disengaged = [H_disengaged * ones(num_bins,1), saturation, ones(num_bins,1)];
 colors_disengaged = hsv2rgb(HSV_disengaged);
@@ -72,13 +83,26 @@ if num_components == 3
             'Color', colors_engaged(ii,:), 'LineWidth', 2);
     end
 
-    % Plot disengaged condition
-    x = mean_score_disengaged(:,1);
-    y = mean_score_disengaged(:,2);
-    z = mean_score_disengaged(:,3);
+    % Plot engaged condition
+    x = mean_score_expert(:,1);
+    y = mean_score_expert(:,2);
+    z = mean_score_expert(:,3);
     for ii = 1:length(x)-1
         line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
-            'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+            'Color', colors_expert(ii,:), 'LineWidth', 2);
+    end
+
+    if change_point_mean < size(data, 3)
+        % Plot disengaged condition
+        x = mean_score_disengaged(:,1);
+        y = mean_score_disengaged(:,2);
+        z = mean_score_disengaged(:,3);
+        for ii = 1:length(x)-1
+            line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+                'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+        end
+
+        %
     end
     hold off
     rotate3d on
@@ -98,9 +122,12 @@ if num_components == 3
         dark_scores_resh = reshape(dark_scores, [dark_nbins, n_trials, num_components]);
 
         mean_dark_score_early = squeeze(mean(dark_scores_resh(:, 1:3, :), 2));
-        mean_dark_score_engaged = squeeze(mean(dark_scores_resh(:, 4:change_point_mean, :), 2));
-        mean_dark_score_disengaged = squeeze(mean(dark_scores_resh(:, change_point_mean+1:end, :), 2));
-
+        mean_dark_score_engaged = squeeze(mean(dark_scores_resh(:, 4:change_point_mean-10, :), 2));
+        mean_dark_score_expert = squeeze(mean(dark_scores_resh(:, change_point_mean-9:change_point_mean, :), 2));
+        if change_point_mean < size(data, 3)
+            mean_dark_score_disengaged = squeeze(mean(dark_scores_resh(:, change_point_mean+1:end, :), 2));
+        end
+        
         % Plot early condition
         x = mean_dark_score_early(:,1);
         y = mean_dark_score_early(:,2);
@@ -119,13 +146,24 @@ if num_components == 3
                 'Color', colors_engaged(ii,:), 'LineWidth', 2);
         end
 
-        % Plot disengaged condition
-        x = mean_dark_score_disengaged(:,1);
-        y = mean_dark_score_disengaged(:,2);
-        z = mean_dark_score_disengaged(:,3);
+        % Plot engaged condition
+        x = mean_dark_score_expert(:,1);
+        y = mean_dark_score_expert(:,2);
+        z = mean_dark_score_expert(:,3);
         for ii = 1:length(x)-1
             line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
-                'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+                'Color', colors_expert(ii,:), 'LineWidth', 2);
+        end
+
+        if change_point_mean < size(data, 3)
+            % Plot disengaged condition
+            x = mean_dark_score_disengaged(:,1);
+            y = mean_dark_score_disengaged(:,2);
+            z = mean_dark_score_disengaged(:,3);
+            for ii = 1:length(x)-1
+                line([x(ii), x(ii+1)], [y(ii), y(ii+1)], [z(ii), z(ii+1)], ...
+                    'Color', colors_disengaged(ii,:), 'LineWidth', 2);
+            end
         end
         hold off
         rotate3d on
