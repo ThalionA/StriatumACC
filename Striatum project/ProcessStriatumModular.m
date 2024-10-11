@@ -65,21 +65,26 @@ for ianimal = 1:n_animals
     trial_lick_positions = cellfun(@(x, y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
     
     % Calculate lick performance
-    trial_lick_errors = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
+    [trial_lick_errors, shuffled_lick_error_means, shuffled_lick_error_sems] = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
     trial_lick_fractions = cellfun(@(x) (sum((x > reward_zone_start_au - 20) & x < reward_zone_start_au) + 1)/(sum(x > 0 & x < reward_zone_start_au)+1), trial_lick_positions); 
     figure
     subplot(3, 1, 1)
-    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, mov_window_size, 'omitmissing'), movstd(trial_lick_fractions, 5, [], 2, 'omitmissing')/sqrt(mov_window_size))
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_fractions, mov_window_size, 'omitmissing'), movstd(trial_lick_fractions, mov_window_size, [], 2, 'omitmissing')/sqrt(mov_window_size))
     xline(change_point_mean)
     ylabel('precise lick fraction')
+    axis tight
     subplot(3, 1, 2)
-    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_errors, mov_window_size, 'omitmissing'), movstd(trial_lick_errors, 5, [], 2, 'omitmissing')/sqrt(mov_window_size))
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_lick_errors, mov_window_size, 'omitmissing'), movstd(trial_lick_errors, mov_window_size, [], 2, 'omitmissing')/sqrt(mov_window_size))
+    hold on
+    shadedErrorBar(1:trialData.n_trials, movmean(shuffled_lick_error_means, mov_window_size, 'omitmissing'), movstd(shuffled_lick_error_means, mov_window_size, [], 2, 'omitmissing')/sqrt(mov_window_size), 'lineprops', {'Color', 'r'})
     xline(change_point_mean)
     ylabel('lick error')
+    axis tight
     subplot(3, 1, 3)
-    shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, mov_window_size), movstd(trial_metrics.trial_lick_no, 5)/sqrt(mov_window_size))
+    shadedErrorBar(1:trialData.n_trials, movmean(trial_metrics.trial_lick_no, mov_window_size), movstd(trial_metrics.trial_lick_no, mov_window_size)/sqrt(mov_window_size))
     ylabel('lick no')
     xline(change_point_mean)
+    axis tight
 
     % Perform spatial binning
     spatial_binned_data = spatial_binning(corridorData, bin_edges, num_bins);
