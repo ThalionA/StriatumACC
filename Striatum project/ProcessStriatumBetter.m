@@ -179,6 +179,12 @@ end
 %% Plotting and further analysis
 
 for ianimal = 3
+    trial_lick_numbers = preprocessed_data(ianimal).trial_metrics.trial_lick_no(1:end-1);
+    trial_lick_errors = preprocessed_data(ianimal).trial_lick_errors(1:end-1); % Adjust if necessary
+    trial_lick_errors(1) = nan;
+    trial_lick_fractions = preprocessed_data(ianimal).trial_lick_fractions(1:end-1); % Adjust if necessary
+    shuffled_lick_error_means = preprocessed_data(ianimal).shuffled_lick_error_means(1:end-1);
+    shuffled_lick_error_means(1) = nan;
     
 
     % Run TCA with cross-validation
@@ -208,45 +214,65 @@ for ianimal = 3
 
     subplot(1, 2, 1)
     hold on
-    scatter(mean_corr_DMSDLS, trial_lick_errors)
+    scatter(mean_corr_DMSDLS, trial_lick_errors')
     xlabel('Cross-area correlation')
     ylabel('Lick error')
     title('DMS-DLS')
+    axis tight
     lsline
+    [rho, pval] = corr(mean_corr_DMSDLS, trial_lick_errors', "Rows", "complete");
+    legend(sprintf('\\rho = %.3f, pval = %.4f', rho, pval))
 
     subplot(1, 2, 2)
-    hold on;
+    hold on
     scatter(mean_corr_DMSACC, trial_lick_errors)
     xlabel('Cross-area correlation')
     ylabel('Lick error')
     title('DMS-ACC')
+    axis tight
     lsline
+    [rho, pval] = corr(mean_corr_DMSACC, trial_lick_errors', "Rows", "complete");
+    legend(sprintf('\\rho = %.3f, pval = %.4f', rho, pval))
+
+    fig = gcf();
+    fig.Position = [100, 100, 1020, 420];
+
+    
 
 
     % Plot licking performance
     mov_window_size = 5;
-    trial_lick_numbers = preprocessed_data(ianimal).trial_metrics.trial_lick_no(1:end-1);
-    trial_lick_errors = preprocessed_data(ianimal).trial_lick_errors(1:end-1); % Adjust if necessary
-    trial_lick_fractions = preprocessed_data(ianimal).trial_lick_fractions(1:end-1); % Adjust if necessary
-    shuffled_lick_error_means = preprocessed_data(ianimal).shuffled_lick_error_means(1:end-1);
+    
 
     figure
-    subplot(3, 1, 1)
+    subplot(5, 1, 1)
     shadedErrorBar(1:length(trial_lick_fractions), movmean(trial_lick_fractions, mov_window_size, 'omitmissing'), movstd(trial_lick_fractions, mov_window_size, [], 2, 'omitmissing')/sqrt(mov_window_size))
     xline(preprocessed_data(ianimal).change_point_mean)
     ylabel('precise lick fraction')
     axis tight
-    subplot(3, 1, 2)
+    subplot(5, 1, 2)
     shadedErrorBar(1:length(trial_lick_errors), movmean(trial_lick_errors, mov_window_size, 'omitmissing'), movstd(trial_lick_errors, mov_window_size, [], 2, 'omitmissing')/sqrt(mov_window_size))
     hold on
     shadedErrorBar(1:length(shuffled_lick_error_means), movmean(shuffled_lick_error_means, mov_window_size, 'omitmissing'), movstd(shuffled_lick_error_means, mov_window_size, [], 2, 'omitmissing')/sqrt(mov_window_size), 'lineprops', {'Color', 'r'})
     xline(preprocessed_data(ianimal).change_point_mean)
     ylabel('lick error')
     axis tight
-    subplot(3, 1, 3)
+    subplot(5, 1, 3)
     shadedErrorBar(1:length(trial_lick_numbers), movmean(trial_lick_numbers, mov_window_size), movstd(trial_lick_numbers, mov_window_size)/sqrt(mov_window_size))
     ylabel('lick no')
     xline(preprocessed_data(ianimal).change_point_mean)
     axis tight
+    % xlabel('trial #')
+
+    subplot(5, 1, 4)
+    shadedErrorBar(1:length(mean_corr_DMSDLS), movmean(mean_corr_DMSDLS, mov_window_size, 'omitmissing'), movstd(mean_corr_DMSDLS, mov_window_size, [], 1, 'omitmissing')/sqrt(mov_window_size))
+    axis tight
+    title('DMS-DLS correlation')
+    ylabel(sprintf('\\rho'))
+    subplot(5, 1, 5)
+    shadedErrorBar(1:length(mean_corr_DMSACC), movmean(mean_corr_DMSACC, mov_window_size, 'omitmissing'), movstd(mean_corr_DMSACC, mov_window_size, [], 1, 'omitmissing')/sqrt(mov_window_size))
+    axis tight
+    title('DMS-ACC correlation')
+    ylabel(sprintf('\\rho'))
     xlabel('trial #')
 end
