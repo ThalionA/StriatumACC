@@ -39,7 +39,7 @@ saturation = linspace(0.1, 1, num_bins)';  % Saturation from 0.1 to 1
 
 % Define base hues for each condition (H values in HSV)
 H_early = 0.6667;    % Blue
-H_engaged = 0.1667;  % Yellow
+H_engaged = 0.0833;  % Yellow
 H_expert = 0.333;    % Green
 H_disengaged = 0;    % Red
 
