@@ -63,7 +63,7 @@ hold on
 if num_components == 3
 
     if nargin > 3
-        ax1 = subplot(1, 2, 1);
+        subplot(1, 2, 1);
     end
 
     % Plot early condition
@@ -114,7 +114,7 @@ if num_components == 3
     zlabel('PC3')
 
     if nargin > 3
-        ax2 = subplot(1, 2, 2);
+        subplot(1, 2, 2);
 
         hold on
         dark_nbins = size(dark_data, 2);
