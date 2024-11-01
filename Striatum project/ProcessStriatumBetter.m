@@ -802,20 +802,23 @@ options.cv_folds = 5;
 options.bin_size = 5;
 options.model_type = 'linear';  % or 'ridge', 'svm', 'ann', 'linear'
 options.area = 'all';  % or 'DMS', 'DLS', 'ACC'
+options.n_bootstraps = 100;
+options.neuron_counts = [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 75, 100, 150];
 
 % Run decoder
 [decoded_positions, decoder_performance] = decode_position(preprocessed_data, options);
 
 % Create regular visualization
-
 visualize_decoding_results(decoded_positions, decoder_performance, options.bin_size);
 sgtitle('Spatial Decoding Results')
 
 % Create trial evolution visualization
+visualize_trial_evolution(decoded_positions, decoder_performance, options.bin_size);
 
-visualize_trial_evolution(decoded_positions, options.bin_size);
-title('Trial Evolution Results');
 
+% figure
+% scatter(cellfun(@length, {preprocessed_data(:).is_dms}), [decoder_performance.r2])
+% lsline
 
 %% TCA plotting (old)
 for ianimal = 1:n_animals
