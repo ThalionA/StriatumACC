@@ -1,4 +1,4 @@
-all_mouse_ids = [523, 614, 624, 727, 730];
+all_mouse_ids = [523, 614, 624, 727, 730, 731, 823];
 num_mice = numel(all_mouse_ids);
 
 %% import the depth data
