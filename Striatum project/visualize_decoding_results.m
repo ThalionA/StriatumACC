@@ -1,65 +1,104 @@
 function visualize_decoding_results(decoded_positions, decoder_performance, bin_size)
     n_animals = length(decoded_positions);
+    neuron_counts = decoder_performance(1).neuron_counts;
+    n_neuron_counts = length(neuron_counts);
     
-    % Create figure with subplots for each animal plus summary
-    figure('Position', [100 100 1200 800]);
-    
-    % Individual animal plots
-    for ianimal = 1:n_animals
-        subplot(2, ceil((n_animals+1)/2), ianimal);
+    % Loop over neuron counts to visualize
+    for icount = 1:n_neuron_counts
+        neuron_count = neuron_counts(icount);
+        fprintf('\nVisualizing results for neuron count: %d\n', neuron_count);
         
-        % Get true positions
-        n_pos_bins = size(decoded_positions{ianimal}, 1);
-        true_positions = (1:n_pos_bins)' * bin_size;
+        % Check which animals have valid data for this neuron count
+        valid_animals = [];
+        for ianimal = 1:n_animals
+            if all(~isnan(decoder_performance(ianimal).r2(icount, :)))
+                valid_animals = [valid_animals, ianimal];
+            end
+        end
         
-        % Calculate mean and SEM of decoded positions
-        mean_decoded = mean(decoded_positions{ianimal}, 2);
-        sem_decoded = std(decoded_positions{ianimal}, [], 2) / sqrt(size(decoded_positions{ianimal}, 2));
+        if isempty(valid_animals)
+            fprintf('No animals have data for neuron count %d. Skipping visualization.\n', neuron_count);
+            continue;
+        end
         
-        % Plot true vs decoded positions with error bars
-        errorbar(true_positions, mean_decoded, sem_decoded, 'b.', 'MarkerSize', 15);
-        hold on;
-        % plot([0 max(true_positions)], [0 max(true_positions)], 'k--'); % Unity line
-        identity_line
-        xline([100, 125])
-        yline([100, 125])
+        % Create figure for this neuron count
+        figure('Name', sprintf('Decoding Results (Neuron Count: %d)', neuron_count), 'Position', [100 100 1200 800]);
         
-        xlabel('True Position (cm)');
-        ylabel('Decoded Position (cm)');
-        title(sprintf('Animal %d (R^2 = %.2f)', ianimal, decoder_performance(ianimal).r2));
+        % Individual animal plots
+        n_valid_animals = length(valid_animals);
+        for idx = 1:n_valid_animals
+            ianimal = valid_animals(idx);
+            subplot(2, ceil((n_valid_animals+1)/2), idx);
+            
+            % Collect decoded positions across bootstraps
+            decoded_pos_bootstraps = decoded_positions{ianimal}(icount, :);
+            n_bootstraps = length(decoded_pos_bootstraps);
+            
+            % Stack decoded positions for averaging
+            n_pos_bins = size(decoded_pos_bootstraps{1}, 1);
+            n_trials = size(decoded_pos_bootstraps{1}, 2);
+            decoded_pos_matrix = zeros(n_pos_bins, n_trials, n_bootstraps);
+            for ibootstrap = 1:n_bootstraps
+                decoded_pos_matrix(:, :, ibootstrap) = decoded_pos_bootstraps{ibootstrap};
+            end
+            
+            % Calculate mean and SEM across bootstraps
+            mean_decoded = mean(decoded_pos_matrix, 3, 'omitnan');
+            sem_decoded = std(decoded_pos_matrix, [], 3, 'omitnan') / sqrt(n_bootstraps);
+            
+            % Get true positions
+            true_positions = (1:n_pos_bins)' * bin_size;
+            
+            % Plot true vs decoded positions with error bars
+            errorbar(true_positions, mean(mean_decoded, 2), mean(sem_decoded, 2), 'b.', 'MarkerSize', 15);
+            hold on;
+            plot([min(true_positions), max(true_positions)], [min(true_positions), max(true_positions)], 'k--'); % Unity line
+            xlabel('True Position (cm)');
+            ylabel('Decoded Position (cm)');
+            
+            % Calculate mean R² across bootstraps
+            mean_r2 = mean(decoder_performance(ianimal).r2(icount, :), 'omitnan');
+            
+            title(sprintf('Animal %d (Mean R^2 = %.2f)', ianimal, mean_r2));
+            axis square;
+        end
+        
+        % Summary plot (e.g., average error by position across animals)
+        subplot(2, ceil((n_valid_animals+1)/2), n_valid_animals + 1);
+        
+        % Aggregate position errors across valid animals
+        all_position_errors = [];
+        for ianimal = valid_animals
+            position_errors = decoder_performance(ianimal).position_errors(:, icount, :);
+            all_position_errors = cat(3, all_position_errors, position_errors);
+        end
+        
+        % Calculate mean and SEM of position errors across animals and bootstraps
+        mean_position_errors = mean(all_position_errors, [3], 'omitnan');
+        sem_position_errors = std(mean(all_position_errors, 3, 'omitnan'), [], 2, 'omitnan') / sqrt(length(valid_animals));
+        positions = (1:length(mean_position_errors))' * bin_size;
+        
+        % Plot average error by position
+        errorbar(positions, mean(mean_position_errors, 2), sem_position_errors, 'r.', 'MarkerSize', 15);
+        xlabel('Position (cm)');
+        ylabel('Mean Absolute Error (cm)');
+        title('Average Decoding Error by Position');
         axis square;
+        
+        % Print summary statistics
+        fprintf('\nDecoding Performance Summary (Neuron Count: %d):\n', neuron_count);
+        fprintf('------------------------------------------------\n');
+        all_r2 = [];
+        all_rmse = [];
+        all_mae = [];
+        for ianimal = valid_animals
+            all_r2 = [all_r2; decoder_performance(ianimal).r2(icount, :)'];
+            all_rmse = [all_rmse; decoder_performance(ianimal).rmse(icount, :)'];
+            all_mae = [all_mae; decoder_performance(ianimal).mae(icount, :)'];
+        end
+        
+        fprintf('Mean R² (± SEM): %.3f ± %.3f\n', mean(all_r2, 'omitnan'), std(all_r2, 'omitnan')/sqrt(length(all_r2)));
+        fprintf('Mean RMSE (± SEM): %.3f ± %.3f cm\n', mean(all_rmse, 'omitnan'), std(all_rmse, 'omitnan')/sqrt(length(all_rmse)));
+        fprintf('Mean MAE (± SEM): %.3f ± %.3f cm\n', mean(all_mae, 'omitnan'), std(all_mae, 'omitnan')/sqrt(length(all_mae)));
     end
-    
-    % Summary plot
-    subplot(2, ceil((n_animals+1)/2), n_animals + 1);
-    
-    % Aggregate position errors across animals
-    all_position_errors = zeros(length(decoder_performance(1).position_errors), n_animals);
-    for ianimal = 1:n_animals
-        all_position_errors(:, ianimal) = decoder_performance(ianimal).position_errors;
-    end
-    
-    % Calculate mean and SEM of position errors
-    mean_position_errors = mean(all_position_errors, 2);
-    sem_position_errors = std(all_position_errors, [], 2) / sqrt(n_animals);
-    positions = (1:length(mean_position_errors))' * bin_size;
-    
-    % Plot average error by position
-    errorbar(positions, mean_position_errors, sem_position_errors, 'r.', 'MarkerSize', 15);
-    xlabel('Position (cm)');
-    ylabel('Mean Absolute Error (cm)');
-    title('Average Decoding Error by Position');
-    axis square;
-    xline([100, 125])
-    
-    % Print summary statistics
-    fprintf('\nDecoding Performance Summary:\n');
-    fprintf('---------------------------\n');
-    all_r2 = [decoder_performance.r2];
-    all_rmse = [decoder_performance.rmse];
-    all_mae = [decoder_performance.mae];
-    
-    fprintf('Mean R² (± SEM): %.3f ± %.3f\n', mean(all_r2), std(all_r2)/sqrt(n_animals));
-    fprintf('Mean RMSE (± SEM): %.3f ± %.3f cm\n', mean(all_rmse), std(all_rmse)/sqrt(n_animals));
-    fprintf('Mean MAE (± SEM): %.3f ± %.3f cm\n', mean(all_mae), std(all_mae)/sqrt(n_animals));
 end
