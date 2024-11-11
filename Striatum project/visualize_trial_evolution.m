@@ -1,11 +1,15 @@
-function visualize_trial_evolution(decoded_positions, decoder_performance, bin_size)
+function visualize_trial_evolution(decoded_positions, decoder_performance, bin_size, neuron_counts_to_visualize)
     n_animals = length(decoded_positions);
     neuron_counts = decoder_performance(1).neuron_counts;
-    n_neuron_counts = length(neuron_counts);
 
-    % Choose neuron counts to visualize (you can adjust this list)
-    neuron_counts_to_visualize = neuron_counts;
+    % Ensure neuron_counts_to_visualize includes only counts that are actually available
+    if nargin < 4
+        neuron_counts_to_visualize = neuron_counts;
+    else
+        neuron_counts_to_visualize = intersect(neuron_counts_to_visualize, neuron_counts);
+    end
 
+    % Loop over each neuron count to visualize trial evolution
     for n_idx = 1:length(neuron_counts_to_visualize)
         neuron_count = neuron_counts_to_visualize(n_idx);
         icount = find(neuron_counts == neuron_count);
@@ -15,7 +19,7 @@ function visualize_trial_evolution(decoded_positions, decoder_performance, bin_s
         % Check which animals have valid data for this neuron count
         valid_animals = [];
         for ianimal = 1:n_animals
-            if all(~isnan(decoder_performance(ianimal).r2(icount, :)))
+            if is_neuron_count_available(decoded_positions, decoder_performance, ianimal, neuron_count)
                 valid_animals = [valid_animals, ianimal];
             end
         end
@@ -63,64 +67,85 @@ function visualize_trial_evolution(decoded_positions, decoder_performance, bin_s
 
                     % RMSE
                     trial_metrics(idx).rmse(itrial, ibootstrap) = sqrt(mean((pred_pos - true_pos).^2));
-
-                    % MAE
-                    trial_metrics(idx).mae(itrial, ibootstrap) = mean(abs(pred_pos - true_pos));
                 end
             end
         end
 
         % Create figure for this neuron count
-        figure('Name', sprintf('Trial Evolution (Neuron Count: %d)', neuron_count), 'Position', [100 100 1200 800]);
+        figure
 
         % 1. R-squared evolution
-        subplot(1,2,1);
+        subplot(2, 1, 1);
         plot_metric_evolution(trial_metrics, 'r2', 'R²');
+        xticks([])
+        xlabel('')
 
         % 2. RMSE evolution
-        subplot(1,2,2);
+        subplot(2, 1, 2);
         plot_metric_evolution(trial_metrics, 'rmse', 'RMSE (cm)');
 
         % Add overall title
-        sgtitle(sprintf('Evolution of Decoding Performance Across Trials (Neuron Count: %d)', neuron_count), 'FontSize', 14);
+        sgtitle(sprintf('Evolution of Decoding Performance Across Trials (Neuron Count: %d, N = %d)', neuron_count, length(valid_animals)), 'FontSize', 14);
     end
 end
 
 function plot_metric_evolution(trial_metrics, metric_field, metric_name)
     n_animals = length(trial_metrics);
-    n_trials = size(trial_metrics(1).(metric_field), 1);
 
-    % Initialize matrix to store mean metrics across bootstraps
-    metrics_mean = zeros(n_trials, n_animals);
-    metrics_sem = zeros(n_trials, n_animals);
+    % Initialize cell array to store mean metrics for each animal
+    metrics_mean_cell = cell(1, n_animals);
+    max_n_trials = 0;
 
-    % Colors for plotting
-    colors = lines(n_animals);
-
-    % Plot individual animals
     for idx = 1:n_animals
         metrics = trial_metrics(idx).(metric_field);
-        % Mean and SEM across bootstraps for each trial
+        % Mean across bootstraps for each trial
         mean_metric = mean(metrics, 2, 'omitnan');
-        sem_metric = std(metrics, [], 2, 'omitnan') / sqrt(size(metrics, 2));
-
-        metrics_mean(:, idx) = mean_metric;
-        metrics_sem(:, idx) = sem_metric;
-
-        % Plot mean metric for each animal
-        plot(mean_metric, 'Color', colors(idx, :), 'LineWidth', 1);
-        hold on;
+        metrics_mean_cell{idx} = mean_metric;
+        max_n_trials = max(max_n_trials, length(mean_metric));
     end
 
-    % Plot mean and SEM across animals
-    mean_across_animals = mean(metrics_mean, 2, 'omitnan');
-    sem_across_animals = std(metrics_mean, [], 2, 'omitnan') / sqrt(n_animals);
+    % Initialize arrays for mean and SEM across animals
+    mean_across_animals = nan(max_n_trials, 1);
+    sem_across_animals = nan(max_n_trials, 1);
+
+    for itrial = 1:max_n_trials
+        % Collect metrics from animals that have data for this trial
+        metrics_at_trial = [];
+        for idx = 1:n_animals
+            if length(metrics_mean_cell{idx}) >= itrial
+                metrics_at_trial = [metrics_at_trial; metrics_mean_cell{idx}(itrial)];
+            end
+        end
+        if ~isempty(metrics_at_trial)
+            mean_across_animals(itrial) = mean(metrics_at_trial, 'omitnan');
+            sem_across_animals(itrial) = std(metrics_at_trial, [], 'omitnan') / sqrt(length(metrics_at_trial));
+        end
+    end
 
     % Plot mean with confidence bands
-    shadedErrorBar(1:n_trials, mean_across_animals, sem_across_animals, 'lineprops', {'LineWidth', 1})
+    shadedErrorBar(1:max_n_trials, mean_across_animals, sem_across_animals, 'lineprops', {'Color', 'k', 'LineWidth', 1})
 
-    xlabel('Trial Number');
+    xlabel('Trial #');
     ylabel(metric_name);
-    title(['Trial-by-Trial ' metric_name]);
-    legend([arrayfun(@(x) ['Animal ' num2str(x)], 1:n_animals, 'UniformOutput', false), {'Mean'}], 'Location', 'best');
+    title(['Trial-by-trial ' metric_name]);
+end
+
+function is_available = is_neuron_count_available(decoded_positions, decoder_performance, ianimal, neuron_count)
+    % Retrieve the list of neuron counts that were used for decoding for this specific animal
+    neuron_counts = decoder_performance(ianimal).neuron_counts;
+
+    % Check if the specified neuron count is in this list
+    if any(neuron_counts == neuron_count)
+        % Find the index of this neuron count in the neuron's list
+        icount_animal = find(neuron_counts == neuron_count);
+        
+        % Check if the decoded positions contain any non-NaN data for this neuron count
+        % decoded_positions{ianimal}{icount_animal, :} contains cells for each bootstrap
+        decoded_pos_bootstraps = decoded_positions{ianimal}(icount_animal, :);
+        
+        % Verify if at least one bootstrap has non-NaN values in decoded positions
+        is_available = any(cellfun(@(x) ~all(isnan(x(:))), decoded_pos_bootstraps));
+    else
+        is_available = false;
+    end
 end
