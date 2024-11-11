@@ -1,6 +1,6 @@
 function plot_tca_results(clusters, cluster_assignments, normalized_spatial_patterns, pattern_labels, all_trial_patterns, reward_zone_start_bins, areas)
     % Plot the dendrogram and cluster patterns
-    % Now accounts for multiple areas per animal.
+    % Now accounts for multiple areas per animal and variable trial lengths.
 
     % Compute the linkage for dendrogram
     similarity_matrix = corrcoef(normalized_spatial_patterns);
@@ -46,7 +46,7 @@ function plot_tca_results(clusters, cluster_assignments, normalized_spatial_patt
             title(sprintf('Area %s - Cluster %d', area, iclust));
 
             xline(reward_zone_start_bins, 'r');
-            % Adjust xline(20, 'r'); as needed for your data
+            % Adjust xline as needed for your data
 
             % Find patterns in the current cluster and area
             cluster_indices = clusters{iclust};
@@ -83,11 +83,25 @@ function plot_tca_results(clusters, cluster_assignments, normalized_spatial_patt
             indices = cluster_indices(area_indices);
 
             if ~isempty(indices)
-                % plot(all_trial_patterns(:, indices));
-                shadedErrorBar(1:size(all_trial_patterns, 1), mean(all_trial_patterns(:, indices), 2), sem(all_trial_patterns(:, indices), 2))
+                % Get the trial patterns for the selected indices
+                trial_patterns = all_trial_patterns(indices); % This is a cell array
+                num_patterns = length(trial_patterns);
+                % Find the maximum trial length among the selected trial patterns
+                max_length = max(cellfun(@length, trial_patterns));
+                % Initialize a matrix to hold padded trial patterns
+                trial_pattern_matrix = NaN(max_length, num_patterns);
+                for i = 1:num_patterns
+                    len = length(trial_patterns{i});
+                    trial_pattern_matrix(1:len, i) = trial_patterns{i};
+                end
+                % Now plot mean and sem, ignoring NaNs
+                mean_pattern = nanmean(trial_pattern_matrix, 2);
+                sem_pattern = nanstd(trial_pattern_matrix, 0, 2) / sqrt(num_patterns);
+                shadedErrorBar(1:max_length, mean_pattern, sem_pattern);
             end
 
             hold off;
+            axis tight;
         end
     end
 
