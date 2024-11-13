@@ -261,6 +261,209 @@ color_dms = [0, 0.4470, 0.7410];       % Deep Blue for DMS
 color_dls =  [0.4660, 0.6740, 0.1880];  % Forest Green for DLS
 color_acc = [0.8500, 0.3250, 0.0980];  % Crimson Red for ACC
 
+%% 
+
+max_precise_runlength = zeros(1, n_animals);
+trials_to_max_precise_run = zeros(1, n_animals);
+max_precise_run_indices = cell(1, n_animals);
+
+for ianimal = 1:n_animals
+    % Get the z-scored lick errors for this animal
+    zscored_lick_errors = preprocessed_data(ianimal).zscored_lick_errors;
+    
+    % Create a logical vector where precise trials are marked as true
+    precise_trials = zscored_lick_errors < - 2;
+    
+    % Use runlength function to parse the precise_trials vector
+    [l, s] = runlength(precise_trials, 100);
+    
+    % Find indices of precise runs (where s == 1)
+    precise_run_indices = find(s == 1);
+    precise_run_lengths = l(s == 1);
+    imprecise_run_lengths = l(s == 0);
+    
+    if isempty(precise_run_lengths)
+        % No precise runs for this animal
+        max_precise_runlength(ianimal) = 0;
+        trials_to_max_precise_run(ianimal) = NaN;
+        max_precise_run_indices{ianimal} = [];
+        continue;
+    end
+    
+    % Find maximum precise run length
+    max_length = max(precise_run_lengths);
+    max_precise_runlength(ianimal) = max_length;
+    
+    % Find indices of runs where this maximum occurs
+    max_length_runs = precise_run_indices(precise_run_lengths == max_length);
+    
+    % For simplicity, pick the first occurrence
+    max_precise_run_idx = max_length_runs(1);
+    
+    % Compute starting indices of all runs
+    start_indices = [1, cumsum(l(1:end-1)) + 1];
+    
+    % Starting trial of the maximum precise run
+    start_trial = start_indices(max_precise_run_idx);
+    
+    % Ending trial of the maximum precise run
+    end_trial = start_trial + max_length - 1;
+    
+    % Store the indices of the trials in the maximum precise run
+    max_precise_run_indices{ianimal} = start_trial:end_trial;
+    
+    % Number of trials it took to reach this window (start_trial - 1)
+    trials_to_max_precise_run(ianimal) = start_trial - 1;
+end
+
+figure
+scatter(max_precise_runlength, average_lick_precision, 75, 'filled', 'MarkerEdgeColor', 'w')
+lsline
+[rho, pval] = corr(max_precise_runlength', average_lick_precision');
+legend(sprintf('\\rho = %.2f - pval = %.3f', rho, pval))
+xlabel('maximum consecutive precise trials')
+ylabel('average z-scored lick error')
+
+figure
+scatter(trials_to_max_precise_run, average_lick_precision, 75, 'filled', 'MarkerEdgeColor', 'w')
+lsline
+[rho, pval] = corr(trials_to_first_precise', average_lick_precision');
+legend(sprintf('\\rho = %.2f - pval = %.3f', rho, pval))
+xlabel('trials until "expert"')
+ylabel('average z-scored lick error')
+
+%% 
+valid_precise_runlengths = max_precise_runlength(max_precise_runlength > 0);
+
+if isempty(valid_precise_runlengths)
+    error('No animals have any precise runs.');
+end
+
+N = min(valid_precise_runlengths);
+fprintf('Selected window length N = %d\n', N);
+
+% Initialize variables to store window indices
+precise_window_indices = cell(1, n_animals);
+imprecise_window_indices = cell(1, n_animals);
+
+for ianimal = 1:n_animals
+    zscored_lick_errors = preprocessed_data(ianimal).zscored_lick_errors;
+    n_trials = length(zscored_lick_errors);
+    
+    % Processing Precise Trials %
+    precise_trials = zscored_lick_errors < -2;
+
+    % Use runlength to find runs of precise trials
+    [l_precise, s_precise] = runlength(precise_trials, 100);
+
+    % Indices of precise runs (where s == 1)
+    precise_run_indices = find(s_precise == 1);
+    precise_run_lengths = l_precise(s_precise == 1);
+
+    % For runs with length >= N
+    valid_precise_runs = find(precise_run_lengths >= N);
+
+    if isempty(valid_precise_runs)
+        % No valid precise runs
+        precise_window_indices{ianimal} = [];
+        fprintf('Animal %d does not have a precise run of length %d.\n', ianimal, N);
+        imprecise_window_indices{ianimal} = [];  % Since precise window is required for imprecise window selection
+        continue;
+    else
+        % Compute starting indices of all runs
+        start_indices_precise = [1, cumsum(l_precise(1:end-1)) + 1];
+        precise_run_starts = start_indices_precise(s_precise == 1);
+
+        % Initialize variables to store subwindow indices and their average errors
+        subwindow_indices_precise = {};
+        subwindow_avg_errors_precise = [];
+
+        % Find all possible subwindows of length N
+        for irun = 1:length(valid_precise_runs)
+            run_start = precise_run_starts(valid_precise_runs(irun));
+            run_length = precise_run_lengths(valid_precise_runs(irun));
+
+            num_subwindows = run_length - N + 1;
+
+            for isub = 1:num_subwindows
+                sub_start = run_start + isub - 1;
+                sub_end = sub_start + N - 1;
+                sub_indices = sub_start:sub_end;
+                sub_avg_error = mean(zscored_lick_errors(sub_indices));
+
+                subwindow_indices_precise{end+1} = sub_indices;
+                subwindow_avg_errors_precise(end+1) = sub_avg_error;
+            end
+        end
+
+        % Select the subwindow with minimal average lick error
+        [~, min_idx] = min(subwindow_avg_errors_precise);
+        precise_window_indices{ianimal} = subwindow_indices_precise{min_idx};
+
+        % fprintf('Animal %d precise window indices: %s\n', ianimal, mat2str(precise_window_indices{ianimal}));
+    end
+
+    % Processing Imprecise Trials %
+    % Exclude first 3 trials
+    zscored_lick_errors_imprecise = zscored_lick_errors;
+    zscored_lick_errors_imprecise(1:min(3, n_trials)) = NaN;
+
+    % Get the precise window start index
+    precise_indices = precise_window_indices{ianimal};
+    precise_start = precise_indices(1);
+
+    % Determine possible start indices for imprecise window
+    earliest_start = max(4, precise_start - 20);
+    latest_start = precise_start - N;
+
+    if latest_start < earliest_start
+        % No possible imprecise window of length N before precise window
+        fprintf('Animal %d does not have enough trials before the precise window.\n', ianimal);
+        imprecise_window_indices{ianimal} = [];
+        continue;
+    end
+
+    possible_starts = earliest_start:latest_start;
+    num_possible_windows = length(possible_starts);
+
+    subwindow_avg_errors_imprecise = nan(1, num_possible_windows);
+    subwindow_indices_imprecise = cell(1, num_possible_windows);
+
+    for idx = 1:num_possible_windows
+        sub_start = possible_starts(idx);
+        sub_end = sub_start + N - 1;
+        if sub_end > n_trials
+            continue;
+        end
+        sub_indices = sub_start:sub_end;
+        if any(isnan(zscored_lick_errors_imprecise(sub_indices)))
+            continue;
+        end
+        sub_avg_error = mean(zscored_lick_errors_imprecise(sub_indices));
+        subwindow_avg_errors_imprecise(idx) = sub_avg_error;
+        subwindow_indices_imprecise{idx} = sub_indices;
+    end
+
+    % Find the window that maximizes the average lick error
+    [max_avg_error, max_idx] = max(subwindow_avg_errors_imprecise);
+
+    if isnan(max_avg_error)
+        fprintf('Animal %d does not have a valid imprecise window.\n', ianimal);
+        imprecise_window_indices{ianimal} = [];
+        continue;
+    end
+
+    imprecise_window_indices{ianimal} = subwindow_indices_imprecise{max_idx};
+    % fprintf('Animal %d imprecise window indices: %s\n', ianimal, mat2str(imprecise_window_indices{ianimal}));
+end
+
+% Update valid animals list
+valid_animals = [];
+for ianimal = 1:n_animals
+    if ~isempty(precise_window_indices{ianimal}) && ~isempty(imprecise_window_indices{ianimal})
+        valid_animals(end+1) = ianimal;
+    end
+end
 %% Plot area dimensionality
 
 dimensionality_stim_all = cell2mat({preprocessed_data(:).pca_stim_dimensionality_all});
@@ -393,7 +596,7 @@ end
 
 % Define precise and random indices based on lick errors
 precise_idx = cellfun(@(x) x <= -2, zscored_lick_errors_all, 'UniformOutput', false);
-random_idx = cellfun(@(x) x > -2, zscored_lick_errors_all, 'UniformOutput', false);
+random_idx = cellfun(@(x) x > -1, zscored_lick_errors_all, 'UniformOutput', false);
 
 % Exclude the first three trials from precise and random indices
 for ianimal = 1:n_animals
@@ -403,8 +606,8 @@ end
 
 % Extract generalized variance values for each condition
 generalised_variance_first = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, first_idx, 'UniformOutput', false);
-generalised_variance_precise = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, precise_idx, 'UniformOutput', false);
-generalised_variance_random = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, random_idx, 'UniformOutput', false);
+generalised_variance_precise = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, precise_window_indices, 'UniformOutput', false);
+generalised_variance_random = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, imprecise_window_indices, 'UniformOutput', false);
 
 mean_gv_first = cellfun(@mean, generalised_variance_first);
 mean_gv_precise = cellfun(@mean, generalised_variance_precise);
@@ -441,6 +644,7 @@ my_errorbar_plot(mean_gv_first, mean_gv_precise, mean_gv_random)
 
 %% Cluster TCA factors based on spatial profiles
 
+% Load z-scored lick errors for all animals
 zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
 
 % Initialize logical indices for first trials
@@ -448,24 +652,26 @@ first_idx = cell(1, n_animals);
 for ianimal = 1:n_animals
     n_trials = preprocessed_data(ianimal).n_trials;
     temp_idx = false(1, n_trials);
-    temp_idx(1:2) = true;
+    temp_idx(1:3) = true; % Ensure we don't exceed available trials
     first_idx{ianimal} = temp_idx;
 end
 
 % Define precise and random indices based on lick errors
-precise_idx = cellfun(@(x) x <= -3, zscored_lick_errors_all, 'UniformOutput', false);
-random_idx = cellfun(@(x) x > 0, zscored_lick_errors_all, 'UniformOutput', false);
+precise_idx = cellfun(@(x) x <= -2, zscored_lick_errors_all, 'UniformOutput', false);
+random_idx = cellfun(@(x) x > -1, zscored_lick_errors_all, 'UniformOutput', false);
 
 % Exclude the first two trials from precise and random indices
 for ianimal = 1:n_animals
-    precise_idx{ianimal}(1:2) = false;
-    random_idx{ianimal}(1:2) = false;
+    n_trials = preprocessed_data(ianimal).n_trials;
+    exclude_idx = 1:3; % Adjust for animals with fewer than 2 trials
+    precise_idx{ianimal}(exclude_idx) = false;
+    random_idx{ianimal}(exclude_idx) = false;
 end
 
 % Initialize variables
 all_spatial_patterns = [];
-pattern_labels = []; % To keep track of animal and component indices
-all_trial_patterns = [];
+pattern_labels = [];
+all_trial_patterns = {}; % Use a cell array
 trial_patterns_by_condition = [];
 factor_counter = 0;
 
@@ -473,7 +679,7 @@ for ianimal = 1:n_animals
     tca_model = preprocessed_data(ianimal).tca_best_mdl;
     n_Factors = size(tca_model.U{2}, 2);
     n_trials = preprocessed_data(ianimal).n_trials;
-    
+
     for iFactor = 1:n_Factors
         factor_counter = factor_counter + 1;
         pattern = tca_model.U{2}(:, iFactor);
@@ -489,44 +695,39 @@ for ianimal = 1:n_animals
 
         trial_patterns_by_condition(factor_counter, :) = [trial_pattern_first, trial_pattern_precise, trial_pattern_random];
 
-        all_trial_patterns = [all_trial_patterns, trial_pattern];
+        all_trial_patterns{factor_counter} = trial_pattern; % Store each trial pattern separately
     end
 end
 
-
-% Normalize each pattern to have unit norm
+% Normalize each spatial pattern to have unit norm
 normalized_spatial_patterns = all_spatial_patterns ./ vecnorm(all_spatial_patterns);
 
-normalized_trial_patterns = all_trial_patterns./vecnorm(all_trial_patterns);
+% Normalize each trial pattern individually
+normalized_trial_patterns = cellfun(@(x) x ./ norm(x), all_trial_patterns, 'UniformOutput', false);
 
-% Compute the pairwise Pearson correlation coefficients
+% Compute the pairwise Pearson correlation coefficients for spatial patterns
 similarity_matrix = corrcoef(normalized_spatial_patterns);
 
 % Perform hierarchical clustering using the distance matrix
 distance_matrix = 1 - similarity_matrix; % Convert similarity to distance
 Z = linkage(squareform(distance_matrix), 'average');
 
-% Step 2: Determine the number of clusters
-num_clusters = 4; % Example value, adjust as needed
-cmap = lines(num_clusters); % Or define your own colors
+% Determine the number of clusters
+num_clusters = 4; % Adjust as needed
+cmap = lines(num_clusters);
 
-% Step 3: Assign clusters
+% Assign clusters
 cluster_assignments = cluster(Z, 'maxclust', num_clusters);
 
-% Step 4: Compute the color threshold
+% Compute the color threshold for dendrogram
 c_thresh = median([Z(end - num_clusters + 2, 3), Z(end - num_clusters + 1, 3)]);
 
-% Step 5: Plot the dendrogram with colored clusters
+% Plot the dendrogram with colored clusters
 figure;
 [H, T, outperm] = dendrogram(Z, 0, 'ColorThreshold', c_thresh);
-ax = gca;
-set(ax, 'ColorOrder', cmap, 'NextPlot', 'replacechildren');
-
-% Step 6: Customize the plot
 xlabel('Patterns');
 ylabel('Distance');
 title('Hierarchical Clustering of Spatial Patterns');
-% Create dummy lines for the legend
 hold on;
 hLegend = gobjects(num_clusters, 1);
 for iclust = 1:num_clusters
@@ -543,10 +744,10 @@ for iclust = 1:num_clusters
     % Find indices of patterns in the current cluster
     cluster_indices = find(cluster_assignments == iclust);
     clusters{iclust} = cluster_indices;
-    
+
     % Get the animals represented in this cluster
     animals_in_cluster = unique([pattern_labels(cluster_indices).animal]);
-    
+
     % Check if the cluster contains patterns from multiple animals
     if numel(animals_in_cluster) > 1
         fprintf('Cluster %d contains patterns from animals: %s\n', iclust, num2str(animals_in_cluster'));
@@ -554,77 +755,148 @@ for iclust = 1:num_clusters
 end
 
 % Visualize clusters
-figure
-t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', Padding='compact');
+figure;
+t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 for iclust = 1:num_clusters
-    nexttile
-    hold on
-    title(sprintf('Cluster %d', iclust))
-    
-    xline(reward_zone_start_bins, 'r')
-    xline(20, 'r')
+    nexttile;
+    hold on;
+    title(sprintf('Cluster %d', iclust));
+
+    xline(reward_zone_start_bins, 'r');
+    xline(20, 'r');
     cluster_indices = clusters{iclust};
-    
+
     plot(normalized_spatial_patterns(:, cluster_indices), 'Color', [0.5 0.5 0.5]);
     plot(mean(normalized_spatial_patterns(:, cluster_indices), 2), 'Color', cmap(iclust, :), 'LineWidth', 2);
 
+    hold off;
+    axis tight;
+end
+
+xlabel(t, 'Spatial Bin');
+ylabel(t, 'Factor Loading');
+
+% Plot trial patterns for each cluster
+figure;
+t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+for iclust = 1:num_clusters
+    nexttile;
+    hold on;
+    cluster_indices = clusters{iclust};
+    title(sprintf('Cluster %d', iclust));
+
+    max_trials_cluster = max(cellfun(@length, all_trial_patterns(cluster_indices)));
+
+    trial_pattern_matrix = nan(length(cluster_indices), max_trials_cluster);
+    pattern_counter = 0;
+
+    % Plot each trial pattern individually
+    for idx = cluster_indices'
+        pattern_counter = pattern_counter + 1;
+        trial_pattern = all_trial_patterns{idx};
+        trial_pattern_matrix(pattern_counter, 1:length(trial_pattern)) = trial_pattern;
+    end
+    shadedErrorBar(1:max_trials_cluster, mean(trial_pattern_matrix, 'omitmissing'), sem(trial_pattern_matrix), 'lineprops', {'Color', cmap(iclust, :)})
     hold off
     axis tight
 end
+xlabel(t, 'Trial');
+ylabel(t, 'Factor Loading');
 
-
-xlabel(t, 'spatial bin');
-ylabel(t, 'factor loading');
-
-% save_to_svg('tca_factor_clusters')
-
-
-
-figure
-t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', Padding='compact');
-
+% Plot trial patterns for each cluster, averaged per mouse
+figure;
+t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 for iclust = 1:num_clusters
-    nexttile
-    
+    nexttile;
+    hold on;
     cluster_indices = clusters{iclust};
-    plot(all_trial_patterns(:, cluster_indices))
+    title(sprintf('Cluster %d', iclust));
 
+    % Get the animals represented in this cluster
+    animals_in_cluster = unique([pattern_labels(cluster_indices).animal]);
+
+    % Prepare colors for different animals
+    num_animals = numel(animals_in_cluster);
+    animal_colors = lines(num_animals);
+
+    % For legend
+    legend_entries = cell(num_animals, 1);
+
+    for ianimal = 1:num_animals
+        animal_id = animals_in_cluster(ianimal);
+
+        % Find patterns in cluster_indices that belong to this animal
+        is_animal = arrayfun(@(x) x.animal == animal_id, pattern_labels(cluster_indices));
+        patterns_for_animal = cluster_indices(is_animal);
+
+        % Collect trial patterns
+        trial_patterns_list = all_trial_patterns(patterns_for_animal);
+
+        % Find maximum length of trial patterns for this animal
+        max_length = max(cellfun(@length, trial_patterns_list));
+
+        % Initialize matrix to hold trial patterns
+        trial_pattern_matrix = nan(numel(trial_patterns_list), max_length);
+
+        for idx = 1:numel(trial_patterns_list)
+            trial_pattern = trial_patterns_list{idx};
+            len = length(trial_pattern);
+            trial_pattern_matrix(idx, 1:len) = trial_pattern;
+        end
+
+        % Average over patterns (rows)
+        mean_trial_pattern = mean(trial_pattern_matrix, 1, 'omitmissing');
+
+        % Plot the averaged trial pattern
+        plot(movmean(mean_trial_pattern, 5), 'Color', animal_colors(ianimal, :), 'LineWidth', 2);
+
+        % For legend
+        legend_entries{ianimal} = sprintf('Animal %d', animal_id);
+    end
+
+    % Optionally, add legend
+    legend(legend_entries, 'Location', 'best');
+    hold off;
+    axis tight;
 end
+xlabel(t, 'Trial');
+ylabel(t, 'Factor Loading');
 
 
-%% Find how the clusters behave 
-% Visualize clusters
-figure
-t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', Padding='compact');
-
+% Analyze cluster behavior
+figure;
+t = tiledlayout(1, num_clusters, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 for iclust = 1:num_clusters
-    nexttile
-    
+    nexttile;
+
     cluster_indices = clusters{iclust};
 
-    data_to_plot = [trial_patterns_by_condition(cluster_indices, 1), trial_patterns_by_condition(cluster_indices, 2), trial_patterns_by_condition(cluster_indices, 3)];
-    
-    my_errorbar_plot(data_to_plot)
+    data_to_plot = [trial_patterns_by_condition(cluster_indices, 1), ...
+                    trial_patterns_by_condition(cluster_indices, 2), ...
+                    trial_patterns_by_condition(cluster_indices, 3)];
+
+    my_errorbar_plot(data_to_plot);
 
     animal_groups = repmat([pattern_labels(cluster_indices).animal]', 1, 3);
     condition_groups = repmat(1:3, numel(cluster_indices), 1);
 
-    [~, ~, stats] = anovan(data_to_plot(:), {condition_groups(:), animal_groups(:)}, "varnames", {'condition', 'animal'}, 'display', 'on');
-    [comp, ~] = multcompare(stats, 'Display','off');
+    [~, ~, stats] = anovan(data_to_plot(:), {condition_groups(:), animal_groups(:)}, ...
+                           'varnames', {'Condition', 'Animal'}, 'display', 'on');
+    [comp, ~] = multcompare(stats, 'Display', 'off');
     comp_groups = num2cell(comp(:, 1:2), 2);
     sig_ind = comp(:, 6) < 0.05;
-    sigstar(comp_groups(sig_ind), comp(sig_ind, 6))
-    xticklabels({'first 3', 'precise', 'random'})
-    title(sprintf('Cluster %d', iclust))
+    sigstar(comp_groups(sig_ind), comp(sig_ind, 6));
+    xticklabels({'First 3', 'Precise', 'Imprecise'});
+    title(sprintf('Cluster %d', iclust));
 end
 
-ylabel(t, 'factor loading');
+ylabel(t, 'Factor Loading');
 
-save_to_svg('tca_factor_cluster_behaviour')
-
+% save_to_svg('tca_factor_cluster_behaviour')
 %% Area-specific TCA
 
 
@@ -702,12 +974,10 @@ plot_tca_results(clusters, cluster_assignments, normalized_spatial_patterns, pat
 % options.neuron_counts = [15, 50, 100, 150];
 
 % Example usage with custom options
-options = struct('bin_size', 5, 'model_type', 'linear', 'area', 'all', 'n_bootstraps', 10, 'neuron_counts', [50]);
-
-% [decoded_positions, decoder_performance] = decode_position_mld(preprocessed_data, options);
+options = struct('bin_size', 5, 'model_type', 'gpr', 'area', 'all', 'n_bootstraps', 20, 'neuron_counts', [50]);
 
 % Run decoder
-[decoded_positions, decoder_performance] = decode_position(preprocessed_data, options);
+[decoded_positions, decoder_performance, decoder_coefficients] = decode_position(preprocessed_data, options);
 
 neuron_counts_to_plot = options.neuron_counts;  % Adjust selection as needed
 
@@ -723,7 +993,298 @@ visualize_performance_vs_neuron_count(decoder_performance);
 % Decoding vs behavioral performance correlations
 visualize_performance_correlations(preprocessed_data, decoded_positions, decoder_performance, options.bin_size, neuron_counts_to_plot);
 
-plot_decoder_accuracy_vs_chance(decoder_performance, 50)
+options_mle = struct('bin_size', 5, 'model_type', 'linear', 'area', 'all', 'n_bootstraps', 100, 'neuron_counts', [50]);
+[decoded_positions_mle, decoder_performance_mle] = decode_position_mld(preprocessed_data, options_mle);
+plot_decoder_accuracy_vs_chance(decoder_performance_mle, 50)
+visualize_decoding_results(decoded_positions_mle, decoder_performance_mle, options_mle.bin_size);
+
+for ianimal = 1:n_animals
+    preprocessed_data(ianimal).decoded_positions = decoded_positions{ianimal};
+    preprocessed_data(ianimal).decoding_options = options;
+    preprocessed_data(ianimal).decoding_performance = decoder_performance(ianimal);
+
+    preprocessed_data(ianimal).decoded_positions_mle = decoded_positions_mle{ianimal};
+    preprocessed_data(ianimal).decoding_options_mle = options_mle;
+    preprocessed_data(ianimal).decoding_performance_mle = decoder_performance_mle(ianimal);
+end
+save('preprocessed_data.mat', 'preprocessed_data', '-v7.3');
+
+
+%% Decoding with behaviour
+
+% Assume the following variables are available:
+% - preprocessed_data: struct containing data for each animal
+% - decoded_positions: cell array from the decode_position function
+% - decoder_performance: struct containing performance metrics
+% - options: options used in the decode_position function
+% - n_animals: number of animals
+
+% Step 1: Identify trial indices for each condition
+% Load z-scored lick errors for all animals
+zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
+
+% Initialize logical indices for each condition
+first_idx = cell(1, n_animals);
+precise_idx = cell(1, n_animals);
+imprecise_idx = cell(1, n_animals);
+
+for ianimal = 1:n_animals
+    n_trials = preprocessed_data(ianimal).n_trials;
+    
+    % First 3 trials
+    temp_first_idx = false(1, n_trials);
+    temp_first_idx(1:min(3, n_trials)) = true; % Adjust for animals with fewer than 3 trials
+    first_idx{ianimal} = temp_first_idx;
+    
+    % Precise trials (z-scored lick error <= -3)
+    precise_idx{ianimal} = zscored_lick_errors_all{ianimal} <= -2;
+    % Exclude the first 3 trials
+    precise_idx{ianimal}(1:min(3, n_trials)) = false;
+    
+    % Imprecise (random) trials (z-scored lick error > 0)
+    imprecise_idx{ianimal} = zscored_lick_errors_all{ianimal} > -1;
+    % Exclude the first 3 trials
+    imprecise_idx{ianimal}(1:min(3, n_trials)) = false;
+end
+
+% Step 2: For each animal, select one neuron count and find the best bootstrap
+n_conditions = 3;
+condition_names = {'First 3 Trials', 'Precise Trials', 'Imprecise Trials'};
+
+% Initialize matrices to store mean RMSE and R² per condition per animal
+mean_rmse_per_animal = nan(n_animals, n_conditions);
+mean_r2_per_animal = nan(n_animals, n_conditions);
+
+selected_neuron_count = 50;
+
+for ianimal = 1:n_animals
+    fprintf('Processing animal %d...\n', ianimal);
+    
+    % Get available neuron counts
+    neuron_counts = decoder_performance(ianimal).neuron_counts;
+    n_counts = length(neuron_counts);
+    
+    max_count_idx = find(neuron_counts == selected_neuron_count);
+    if isempty(max_count_idx)
+        continue
+    end
+    % Select the maximum neuron count
+    % [max_neuron_count, max_count_idx] = max(neuron_counts);
+    fprintf('Selected neuron count: %d\n', max_neuron_count);
+    
+    % Get the number of bootstrap iterations
+    n_bootstraps = options.n_bootstraps;
+    avg_rmse_per_bootstrap = nan(n_bootstraps, 1);
+    
+    % Step 2a: Find the best bootstrap iteration based on average RMSE
+    for ibootstrap = 1:n_bootstraps
+        % Check if decoded positions are available
+        if isempty(decoded_positions{ianimal}{max_count_idx, ibootstrap})
+            continue;
+        end
+        
+        % Get decoded positions for this bootstrap
+        decoded_positions_matrix = decoded_positions{ianimal}{max_count_idx, ibootstrap}; % [n_pos_bins x n_trials]
+        n_trials = size(decoded_positions_matrix, 2);
+        n_pos_bins = size(decoded_positions_matrix, 1);
+        
+        % True positions (same for all trials)
+        true_positions_vector = (1:n_pos_bins)' * options.bin_size; % [n_pos_bins x 1]
+        
+        % Compute RMSE per trial
+        rmse_per_trial = nan(n_trials, 1);
+        for itrial = 1:n_trials
+            y_pred = decoded_positions_matrix(:, itrial);
+            y_true = true_positions_vector;
+            
+            % Remove NaNs (if any)
+            valid_idx = ~isnan(y_pred) & ~isnan(y_true);
+            y_pred = y_pred(valid_idx);
+            y_true = y_true(valid_idx);
+            
+            % Compute RMSE
+            rmse = sqrt(mean((y_pred - y_true).^2));
+            rmse_per_trial(itrial) = rmse;
+        end
+        
+        % Compute average RMSE across all trials
+        avg_rmse = mean(rmse_per_trial, 'omitnan');
+        avg_rmse_per_bootstrap(ibootstrap) = avg_rmse;
+    end
+    
+    % Check if any valid bootstraps were found
+    if all(isnan(avg_rmse_per_bootstrap))
+        warning('No valid bootstraps found for animal %d. Skipping.', ianimal);
+        continue;
+    end
+    
+    % Step 2b: Select the bootstrap with the lowest average RMSE
+    [~, best_bootstrap_idx] = min(avg_rmse_per_bootstrap);
+    fprintf('Selected best bootstrap iteration: %d\n', best_bootstrap_idx);
+    
+    % Step 3: Compute per-trial performance metrics using the best bootstrap
+    decoded_positions_matrix = decoded_positions{ianimal}{max_count_idx, best_bootstrap_idx};
+    n_trials = size(decoded_positions_matrix, 2);
+    n_pos_bins = size(decoded_positions_matrix, 1);
+    
+    % True positions (same for all trials)
+    true_positions_vector = (1:n_pos_bins)' * options.bin_size; % [n_pos_bins x 1]
+    
+    % Initialize arrays to store performance metrics per trial
+    rmse_per_trial = nan(n_trials, 1);
+    r2_per_trial = nan(n_trials, 1);
+    
+    % Compute performance metrics per trial
+    for itrial = 1:n_trials
+        y_pred = decoded_positions_matrix(:, itrial);
+        y_true = true_positions_vector;
+        
+        % Remove NaNs (if any)
+        valid_idx = ~isnan(y_pred) & ~isnan(y_true);
+        y_pred = y_pred(valid_idx);
+        y_true = y_true(valid_idx);
+        
+        % Compute RMSE
+        rmse = sqrt(mean((y_pred - y_true).^2));
+        
+        % Compute R²
+        ss_res = sum((y_true - y_pred).^2);
+        ss_tot = sum((y_true - mean(y_true)).^2);
+        r2 = 1 - ss_res / ss_tot;
+        
+        % Store the metrics
+        rmse_per_trial(itrial) = rmse;
+        r2_per_trial(itrial) = r2;
+    end
+    
+    % Step 4: Group the trials into conditions and compute mean metrics per condition
+    idx_first = first_idx{ianimal};
+    idx_precise = precise_idx{ianimal};
+    idx_imprecise = imprecise_idx{ianimal};
+    
+    % For each condition, compute mean RMSE and R²
+    for icondition = 1:n_conditions
+        switch icondition
+            case 1 % First 3 trials
+                trial_idx = idx_first;
+            case 2 % Precise trials
+                trial_idx = idx_precise;
+            case 3 % Imprecise trials
+                trial_idx = idx_imprecise;
+        end
+        
+        % Get the performance metrics for these trials
+        rmse_trials = rmse_per_trial(trial_idx);
+        r2_trials = r2_per_trial(trial_idx);
+        
+        % Compute mean values, handling cases with no trials
+        if ~isempty(rmse_trials)
+            mean_rmse_per_animal(ianimal, icondition) = mean(rmse_trials, 'omitnan');
+        end
+        if ~isempty(r2_trials)
+            mean_r2_per_animal(ianimal, icondition) = mean(r2_trials, 'omitnan');
+        end
+    end
+end
+
+% Remove animals with NaNs in all conditions
+valid_animals = ~all(isnan(mean_rmse_per_animal), 2);
+mean_rmse_per_animal = mean_rmse_per_animal(valid_animals, :);
+mean_r2_per_animal = mean_r2_per_animal(valid_animals, :);
+n_animals_valid = sum(valid_animals);
+
+% Step 5: Perform Repeated-Measures ANOVA
+
+% Define the within-subjects factor
+within = table({'First3'; 'Precise'; 'Imprecise'}, 'VariableNames', {'Condition'});
+
+% For RMSE
+% Create a table for RMSE
+rmse_table = array2table(mean_rmse_per_animal, 'VariableNames', {'First3', 'Precise', 'Imprecise'});
+rmse_table.AnimalID = (1:n_animals_valid)';
+
+% Fit the repeated-measures model
+rm_rm = fitrm(rmse_table, 'First3,Precise,Imprecise~1', 'WithinDesign', within);
+
+% Perform the ANOVA
+ranovatbl_rmse = ranova(rm_rm);
+disp('RMSE ANOVA Results:');
+disp(ranovatbl_rmse);
+
+% Post-hoc comparisons for RMSE
+[rmse_multcompare] = multcompare(rm_rm, 'Condition', 'ComparisonType', 'bonferroni');
+disp('RMSE Post-hoc Comparisons:');
+disp(rmse_multcompare);
+
+% For R²
+% Create a table for R²
+r2_table = array2table(mean_r2_per_animal, 'VariableNames', {'First3', 'Precise', 'Imprecise'});
+r2_table.AnimalID = (1:n_animals_valid)';
+
+% Fit the repeated-measures model
+r2_rm = fitrm(r2_table, 'First3,Precise,Imprecise~1', 'WithinDesign', within);
+
+% Perform the ANOVA
+ranovatbl_r2 = ranova(r2_rm);
+disp('R² ANOVA Results:');
+disp(ranovatbl_r2);
+
+% Post-hoc comparisons for R²
+[r2_multcompare] = multcompare(r2_rm, 'Condition', 'ComparisonType', 'bonferroni');
+disp('R² Post-hoc Comparisons:');
+disp(r2_multcompare);
+
+% Step 6: Plot the results and add significance markers
+
+% Prepare data for plotting
+rmse_plot_data = num2cell(mean_rmse_per_animal, 1);
+r2_plot_data = num2cell(mean_r2_per_animal, 1);
+
+% Plot RMSE with error bars
+figure;
+my_errorbar_plot(rmse_plot_data);
+xticks(1:n_conditions);
+xticklabels({'First 3', 'Precise', 'Imprecise'});
+ylabel('RMSE');
+title('Decoding RMSE Across Conditions');
+
+% Add significance markers for RMSE
+hold on;
+comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
+p_values = rmse_multcompare.pValue;
+
+for i = 1:size(comparison_pairs, 1)
+    cond1 = comparison_pairs(i, 1);
+    cond2 = comparison_pairs(i, 2);
+    p = p_values(i);
+    if p < 0.05
+        sigstar({[cond1, cond2]}, p);
+    end
+end
+hold off;
+
+% Plot R² with error bars
+figure;
+my_errorbar_plot(r2_plot_data);
+xticks(1:n_conditions);
+xticklabels({'First 3', 'Precise', 'Imprecise'});
+ylabel('R²');
+title('Decoding R² Across Conditions');
+
+% Add significance markers for R²
+hold on;
+p_values = r2_multcompare.pValue;
+
+for i = 1:size(comparison_pairs, 1)
+    cond1 = comparison_pairs(i, 1);
+    cond2 = comparison_pairs(i, 2);
+    p = p_values(i);
+    if p < 0.05
+        sigstar({[cond1, cond2]}, p);
+    end
+end
+hold off;
+
 
 %% PCA plotting
 
