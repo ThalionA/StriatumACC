@@ -1,11 +1,11 @@
-function [decoded_positions, decoder_performance] = decode_position(preprocessed_data, options)
+function [decoded_positions, decoder_performance, decoder_coefficients] = decode_position(preprocessed_data, options)
     % Set default options
     default_options = struct('model_type', 'ridge', ...
                              'bin_size', 5, ...
                              'area', 'all', ...
                              'n_bootstraps', 10, ...
                              'neuron_counts', [15, 50, 100]);
-    
+
     if nargin < 2
         options = default_options;
     else
@@ -14,7 +14,7 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
     end
 
     % Validate the model_type option
-    valid_model_types = {'ridge', 'linear'};
+    valid_model_types = {'ridge', 'linear', 'gpr'};
     if ~ismember(lower(options.model_type), valid_model_types)
         error('Invalid model_type: %s. Valid options are ''ridge'' or ''linear''.', options.model_type);
     end
@@ -22,6 +22,7 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
     n_animals = length(preprocessed_data);
     decoder_performance = struct();
     decoded_positions = cell(1, n_animals);
+    decoder_coefficients = cell(1, n_animals);
 
     % Decode positions for each animal
     for ianimal = 1:n_animals
@@ -71,6 +72,7 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
         decoder_performance(ianimal).position_errors = nan(n_pos_bins, n_counts, n_bootstraps);
 
         decoded_positions{ianimal} = cell(n_counts, n_bootstraps);
+        decoder_coefficients{ianimal} = cell(n_counts, n_bootstraps);
 
         % Loop over neuron counts
         for icount = 1:n_counts
@@ -93,6 +95,10 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
                 end
                 spatial_binned_fr_boot = spatial_binned_fr(selected_neuron_idx, :, :);
 
+                % Store the selected neuron indices
+                decoder_coefficients{ianimal}{icount, ibootstrap}.neuron_indices = find(neuron_idx);
+                decoder_coefficients{ianimal}{icount, ibootstrap}.selected_neurons = decoder_coefficients{ianimal}{icount, ibootstrap}.neuron_indices(selected_neuron_idx);
+
                 % Prepare data for decoding
                 X = reshape(spatial_binned_fr_boot, n_selected_neurons, [])';
                 true_positions = repmat((1:n_pos_bins)', n_trials, 1) * options.bin_size;
@@ -103,6 +109,11 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
 
                 % Initialize predicted positions
                 predicted_positions = nan(size(true_positions));
+
+                % Initialize coefficients matrix
+                n_folds = n_trials;
+                n_features = n_selected_neurons;
+                coefficients = nan(n_features, n_folds);
 
                 % Leave-One-Out Cross-Validation over trials
                 for ileaveout = 1:n_trials
@@ -123,19 +134,32 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
                     % Train decoder based on selected model type
                     mdl = train_decoder(X(train_idx, :), true_positions(train_idx), options);
 
+                    % Extract coefficients
+                    beta = mdl.Beta;
+
+                    % Store coefficients
+                    coefficients(:, ileaveout) = beta;
+
                     % Test decoder
-                    predicted_positions(test_idx) = test_decoder(mdl, X(test_idx, :), options);
-                end
+                    y_pred = test_decoder(mdl, X(test_idx, :), options);
+
+                    % Replace negative predictions with NaN
+                    y_pred(y_pred < 0) = NaN;
+
+                    predicted_positions(test_idx) = y_pred;
+                end % End of leave-one-out cross-validation
+
+                % Average coefficients across folds
+                mean_coefficients = mean(coefficients, 2, 'omitnan');
+
+                % Store the averaged coefficients
+                decoder_coefficients{ianimal}{icount, ibootstrap}.coefficients = mean_coefficients;
 
                 % Reshape predictions back to positions x trials
                 decoded_positions_matrix = reshape(predicted_positions, n_pos_bins, n_trials);
 
                 % Determine the index for storing results
-                if n_selected_neurons == n_neurons
-                    store_idx = 1;  % Only one iteration
-                else
-                    store_idx = ibootstrap;
-                end
+                store_idx = ibootstrap;
 
                 decoded_positions{ianimal}{icount, store_idx} = decoded_positions_matrix;
 
@@ -148,6 +172,7 @@ function [decoded_positions, decoder_performance] = decode_position(preprocessed
                 decoder_performance(ianimal).mae(icount, store_idx) = mae;
                 decoder_performance(ianimal).position_errors(:, icount, store_idx) = position_errors;
             end % End of bootstrap iterations
+            fprintf('Done with neuron count %d for animal %d\n', n_selected_neurons, ianimal);
         end % End of neuron counts
         fprintf('Done with animal %d\n', ianimal);
     end % End of animals
@@ -163,6 +188,10 @@ end
 
 function mdl = train_decoder(X_train, y_train, options)
     switch lower(options.model_type)
+        case 'gpr'
+            % Train GPR model
+            mdl = fitrgp(X_train, y_train, 'FitMethod', 'exact', 'KernelFunction', 'squaredexponential');
+
         case 'ridge'
             mdl = fitrlinear(X_train, y_train, ...
                 'Learner', 'leastsquares', 'Regularization', 'ridge', ...
@@ -177,9 +206,25 @@ end
 
 function y_pred = test_decoder(mdl, X_test, options)
     y_pred = predict(mdl, X_test);
+    % Replace negative positions with NaN
+    y_pred(y_pred < 0) = NaN;
 end
 
 function [rmse, r2, mae, position_errors] = compute_performance_metrics(y_pred, y_true, n_pos_bins)
+    % Remove NaN predictions and corresponding true values
+    valid_idx = ~isnan(y_pred);
+    y_pred = y_pred(valid_idx);
+    y_true = y_true(valid_idx);
+
+    % Check if there are valid predictions
+    if isempty(y_pred)
+        rmse = NaN;
+        r2 = NaN;
+        mae = NaN;
+        position_errors = NaN(n_pos_bins, 1);
+        return;
+    end
+
     rmse = sqrt(mean((y_pred - y_true).^2, 'omitnan'));
     ss_res = sum((y_true - y_pred).^2, 'omitnan');
     ss_tot = sum((y_true - mean(y_true, 'omitnan')).^2, 'omitnan');
