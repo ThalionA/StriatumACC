@@ -21,7 +21,7 @@ function [decoded_positions, decoder_performance] = decode_position_mld(preproce
         fprintf('Decoding positions for animal %d using Gaussian MLD...\n', ianimal);
 
         % Get binned neural data and select neurons based on area
-        spatial_binned_fr = preprocessed_data(ianimal).spatial_binned_fr_all;
+        spatial_binned_fr = preprocessed_data(ianimal).z_spatial_binned_fr_all;
 
         % Select neurons based on area
         switch lower(options.area)
