@@ -86,7 +86,7 @@ function [clusters, cluster_assignments, normalized_spatial_patterns, pattern_la
     max_clusters = min(6, num_patterns); % Set a reasonable maximum
     silhouette_avg = zeros(max_clusters, 1);
 
-    for k = 2:max_clusters
+    for k = 4:max_clusters
         % Assign clusters
         cluster_assignments_k = cluster(Z, 'maxclust', k);
         % Compute the silhouette values
