@@ -9,6 +9,7 @@ function plot_decoder_accuracy_vs_chance(decoder_performance, neuron_count, n_po
     % Initialize variables to store accuracies
     all_accuracies = [];
 
+    invalid_animals = false(1, n_animals);
     % Collect accuracies for each animal at the specified neuron count
     for ianimal = 1:n_animals
         % Get neuron counts for this animal
@@ -19,6 +20,7 @@ function plot_decoder_accuracy_vs_chance(decoder_performance, neuron_count, n_po
         idx = find(animal_neuron_counts == neuron_count);
         if isempty(idx)
             warning('Animal %d does not have data for neuron count %d. Skipping this animal.', ianimal, neuron_count);
+            invalid_animals(ianimal) = true;
             continue;
         end
 
@@ -34,28 +36,20 @@ function plot_decoder_accuracy_vs_chance(decoder_performance, neuron_count, n_po
         error('No data available for neuron count %d across all animals.', neuron_count);
     end
 
-    % Compute mean and SEM across all animals and bootstraps
-    mean_acc = mean(all_accuracies(:), 'omitnan');
-    sem_acc = std(all_accuracies(:), [], 'omitnan') / sqrt(numel(all_accuracies));
+    valid_animals = ~invalid_animals;
 
     % Plot the accuracy
-    figure;
-    hold on;
-
-    % Bar plot of the decoder accuracy
-    bar(1, mean_acc, 'FaceColor', 'b');
-    errorbar(1, mean_acc, sem_acc, 'k', 'LineWidth', 1.5);
+    figure
+    my_errorbar_plot(all_accuracies')
 
     % Plot chance level
     chance_level = 1 / n_pos_bins;  % Assuming n_pos_bins is known
     yline(chance_level, 'r--', 'LineWidth', 1);
 
     % Customize the plot
-    xlim([0.5, 1.5]);
-    xticks(1);
-    xticklabels({sprintf('%d Neurons', neuron_count)});
+    % xlim([0.5, 1.5]);
+    % xticks(1);
+    xticklabels(strsplit(sprintf('animal%d ', find(valid_animals))));
     ylabel('Decoder Accuracy');
-    title(sprintf('Decoder Accuracy at Neuron Count %d', neuron_count));
-    legend({'Decoder Accuracy', 'Chance Level'}, 'Location', 'best');
-    hold off;
+    
 end
