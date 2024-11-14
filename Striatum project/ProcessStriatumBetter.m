@@ -261,6 +261,8 @@ color_dms = [0, 0.4470, 0.7410];       % Deep Blue for DMS
 color_dls =  [0.4660, 0.6740, 0.1880];  % Forest Green for DLS
 color_acc = [0.8500, 0.3250, 0.0980];  % Crimson Red for ACC
 
+average_lick_precision = cellfun(@(x) mean(x, 'omitmissing'), {preprocessed_data(:).zscored_lick_errors});
+
 %% 
 
 max_precise_runlength = zeros(1, n_animals);
@@ -993,10 +995,16 @@ visualize_performance_vs_neuron_count(decoder_performance);
 % Decoding vs behavioral performance correlations
 visualize_performance_correlations(preprocessed_data, decoded_positions, decoder_performance, options.bin_size, neuron_counts_to_plot);
 
-options_mle = struct('bin_size', 5, 'model_type', 'linear', 'area', 'all', 'n_bootstraps', 100, 'neuron_counts', [50]);
+all_decoder_performances = {decoder_performance(:).r2};
+valid_animals = cellfun(@(x) size(x, 1) > 0, all_decoder_performances);
+mean_decoding_performance = cellfun(@(x) mean(x(end, :), "omitmissing"), all_decoder_performances(valid_animals));
+
+
+options_mle = struct('bin_size', 5, 'area', 'all', 'n_bootstraps', 100, 'neuron_counts', [100]);
 [decoded_positions_mle, decoder_performance_mle] = decode_position_mld(preprocessed_data, options_mle);
-plot_decoder_accuracy_vs_chance(decoder_performance_mle, 50)
+plot_decoder_accuracy_vs_chance(decoder_performance_mle, 100)
 visualize_decoding_results(decoded_positions_mle, decoder_performance_mle, options_mle.bin_size);
+
 
 for ianimal = 1:n_animals
     preprocessed_data(ianimal).decoded_positions = decoded_positions{ianimal};
@@ -1070,7 +1078,7 @@ for ianimal = 1:n_animals
     end
     % Select the maximum neuron count
     % [max_neuron_count, max_count_idx] = max(neuron_counts);
-    fprintf('Selected neuron count: %d\n', max_neuron_count);
+    % fprintf('Selected neuron count: %d\n', max_neuron_count);
     
     % Get the number of bootstrap iterations
     n_bootstraps = options.n_bootstraps;
@@ -1321,8 +1329,8 @@ end
 %% New pca plotting
 
 for ianimal = 1:n_animals
-
-    zscored_lick_errors = preprocessed_data(ianimal).zscored_lick_errors(1:highest_common_n_trials);
+    
+    zscored_lick_errors = preprocessed_data(ianimal).zscored_lick_errors;
 
     % Run pca plotting ALL
     plot_striatum_pca_new(preprocessed_data(ianimal).spatial_binned_fr_all, 3, highest_common_n_trials, zscored_lick_errors, preprocessed_data(ianimal).temp_binned_dark_fr)
@@ -1521,7 +1529,7 @@ for ianimal = 1:n_animals
     xlabel('Trials')
     title('DMS Only')
     axis tight
-    ylim([-0.05, 0.5])
+    % ylim([-0.05, 0.5])
 
     if any(is_dls)
         subplot(3, 2, 4)
@@ -1530,7 +1538,7 @@ for ianimal = 1:n_animals
         xlabel('Trials')
         title('DLS Only')
         axis tight
-        ylim([-0.05, 0.5])
+        % ylim([-0.05, 0.5])
     end
 
     subplot(3, 2, 6)
@@ -1539,13 +1547,13 @@ for ianimal = 1:n_animals
     xlabel('Trials')
     title('ACC Only')
     axis tight
-    ylim([-0.05, 0.5])
+    % ylim([-0.05, 0.5])
 
     sgtitle(sprintf('Average Trial-to-Trial Correlation - Animal %d', ianimal))
     fig = gcf();
     fig.Position = [933, 11, 750, 950];
 
-    % save_to_svg(sprintf('average_trial_to_trial_correlation_animal%d', ianimal))
+    save_to_svg(sprintf('average_trial_to_trial_correlation_animal%d', ianimal))
 end
 
 %% Trial-to-Trial Correlation of Behaviour
@@ -1765,3 +1773,429 @@ for ianimal = 1:n_animals
 end
 ylabel(t, 'Lick Error')
 xlabel(t, 'Neural Stability')
+
+zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
+
+% Plot for DMS
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    is_dms = preprocessed_data(ianimal).is_dms;
+    avg_neuron_corrs_dms = mean(avg_neuron_corrs{ianimal}(is_dms, :), 'omitnan');  % Mean over DMS neurons
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_neuron_corrs_dms), length(zscored_lick_errors_animal));
+    avg_neuron_corrs_dms = avg_neuron_corrs_dms(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+    
+    nexttile
+    scatter(avg_neuron_corrs_dms, zscored_lick_errors_animal, 'filled', 'MarkerFaceColor', color_dms, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_neuron_corrs_dms', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d - DMS', ianimal))
+end
+xlabel(t, 'Neural Stability')
+ylabel(t, 'Lick Error')
+title(t, 'DMS: Neural Stability vs Behavioral Performance')
+
+% Plot for DLS
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    is_dls = preprocessed_data(ianimal).is_dls;
+    avg_neuron_corrs_dls = mean(avg_neuron_corrs{ianimal}(is_dls, :), 'omitnan');  % Mean over DLS neurons
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_neuron_corrs_dls), length(zscored_lick_errors_animal));
+    avg_neuron_corrs_dls = avg_neuron_corrs_dls(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+    
+    nexttile
+    scatter(avg_neuron_corrs_dls, zscored_lick_errors_animal, 'filled', 'MarkerFaceColor', color_dls, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_neuron_corrs_dls', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d - DLS', ianimal))
+end
+xlabel(t, 'Neural Stability')
+ylabel(t, 'Lick Error')
+title(t, 'DLS: Neural Stability vs Behavioral Performance')
+
+% Plot for ACC
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    is_acc = preprocessed_data(ianimal).is_acc;
+    avg_neuron_corrs_acc = mean(avg_neuron_corrs{ianimal}(is_acc, :), 'omitnan');  % Mean over ACC neurons
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_neuron_corrs_acc), length(zscored_lick_errors_animal));
+    avg_neuron_corrs_acc = avg_neuron_corrs_acc(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+    
+    nexttile
+    scatter(avg_neuron_corrs_acc, zscored_lick_errors_animal, 'filled', 'MarkerFaceColor', color_acc, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_neuron_corrs_acc', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d - ACC', ianimal))
+end
+xlabel(t, 'Neural Stability')
+ylabel(t, 'Lick Error')
+title(t, 'ACC: Neural Stability vs Behavioral Performance')
+
+%% Neural Stability Across Conditions for All Neurons
+
+% Assume the following variables are available:
+% - preprocessed_data: struct containing data for each animal
+% - avg_neuron_corrs: cell array containing [n_neurons x n_trials] matrices per animal
+% - zscored_lick_errors_all: cell array containing [1 x n_trials] vectors per animal
+% - n_animals: number of animals
+
+% Step 1: Identify trial indices for each condition
+% Load z-scored lick errors for all animals
+zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
+
+% Initialize logical indices for each condition
+first_idx = cell(1, n_animals);
+precise_idx = cell(1, n_animals);
+imprecise_idx = cell(1, n_animals);
+
+for ianimal = 1:n_animals
+    n_trials = preprocessed_data(ianimal).n_trials;
+    
+    % First 3 trials
+    temp_first_idx = false(1, n_trials);
+    temp_first_idx(1:min(3, n_trials)) = true; % Adjust for animals with fewer than 3 trials
+    first_idx{ianimal} = temp_first_idx;
+    
+    % Precise trials (z-scored lick error <= -2)
+    precise_idx{ianimal} = zscored_lick_errors_all{ianimal} <= -2;
+    % Exclude the first 3 trials
+    precise_idx{ianimal}(1:min(3, n_trials)) = false;
+    
+    % Imprecise trials (z-scored lick error > -1)
+    imprecise_idx{ianimal} = zscored_lick_errors_all{ianimal} > -1;
+    % Exclude the first 3 trials
+    imprecise_idx{ianimal}(1:min(3, n_trials)) = false;
+end
+
+% Define conditions
+n_conditions = 3;
+condition_names = {'First 3 Trials', 'Precise Trials', 'Imprecise Trials'};
+
+% Initialize matrix to store mean neural stability per condition per animal (all neurons)
+mean_neural_stability_all = nan(n_animals, n_conditions);
+
+for ianimal = 1:n_animals
+    fprintf('Processing animal %d...\n', ianimal);
+    
+    % Get avg_neuron_corrs for this animal
+    avg_neuron_corrs_animal = avg_neuron_corrs{ianimal}; % [n_neurons x n_trials]
+    
+    % Get indices for conditions
+    idx_first = first_idx{ianimal};
+    idx_precise = precise_idx{ianimal};
+    idx_imprecise = imprecise_idx{ianimal};
+    
+    % For each condition
+    for icondition = 1:n_conditions
+        switch icondition
+            case 1 % First 3 trials
+                trial_idx = idx_first;
+            case 2 % Precise trials
+                trial_idx = idx_precise;
+            case 3 % Imprecise trials
+                trial_idx = idx_imprecise;
+        end
+        
+        % Neural stability across all neurons and selected trials
+        neural_stability_all = avg_neuron_corrs_animal(:, trial_idx); % [n_neurons x n_trials_in_condition]
+        mean_stability_all = mean(neural_stability_all, 'all', 'omitnan');
+        mean_neural_stability_all(ianimal, icondition) = mean_stability_all;
+    end
+end
+
+% Remove animals with NaNs in all conditions
+valid_animals_all = ~all(isnan(mean_neural_stability_all), 2);
+mean_neural_stability_all = mean_neural_stability_all(valid_animals_all, :);
+
+% Step 4: Perform Repeated-Measures ANOVA
+
+% Define the within-subjects factor
+within = table({'First3'; 'Precise'; 'Imprecise'}, 'VariableNames', {'Condition'});
+
+% All neurons
+if ~isempty(mean_neural_stability_all)
+    n_animals_all = size(mean_neural_stability_all, 1);
+    
+    % Create a table for All Neurons
+    neural_stability_table_all = array2table(mean_neural_stability_all, 'VariableNames', {'First3', 'Precise', 'Imprecise'});
+    neural_stability_table_all.AnimalID = (1:n_animals_all)';
+    
+    % Fit the repeated-measures model
+    rm_all = fitrm(neural_stability_table_all, 'First3,Precise,Imprecise~1', 'WithinDesign', within);
+    
+    % Perform the ANOVA
+    ranovatbl_all = ranova(rm_all);
+    disp('All Neurons Neural Stability ANOVA Results:');
+    disp(ranovatbl_all);
+    
+    % Post-hoc comparisons
+    [all_multcompare] = multcompare(rm_all, 'Condition', 'ComparisonType', 'bonferroni');
+    disp('All Neurons Neural Stability Post-hoc Comparisons:');
+    disp(all_multcompare);
+    
+    % Step 5: Plot the results and add significance markers
+    % Prepare data for plotting
+    neural_stability_plot_data_all = num2cell(mean_neural_stability_all, 1);
+    
+    % Plot with error bars
+    figure;
+    my_errorbar_plot(neural_stability_plot_data_all);
+    xticks(1:n_conditions);
+    xticklabels({'First 3', 'Precise', 'Imprecise'});
+    ylabel('Neural Stability');
+    title('All Neurons Neural Stability Across Conditions');
+    
+    % Add significance markers
+    hold on;
+    comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
+    p_values = all_multcompare.pValue;
+    
+    for i = 1:size(comparison_pairs, 1)
+        cond1 = comparison_pairs(i, 1);
+        cond2 = comparison_pairs(i, 2);
+        p = p_values(i);
+        if p < 0.05
+            sigstar({[cond1, cond2]}, p);
+        end
+    end
+    hold off;
+end
+
+
+% Initialize matrices to store mean neural stability per condition per animal per area
+mean_neural_stability_dms = nan(n_animals, n_conditions);
+mean_neural_stability_dls = nan(n_animals, n_conditions);
+mean_neural_stability_acc = nan(n_animals, n_conditions);
+
+for ianimal = 1:n_animals
+    fprintf('Processing animal %d...\n', ianimal);
+    
+    % Get avg_neuron_corrs for this animal
+    avg_neuron_corrs_animal = avg_neuron_corrs{ianimal}; % [n_neurons x n_trials]
+    
+    % Get indices for neurons in each area
+    is_dms = preprocessed_data(ianimal).is_dms;
+    is_dls = preprocessed_data(ianimal).is_dls;
+    is_acc = preprocessed_data(ianimal).is_acc;
+    
+    % Get indices for conditions
+    idx_first = first_idx{ianimal};
+    idx_precise = precise_idx{ianimal};
+    idx_imprecise = imprecise_idx{ianimal};
+    
+    % For each condition
+    for icondition = 1:n_conditions
+        switch icondition
+            case 1 % First 3 trials
+                trial_idx = idx_first;
+            case 2 % Precise trials
+                trial_idx = idx_precise;
+            case 3 % Imprecise trials
+                trial_idx = idx_imprecise;
+        end
+        
+        % For each area
+        % DMS
+        if any(is_dms)
+            neural_stability_dms = avg_neuron_corrs_animal(is_dms, trial_idx); % [n_dms_neurons x n_trials_in_condition]
+            mean_stability_dms = mean(neural_stability_dms, 'all', 'omitnan');
+            mean_neural_stability_dms(ianimal, icondition) = mean_stability_dms;
+        end
+        
+        % DLS
+        if any(is_dls)
+            neural_stability_dls = avg_neuron_corrs_animal(is_dls, trial_idx); % [n_dls_neurons x n_trials_in_condition]
+            mean_stability_dls = mean(neural_stability_dls, 'all', 'omitnan');
+            mean_neural_stability_dls(ianimal, icondition) = mean_stability_dls;
+        end
+        
+        % ACC
+        if any(is_acc)
+            neural_stability_acc = avg_neuron_corrs_animal(is_acc, trial_idx); % [n_acc_neurons x n_trials_in_condition]
+            mean_stability_acc = mean(neural_stability_acc, 'all', 'omitnan');
+            mean_neural_stability_acc(ianimal, icondition) = mean_stability_acc;
+        end
+    end
+end
+
+% Remove animals with NaNs in all conditions for each area
+valid_animals_dms = ~all(isnan(mean_neural_stability_dms), 2);
+valid_animals_dls = ~all(isnan(mean_neural_stability_dls), 2);
+valid_animals_acc = ~all(isnan(mean_neural_stability_acc), 2);
+
+% For each area, get the data for valid animals
+mean_neural_stability_dms = mean_neural_stability_dms(valid_animals_dms, :);
+mean_neural_stability_dls = mean_neural_stability_dls(valid_animals_dls, :);
+mean_neural_stability_acc = mean_neural_stability_acc(valid_animals_acc, :);
+
+% Step 4: Perform Repeated-Measures ANOVA per area
+
+% Define the within-subjects factor
+within = table({'First3'; 'Precise'; 'Imprecise'}, 'VariableNames', {'Condition'});
+
+% DMS
+if ~isempty(mean_neural_stability_dms)
+    n_animals_dms = size(mean_neural_stability_dms, 1);
+    
+    % Create a table for DMS
+    neural_stability_table_dms = array2table(mean_neural_stability_dms, 'VariableNames', {'First3', 'Precise', 'Imprecise'});
+    neural_stability_table_dms.AnimalID = (1:n_animals_dms)';
+    
+    % Fit the repeated-measures model
+    rm_dms = fitrm(neural_stability_table_dms, 'First3,Precise,Imprecise~1', 'WithinDesign', within);
+    
+    % Perform the ANOVA
+    ranovatbl_dms = ranova(rm_dms);
+    disp('DMS Neural Stability ANOVA Results:');
+    disp(ranovatbl_dms);
+    
+    % Post-hoc comparisons
+    [dms_multcompare] = multcompare(rm_dms, 'Condition', 'ComparisonType', 'bonferroni');
+    disp('DMS Neural Stability Post-hoc Comparisons:');
+    disp(dms_multcompare);
+    
+    % Step 5: Plot the results and add significance markers
+    % Prepare data for plotting
+    neural_stability_plot_data_dms = num2cell(mean_neural_stability_dms, 1);
+    
+    % Plot with error bars
+    figure;
+    my_errorbar_plot(neural_stability_plot_data_dms);
+    xticks(1:n_conditions);
+    xticklabels({'First 3', 'Precise', 'Imprecise'});
+    ylabel('Neural Stability');
+    title('DMS Neural Stability Across Conditions');
+    
+    % Add significance markers
+    hold on;
+    comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
+    p_values = dms_multcompare.pValue;
+    
+    for i = 1:size(comparison_pairs, 1)
+        cond1 = comparison_pairs(i, 1);
+        cond2 = comparison_pairs(i, 2);
+        p = p_values(i);
+        if p < 0.05
+            sigstar({[cond1, cond2]}, p);
+        end
+    end
+    hold off;
+end
+
+% Repeat for DLS
+if ~isempty(mean_neural_stability_dls)
+    n_animals_dls = size(mean_neural_stability_dls, 1);
+    
+    % Create a table for DLS
+    neural_stability_table_dls = array2table(mean_neural_stability_dls, 'VariableNames', {'First3', 'Precise', 'Imprecise'});
+    neural_stability_table_dls.AnimalID = (1:n_animals_dls)';
+    
+    % Fit the repeated-measures model
+    rm_dls = fitrm(neural_stability_table_dls, 'First3,Precise,Imprecise~1', 'WithinDesign', within);
+    
+    % Perform the ANOVA
+    ranovatbl_dls = ranova(rm_dls);
+    disp('DLS Neural Stability ANOVA Results:');
+    disp(ranovatbl_dls);
+    
+    % Post-hoc comparisons
+    [dls_multcompare] = multcompare(rm_dls, 'Condition', 'ComparisonType', 'bonferroni');
+    disp('DLS Neural Stability Post-hoc Comparisons:');
+    disp(dls_multcompare);
+    
+    % Step 5: Plot the results and add significance markers
+    % Prepare data for plotting
+    neural_stability_plot_data_dls = num2cell(mean_neural_stability_dls, 1);
+    
+    % Plot with error bars
+    figure;
+    my_errorbar_plot(neural_stability_plot_data_dls);
+    xticks(1:n_conditions);
+    xticklabels({'First 3', 'Precise', 'Imprecise'});
+    ylabel('Neural Stability');
+    title('DLS Neural Stability Across Conditions');
+    
+    % Add significance markers
+    hold on;
+    comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
+    p_values = dls_multcompare.pValue;
+    
+    for i = 1:size(comparison_pairs, 1)
+        cond1 = comparison_pairs(i, 1);
+        cond2 = comparison_pairs(i, 2);
+        p = p_values(i);
+        if p < 0.05
+            sigstar({[cond1, cond2]}, p);
+        end
+    end
+    hold off;
+end
+
+% Repeat for ACC
+if ~isempty(mean_neural_stability_acc)
+    n_animals_acc = size(mean_neural_stability_acc, 1);
+    
+    % Create a table for ACC
+    neural_stability_table_acc = array2table(mean_neural_stability_acc, 'VariableNames', {'First3', 'Precise', 'Imprecise'});
+    neural_stability_table_acc.AnimalID = (1:n_animals_acc)';
+    
+    % Fit the repeated-measures model
+    rm_acc = fitrm(neural_stability_table_acc, 'First3,Precise,Imprecise~1', 'WithinDesign', within);
+    
+    % Perform the ANOVA
+    ranovatbl_acc = ranova(rm_acc);
+    disp('ACC Neural Stability ANOVA Results:');
+    disp(ranovatbl_acc);
+    
+    % Post-hoc comparisons
+    [acc_multcompare] = multcompare(rm_acc, 'Condition', 'ComparisonType', 'bonferroni');
+    disp('ACC Neural Stability Post-hoc Comparisons:');
+    disp(acc_multcompare);
+    
+    % Step 5: Plot the results and add significance markers
+    % Prepare data for plotting
+    neural_stability_plot_data_acc = num2cell(mean_neural_stability_acc, 1);
+    
+    % Plot with error bars
+    figure;
+    my_errorbar_plot(neural_stability_plot_data_acc);
+    xticks(1:n_conditions);
+    xticklabels({'First 3', 'Precise', 'Imprecise'});
+    ylabel('Neural Stability');
+    title('ACC Neural Stability Across Conditions');
+    
+    % Add significance markers
+    hold on;
+    comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
+    p_values = acc_multcompare.pValue;
+    
+    for i = 1:size(comparison_pairs, 1)
+        cond1 = comparison_pairs(i, 1);
+        cond2 = comparison_pairs(i, 2);
+        p = p_values(i);
+        if p < 0.05
+            sigstar({[cond1, cond2]}, p);
+        end
+    end
+    hold off;
+end
