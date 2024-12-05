@@ -54,12 +54,12 @@ function [decoded_positions, decoder_performance, decoder_coefficients] = decode
 
         % Determine neuron counts to use for this animal
         neuron_counts = options.neuron_counts(options.neuron_counts <= n_neurons);
-        if isempty(neuron_counts)
-            neuron_counts = n_neurons;
-        elseif ~ismember(n_neurons, neuron_counts)
-            neuron_counts = [neuron_counts, n_neurons];
-        end
-        neuron_counts = unique(neuron_counts);
+        % if isempty(neuron_counts)
+        %     neuron_counts = n_neurons;
+        % elseif ~ismember(n_neurons, neuron_counts)
+        %     neuron_counts = [neuron_counts, n_neurons];
+        % end
+        % neuron_counts = unique(neuron_counts);
 
         n_counts = length(neuron_counts);
         n_bootstraps = options.n_bootstraps;
