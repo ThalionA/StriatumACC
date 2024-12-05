@@ -3,15 +3,24 @@ clearvars -except all_data
 clc
 
 reward_zone_start_cm = 125; % in cm
+visual_zone_start_au = 80;
 reward_zone_start_au = 100;
+reward_zone_end_au = 135;
 
 bin_size = 4; % x1.25 = cm
-bin_edges = 0:bin_size:200;
-bin_edges(end) = 202;
+% bin_edges = 0:bin_size:200;
+% bin_edges(end) = 202;
+
+% Modified code:
+bin_edges = 0:bin_size:reward_zone_end_au;
+bin_edges(end) = reward_zone_end_au + bin_size;
+
 bin_centres = bin_edges(1:end-1) + diff(bin_edges)/2;
 num_bins = numel(bin_centres);
 
+% Adjust reward zone bins accordingly
 reward_zone_start_bins = reward_zone_start_au / bin_size;
+reward_zone_end_bins = reward_zone_end_au / bin_size;
 
 % Check if preprocessed data exists
 if exist('preprocessed_data.mat', 'file')
@@ -491,7 +500,6 @@ sigstar(comp_groups(sig_ind), comp(sig_ind, 6))
 save_to_svg('area_stim_dimensionality')
 
 
-
 %% Dark dimensionality
 
 for ianimal = 1:n_animals
@@ -968,15 +976,8 @@ plot_tca_results(clusters, cluster_assignments, normalized_spatial_patterns, pat
 
 %% Decoding of position
 
-% options.cv_folds = 5;
-% options.bin_size = 5;
-% options.model_type = 'linear';  % or 'ridge', 'ann', 'linear'
-% options.area = 'all';  % or 'DMS', 'DLS', 'ACC'
-% options.n_bootstraps = 50;
-% options.neuron_counts = [15, 50, 100, 150];
-
 % Example usage with custom options
-options = struct('bin_size', 5, 'model_type', 'gpr', 'area', 'all', 'n_bootstraps', 20, 'neuron_counts', [50]);
+options = struct('bin_size', 5, 'model_type', 'linear', 'area', 'all', 'n_bootstraps', 20, 'neuron_counts', [50]);
 
 % Run decoder
 [decoded_positions, decoder_performance, decoder_coefficients] = decode_position(preprocessed_data, options);
@@ -1011,9 +1012,9 @@ for ianimal = 1:n_animals
     preprocessed_data(ianimal).decoding_options = options;
     preprocessed_data(ianimal).decoding_performance = decoder_performance(ianimal);
 
-    preprocessed_data(ianimal).decoded_positions_mle = decoded_positions_mle{ianimal};
-    preprocessed_data(ianimal).decoding_options_mle = options_mle;
-    preprocessed_data(ianimal).decoding_performance_mle = decoder_performance_mle(ianimal);
+    % preprocessed_data(ianimal).decoded_positions_mle = decoded_positions_mle{ianimal};
+    % preprocessed_data(ianimal).decoding_options_mle = options_mle;
+    % preprocessed_data(ianimal).decoding_performance_mle = decoder_performance_mle(ianimal);
 end
 save('preprocessed_data.mat', 'preprocessed_data', '-v7.3');
 
@@ -1463,6 +1464,9 @@ areas = {'DMS', 'DLS', 'ACC'};
 area_colors = {color_dms, color_dls, color_acc};
 
 avg_neuron_corrs = cell(1, n_animals); % Initialize cell array
+avg_neuron_corrs_spear = cell(1, n_animals); % Initialize cell array
+avg_population_corrs = cell(1, n_animals);
+
 
 for ianimal = 1:n_animals
     all_activity = preprocessed_data(ianimal).spatial_binned_fr_all;
@@ -1478,6 +1482,7 @@ for ianimal = 1:n_animals
 
     % Preallocate the output matrix with NaNs to handle cases with insufficient data
     avg_corrs = NaN(neurons, trials);
+    avg_corrs_spear = NaN(neurons, trials);
 
     % Loop over each neuron
     for n = 1:neurons
@@ -1495,7 +1500,8 @@ for ianimal = 1:n_animals
                 data_block = squeeze(all_activity(n, :, trials_in_window)); % Size: [spatial_bins x num_trials_in_window]
 
                 % Compute the correlation matrix for the trials in the current window
-                R = corrcoef(data_block);
+                R_spear = corr(data_block, 'Type', 'Spearman');
+                R = corr(data_block);
 
                 % Extract the upper triangle of the correlation matrix (excluding the diagonal)
                 upper_triangle = triu(R, 1);
@@ -1503,6 +1509,13 @@ for ianimal = 1:n_animals
 
                 % Compute the average correlation
                 avg_corrs(n, t) = mean(upper_vals);
+
+
+                upper_triangle_spear = triu(R_spear, 1);
+                upper_vals_spear = upper_triangle_spear(upper_triangle_spear ~= 0);
+
+                % Compute the average correlation
+                avg_corrs_spear(n, t) = mean(upper_vals_spear);
             else
                 % If only one trial is available, set the average correlation to NaN
                 avg_corrs(n, t) = NaN;
@@ -1511,6 +1524,55 @@ for ianimal = 1:n_animals
     end
 
     avg_neuron_corrs{ianimal} = avg_corrs;
+
+    avg_neuron_corrs_spear{ianimal} = avg_corrs_spear;
+
+    % Preallocate a matrix for population correlations: [areas x trials]
+    pop_corrs = NaN(numel(areas), trials);
+
+    for a = 1:numel(areas)
+        is_area = area_indices{a};
+        area_neurons = find(is_area);
+        n_area_neurons = sum(is_area);
+
+        if n_area_neurons < 2
+            continue; % Skip if not at least 2 neurons in the area
+        end
+
+        for t = 1:trials
+            % Define the sliding window centered on trial t
+            trial_start = max(1, t - half_window);
+            trial_end = min(trials, t + half_window);
+            trials_in_window = trial_start:trial_end;
+            num_trials_in_window = length(trials_in_window);
+
+            if num_trials_in_window > 1
+                % Extract firing rate matrices for all neurons in the area within the window
+                % [neurons_in_area x spatial_bins x window_size]
+                data_block = all_activity(area_neurons, :, trials_in_window); 
+
+                % Initialize a vector to store corr2 values for all unique trial pairs in the window
+                corr2_vals = [];
+
+                % Compute corr2 for each unique pair of trials within the window
+                for i = 1:(num_trials_in_window-1)
+                    for j = (i+1):num_trials_in_window
+                        trial_i = squeeze(data_block(:, :, i)); % [neurons_in_area x spatial_bins]
+                        trial_j = squeeze(data_block(:, :, j)); % [neurons_in_area x spatial_bins]
+                        R = corr2(trial_i, trial_j);
+                        corr2_vals(end+1) = R; %#ok<SAGROW>
+                    end
+                end
+
+                % Compute the average corr2 for the window
+                pop_corrs(a, t) = mean(corr2_vals, 'omitnan');
+            else
+                pop_corrs(a, t) = NaN;
+            end
+        end
+    end
+
+    avg_population_corrs{ianimal} = pop_corrs;
 
     % Plotting
     figure
@@ -1553,8 +1615,55 @@ for ianimal = 1:n_animals
     fig = gcf();
     fig.Position = [933, 11, 750, 950];
 
-    save_to_svg(sprintf('average_trial_to_trial_correlation_animal%d', ianimal))
+    % save_to_svg(sprintf('average_trial_to_trial_correlation_animal%d', ianimal))
+
+
 end
+
+figure
+tiledlayout('flow');
+for ianimal = 1:n_animals
+    nexttile
+    pop_corr = avg_population_corrs{ianimal}; % [areas x trials]
+    trials = 1:size(pop_corr, 2);
+    hold on
+    for a = 1:numel(areas)
+        if any(~isnan(pop_corr(a, :)))
+            plot(trials, pop_corr(a, :), 'Color', area_colors{a}, 'LineWidth', 1);
+        end
+    end
+end
+
+xlabel('Trial Number');
+ylabel('Population Correlation (Pearson''s corr2)');
+title('Population-Level Trial-to-Trial Correlations per Area');
+legend(areas, 'Location', 'best');
+hold off;
+
+% close all
+% figure
+% t = tiledlayout('flow');
+% 
+% for ianimal = 1:n_animals
+% 
+%     nexttile
+%     scatter(avg_neuron_corrs{ianimal}(:), avg_neuron_corrs_spear{ianimal}(:))
+%     lsline
+%     identity_line
+%     axis tight
+% end
+% xlabel(t, 'pearsons rho')
+% ylabel(t, 'spearmans rho')
+
+% figure
+% ianimal = 3;
+% hold on
+% for ineuron = 1:size(avg_neuron_corrs{ianimal}, 1)
+%     scatter(squeeze(mean(preprocessed_data(ianimal).spatial_binned_fr_all(ineuron, :, :), 2)), avg_neuron_corrs{ianimal}(ineuron, :)')
+%     title(num2str(ineuron))
+%     lsline
+% end
+
 
 %% Trial-to-Trial Correlation of Behaviour
 
@@ -1750,6 +1859,7 @@ title(t, 'ACC')
 %% Stability of Neural Activity vs Behavioural Performance
 
 figure
+
 t = tiledlayout('flow', 'TileSpacing', 'compact');
 
 zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
@@ -1851,6 +1961,133 @@ xlabel(t, 'Neural Stability')
 ylabel(t, 'Lick Error')
 title(t, 'ACC: Neural Stability vs Behavioral Performance')
 
+%% Stability of Population Activity vs Behavioural Performance
+
+zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
+
+% Plot for DMS
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    is_dms = preprocessed_data(ianimal).is_dms;
+    avg_pop_corrs_dms = avg_population_corrs{ianimal}(1, :);
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_pop_corrs_dms), length(zscored_lick_errors_animal));
+    avg_pop_corrs_dms = avg_pop_corrs_dms(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+    
+    nexttile
+    scatter(avg_pop_corrs_dms, zscored_lick_errors_animal, 'filled', 'MarkerFaceColor', color_dms, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_pop_corrs_dms', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d - DMS', ianimal))
+end
+xlabel(t, 'Neural Stability')
+ylabel(t, 'Lick Error')
+title(t, 'DMS: Neural Stability vs Behavioral Performance')
+
+% Plot for DLS
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    is_dls = preprocessed_data(ianimal).is_dls;
+    avg_pop_corrs_dls = avg_population_corrs{ianimal}(2, :);
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_pop_corrs_dls), length(zscored_lick_errors_animal));
+    avg_pop_corrs_dls = avg_pop_corrs_dls(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+    
+    nexttile
+    scatter(avg_pop_corrs_dls, zscored_lick_errors_animal, 'filled', 'MarkerFaceColor', color_dls, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_pop_corrs_dls', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d - DLS', ianimal))
+end
+xlabel(t, 'Neural Stability')
+ylabel(t, 'Lick Error')
+title(t, 'DLS: Neural Stability vs Behavioral Performance')
+
+% Plot for ACC
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    
+    avg_pop_corrs_acc = avg_population_corrs{ianimal}(3, :);
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_pop_corrs_acc), length(zscored_lick_errors_animal));
+    avg_pop_corrs_acc = avg_pop_corrs_acc(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+    
+    nexttile
+    scatter(avg_pop_corrs_acc, zscored_lick_errors_animal, 'filled', 'MarkerFaceColor', color_acc, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_pop_corrs_acc', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d - ACC', ianimal))
+end
+xlabel(t, 'Neural Stability')
+ylabel(t, 'Lick Error')
+title(t, 'ACC: Neural Stability vs Behavioral Performance')
+
+
+%% Population vs neuron correlations
+
+figure
+t = tiledlayout('flow');
+for ianimal = 1:n_animals
+    nexttile
+    is_dms = preprocessed_data(ianimal).is_dms;
+    avg_pop_corrs_dms = avg_population_corrs{ianimal}(1, :);
+    avg_neuron_corrs_dms = mean(avg_neuron_corrs{ianimal}(is_dms, :), 'omitnan');  % Mean over ACC neurons
+
+    scatter(avg_pop_corrs_dms, avg_neuron_corrs_dms, 'filled', 'MarkerFaceColor', color_dms, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    lsline
+end
+title(t, 'DMS')
+xlabel(t, 'population stability')
+ylabel(t, 'average neuronal stability')
+
+figure
+t = tiledlayout('flow');
+for ianimal = 1:n_animals
+    nexttile
+    is_dls = preprocessed_data(ianimal).is_dls;
+    avg_pop_corrs_dls = avg_population_corrs{ianimal}(2, :);
+    avg_neuron_corrs_dls = mean(avg_neuron_corrs{ianimal}(is_dls, :), 'omitnan');  % Mean over ACC neurons
+
+    scatter(avg_pop_corrs_dls, avg_neuron_corrs_dls, 'filled', 'MarkerFaceColor', color_dls, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    lsline
+end
+title(t, 'DLS')
+xlabel(t, 'population stability')
+ylabel(t, 'average neuronal stability')
+
+figure
+t = tiledlayout('flow');
+for ianimal = 1:n_animals
+    nexttile
+    is_acc = preprocessed_data(ianimal).is_acc;
+    avg_pop_corrs_acc = avg_population_corrs{ianimal}(3, :);
+    avg_neuron_corrs_acc = mean(avg_neuron_corrs{ianimal}(is_acc, :), 'omitnan');  % Mean over ACC neurons
+
+    scatter(avg_pop_corrs_acc, avg_neuron_corrs_acc, 'filled', 'MarkerFaceColor', color_acc, 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    lsline
+end
+title(t, 'ACC')
+xlabel(t, 'population stability')
+ylabel(t, 'average neuronal stability')
+
 %% Neural Stability Across Conditions for All Neurons
 
 % Assume the following variables are available:
@@ -1949,7 +2186,7 @@ if ~isempty(mean_neural_stability_all)
     disp(ranovatbl_all);
     
     % Post-hoc comparisons
-    [all_multcompare] = multcompare(rm_all, 'Condition', 'ComparisonType', 'bonferroni');
+    [all_multcompare] = multcompare(rm_all, 'Condition', 'ComparisonType', 'tukey-kramer');
     disp('All Neurons Neural Stability Post-hoc Comparisons:');
     disp(all_multcompare);
     
@@ -1970,9 +2207,11 @@ if ~isempty(mean_neural_stability_all)
     comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
     p_values = all_multcompare.pValue;
     
-    for i = 1:size(comparison_pairs, 1)
-        cond1 = comparison_pairs(i, 1);
-        cond2 = comparison_pairs(i, 2);
+    which_comparison = 0;
+    for i = [1, 2, 4]
+        which_comparison = which_comparison + 1;
+        cond1 = comparison_pairs(which_comparison, 1);
+        cond2 = comparison_pairs(which_comparison, 2);
         p = p_values(i);
         if p < 0.05
             sigstar({[cond1, cond2]}, p);
@@ -2070,7 +2309,7 @@ if ~isempty(mean_neural_stability_dms)
     disp(ranovatbl_dms);
     
     % Post-hoc comparisons
-    [dms_multcompare] = multcompare(rm_dms, 'Condition', 'ComparisonType', 'bonferroni');
+    [dms_multcompare] = multcompare(rm_dms, 'Condition', 'ComparisonType', 'tukey-kramer');
     disp('DMS Neural Stability Post-hoc Comparisons:');
     disp(dms_multcompare);
     
@@ -2091,9 +2330,11 @@ if ~isempty(mean_neural_stability_dms)
     comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
     p_values = dms_multcompare.pValue;
     
-    for i = 1:size(comparison_pairs, 1)
-        cond1 = comparison_pairs(i, 1);
-        cond2 = comparison_pairs(i, 2);
+    which_comparison = 0;
+    for i = [1, 2, 4]
+        which_comparison = which_comparison + 1;
+        cond1 = comparison_pairs(which_comparison, 1);
+        cond2 = comparison_pairs(which_comparison, 2);
         p = p_values(i);
         if p < 0.05
             sigstar({[cond1, cond2]}, p);
@@ -2119,7 +2360,7 @@ if ~isempty(mean_neural_stability_dls)
     disp(ranovatbl_dls);
     
     % Post-hoc comparisons
-    [dls_multcompare] = multcompare(rm_dls, 'Condition', 'ComparisonType', 'bonferroni');
+    [dls_multcompare] = multcompare(rm_dls, 'Condition', 'ComparisonType', 'tukey-kramer');
     disp('DLS Neural Stability Post-hoc Comparisons:');
     disp(dls_multcompare);
     
@@ -2140,9 +2381,11 @@ if ~isempty(mean_neural_stability_dls)
     comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
     p_values = dls_multcompare.pValue;
     
-    for i = 1:size(comparison_pairs, 1)
-        cond1 = comparison_pairs(i, 1);
-        cond2 = comparison_pairs(i, 2);
+    which_comparison = 0;
+    for i = [1, 2, 4]
+        which_comparison = which_comparison + 1;
+        cond1 = comparison_pairs(which_comparison, 1);
+        cond2 = comparison_pairs(which_comparison, 2);
         p = p_values(i);
         if p < 0.05
             sigstar({[cond1, cond2]}, p);
@@ -2168,7 +2411,7 @@ if ~isempty(mean_neural_stability_acc)
     disp(ranovatbl_acc);
     
     % Post-hoc comparisons
-    [acc_multcompare] = multcompare(rm_acc, 'Condition', 'ComparisonType', 'bonferroni');
+    [acc_multcompare] = multcompare(rm_acc, 'Condition', 'ComparisonType', 'tukey-kramer');
     disp('ACC Neural Stability Post-hoc Comparisons:');
     disp(acc_multcompare);
     
@@ -2189,9 +2432,11 @@ if ~isempty(mean_neural_stability_acc)
     comparison_pairs = [1 3; 1 2; 2 3]; % Pairs of conditions
     p_values = acc_multcompare.pValue;
     
-    for i = 1:size(comparison_pairs, 1)
-        cond1 = comparison_pairs(i, 1);
-        cond2 = comparison_pairs(i, 2);
+    which_comparison = 0;
+    for i = [1, 2, 4]
+        which_comparison = which_comparison + 1;
+        cond1 = comparison_pairs(which_comparison, 1);
+        cond2 = comparison_pairs(which_comparison, 2);
         p = p_values(i);
         if p < 0.05
             sigstar({[cond1, cond2]}, p);
@@ -2199,3 +2444,92 @@ if ~isempty(mean_neural_stability_acc)
     end
     hold off;
 end
+
+
+
+%% Stability of behaviour vs performance
+
+zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
+
+
+figure
+t = tiledlayout('flow', 'TileSpacing', 'compact');
+
+for ianimal = 1:n_animals
+    n_trials = preprocessed_data(ianimal).n_trials;
+    avg_lick_corrs_animal = avg_lick_corrs{ianimal};  % This is now a vector\
+
+    zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
+    
+    % Ensure both vectors are of the same length
+    min_length = min(length(avg_lick_corrs_animal), length(zscored_lick_errors_animal));
+    avg_lick_corrs_animal = avg_lick_corrs_animal(1:min_length);
+    zscored_lick_errors_animal = zscored_lick_errors_animal(1:min_length);
+
+    nexttile
+    scatter(avg_lick_corrs_animal, zscored_lick_errors_animal, 'filled', 'MarkerEdgeColor', 'w', 'MarkerFaceAlpha', 0.75)
+    [rho, pval] = corr(avg_lick_corrs_animal', zscored_lick_errors_animal', 'Rows', 'complete');
+    lsline
+    legend(sprintf('\\rho = %.2f, p = %.3f', rho, pval))
+    title(sprintf('Animal %d', ianimal))
+end
+xlabel(t, 'Lick Stability')
+ylabel(t, 'Lick Error')
+%% Lick heatmap
+
+ianimal = 3;
+licks_to_plot = preprocessed_data(ianimal).spatial_binned_data.licks;
+licks_to_plot(licks_to_plot > quantile(licks_to_plot, 0.99, 'all')) = nan;
+
+figure
+imagesc(licks_to_plot)
+xlabel('spatial bin (x5cm)')
+ylabel('trial')
+xline([20, 25], 'Color', 'w')
+
+%% Example neuron
+
+ianimal = 3;
+neuron_to_plot = squeeze(preprocessed_data(ianimal).spatial_binned_fr_all(2, :, :));
+figure
+imagesc(neuron_to_plot')
+xline([20, 25], 'Color', 'w')
+colorbar
+
+figure
+shadedErrorBar(1:num_bins, mean(neuron_to_plot, 2), sem(neuron_to_plot, 2))
+xline([20, 25], 'Color', 'w')
+
+figure
+imagesc(neuron_to_plot')
+xline([20, 25], 'Color', 'w')
+colorbar
+ylim([2.5, 7.5])
+yticks(3:7)
+
+figure
+scatter(neuron_to_plot(:, 3), neuron_to_plot(:, 4), 'filled')
+lsline
+
+
+% Define the trials of interest
+selected_trials = 3:7;
+
+% Extract the data subset for trials 3 to 7
+data_subset = neuron_to_plot(:, selected_trials); % [spatial_bins x 5]
+
+% Compute the Pearson correlation matrix
+corr_matrix = corrcoef(data_subset); % [5 x 5]
+
+% --- Visualization Using imagesc ---
+figure;
+imagesc(corr_matrix);
+colorbar;
+
+% Enhance the heatmap appearance
+colormap('hot'); % Choose a color map (e.g., 'jet', 'hot', 'parula')
+axis square;      % Make the axes square for better visualization
+
+xticks(1:5)
+yticks(1:5)
+
