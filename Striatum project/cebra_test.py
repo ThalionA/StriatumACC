@@ -41,7 +41,7 @@ random.seed(42)
 logger.info("Step 1: Loading and preparing your data...")
 
 # Load your MATLAB v7.3 file using h5py
-mat_file = h5py.File('cebra_mouse3data.mat', 'r')
+mat_file = h5py.File('cebra_mouse2data.mat', 'r')
 
 # List variables in the file
 print("Variables in the MATLAB file:", list(mat_file.keys()))
