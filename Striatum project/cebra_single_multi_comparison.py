@@ -113,6 +113,7 @@ for name, X, y in zip(animal_names, animal_neural_data_list, animal_continuous_l
         device='cuda_if_available',
         verbose=True,
         time_offsets=MODEL_TIME_OFFSETS,
+        hybrid=True
     )
 
     cebra_model.fit(X, y)
@@ -150,7 +151,8 @@ multi_cebra_model = CEBRA(
     conditional=CONDITIONAL_MODE,
     device='cuda_if_available',
     verbose=True,
-    time_offsets=MODEL_TIME_OFFSETS
+    time_offsets=MODEL_TIME_OFFSETS,
+    hybrid=True
 )
 
 multi_cebra_model.fit(animal_neural_data_list, animal_continuous_label_list)
@@ -166,19 +168,73 @@ fig = plt.figure(figsize=(4 * ANIMAL_COUNT, 8))
 for idx, (name, label) in enumerate(zip(animal_names, animal_continuous_label_list)):
     # Single-session aligned embeddings
     ax_single = fig.add_subplot(2, ANIMAL_COUNT, idx + 1, projection='3d')
-    emb_single = aligned_embeddings[name]
-    cebra.plot_embedding(emb_single, embedding_labels=label[:, 0],
+    cebra.plot_embedding(emb_single := aligned_embeddings[name], embedding_labels=label[:, 0],
                          markersize=1, title=f"Single-{name}", ax=ax_single)
     ax_single.axis('off')
+    # Retrieve the scatter object
+    sc_single = ax_single.collections[-1]
+    fig.colorbar(sc_single, ax=ax_single, shrink=0.5, aspect=10)
 
     # Multi-session embeddings
     ax_multi = fig.add_subplot(2, ANIMAL_COUNT, ANIMAL_COUNT + idx + 1, projection='3d')
-    emb_multi = multi_embeddings[name]
-    cebra.plot_embedding(emb_multi, embedding_labels=label[:, 0],
+    cebra.plot_embedding(emb_multi := multi_embeddings[name], embedding_labels=label[:, 0],
                          markersize=1, title=f"Multi-{name}", ax=ax_multi)
     ax_multi.axis('off')
+    # Retrieve the scatter object
+    sc_multi = ax_multi.collections[-1]
+    fig.colorbar(sc_multi, ax=ax_multi, shrink=0.5, aspect=10)
 
 plt.tight_layout()
+plt.show()
+
+# %% Visualization of Single vs Multi-Session Embeddings with Consistent Color Code
+logger.info("Step 5: Visualizing single (aligned) vs multi-session embeddings with consistent color code...")
+
+# Gather all label values (from all animals) to determine global min and max
+all_labels = np.concatenate([lbl[:, 0] for lbl in animal_continuous_label_list])
+vmin, vmax = np.percentile(all_labels, 1), np.percentile(all_labels, 99)
+
+# Define a normalization and a colormap
+import matplotlib.colors as mcolors
+norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+cmap = plt.cm.viridis  # choose any colormap you like
+
+fig = plt.figure(figsize=(4 * ANIMAL_COUNT, 8))
+scatters = []  # to store scatter plots for colorbar reference
+
+for idx, (name, label) in enumerate(zip(animal_names, animal_continuous_label_list)):
+    emb_single = aligned_embeddings[name]
+    emb_multi = multi_embeddings[name]
+
+    # Single-session aligned embeddings
+    ax_single = fig.add_subplot(2, ANIMAL_COUNT, idx + 1, projection='3d')
+    sc_single = ax_single.scatter(
+        emb_single[:, 0], emb_single[:, 1], emb_single[:, 2],
+        c=label[:, 0], cmap=cmap, norm=norm, s=1
+    )
+    ax_single.set_title(f"Single-{name}")
+    ax_single.axis('off')
+    scatters.append(sc_single)
+    ax_single.view_init(elev=10, azim=-15)
+
+
+    # Multi-session embeddings
+    ax_multi = fig.add_subplot(2, ANIMAL_COUNT, ANIMAL_COUNT + idx + 1, projection='3d')
+    sc_multi = ax_multi.scatter(
+        emb_multi[:, 0], emb_multi[:, 1], emb_multi[:, 2],
+        c=label[:, 0], cmap=cmap, norm=norm, s=1
+    )
+    ax_multi.set_title(f"Multi-{name}")
+    ax_multi.axis('off')
+    scatters.append(sc_multi)
+    ax_multi.view_init(elev=10, azim=-15)
+
+plt.tight_layout()
+
+# Add one colorbar that applies to all plots
+# We can pass a list of axes or just use the last scatter since they share the same colormap/norm
+fig.colorbar(scatters[-1], ax=fig.get_axes(), shrink=0.5, aspect=10, label="Lick Error Value")
+
 plt.show()
 
 # %% Training Loss Visualization (Optional)
