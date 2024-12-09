@@ -216,23 +216,10 @@ plt.show()
 # Display consistency maps
 fig3 = plt.figure(figsize=(11, 4))
 
-ax1 = plt.subplot(121)
-ax2 = plt.subplot(122)
-
 ax1 = cebra.plot_consistency(
-    scores,
-    pairs=pairs,
-    datasets=subjects,
-    ax=ax1,
-    title="Single-Animal Consistency",
-    colorbar_label=None
-)
-
-ax2 = cebra.plot_consistency(
     multi_scores,
     pairs=multi_pairs,
     datasets=multi_subjects,
-    ax=ax2,
     title="Multi-Animal Consistency",
     colorbar_label=None
 )
