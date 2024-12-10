@@ -1,4 +1,4 @@
-function v = estimate_trialwise_variance(data, change_point_mean)
+function v = estimate_trialwise_variance(data)
 
 [n_neurons, n_bins, n_trials] = size(data);
 
@@ -16,12 +16,15 @@ for trial = 1:n_trials
     covMatrix = cov(trialDataT);
     
     % Compute the determinant of the covariance matrix
-    genVar(trial) = log(det(covMatrix + eps*eye(size(covMatrix))));
+    genVar(trial) = log(det(covMatrix + 1*eye(size(covMatrix))));
 end
 
-figure
-shadedErrorBar(1:n_trials, movmean(genVar, 3), movstd(genVar, 3)/sqrt(3))
-xline(change_point_mean)
+genVar = genVar/n_neurons;
+
+window_size = 5;
 
 figure
-bar([mean(genVar(1:3)), mean(genVar(4:125)), mean(genVar(126:end))])
+shadedErrorBar(1:n_trials, movmean(genVar, window_size), movstd(genVar, window_size)/sqrt(window_size))
+
+
+v = genVar;
