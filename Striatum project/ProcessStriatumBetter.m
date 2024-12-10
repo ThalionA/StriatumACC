@@ -201,12 +201,12 @@ else
 
         for itrial = 1:n_trials
             % Stimulus period
-            X_stim = z_spatial_binned_fr_all(:, :, itrial);
+            X_stim = spatial_binned_fr_all(:, :, itrial);
             singular_values_stim = svd(X_stim, 'econ');
             generalized_variances_stim(itrial) = sum(log(singular_values_stim .^ 2)) / n_total_neurons;
 
             % Dark period
-            X_dark = z_temp_binned_dark_fr(:, :, itrial);
+            X_dark = temp_binned_dark_fr(:, :, itrial);
             singular_values_dark = svd(X_dark, 'econ');
             generalized_variances_dark(itrial) = sum(log(singular_values_dark .^ 2)) / n_total_neurons;
         end
@@ -606,26 +606,35 @@ end
 
 % Define precise and random indices based on lick errors
 precise_idx = cellfun(@(x) x <= -2, zscored_lick_errors_all, 'UniformOutput', false);
-random_idx = cellfun(@(x) x > -1, zscored_lick_errors_all, 'UniformOutput', false);
+imprecise_idx = cellfun(@(x) x > -1, zscored_lick_errors_all, 'UniformOutput', false);
 
 % Exclude the first three trials from precise and random indices
 for ianimal = 1:n_animals
     precise_idx{ianimal}(1:3) = false;
-    random_idx{ianimal}(1:3) = false;
+    imprecise_idx{ianimal}(1:3) = false;
+end
+
+genvar = cell(1, n_animals);
+for ianimal = 1:n_animals
+    genvar{ianimal} = estimate_trialwise_variance(preprocessed_data(ianimal).z_spatial_binned_fr_all);
 end
 
 % Extract generalized variance values for each condition
-generalised_variance_first = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, first_idx, 'UniformOutput', false);
-generalised_variance_precise = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, precise_window_indices, 'UniformOutput', false);
-generalised_variance_random = cellfun(@(x, y) exp(x(y)), generalized_variances_stim, imprecise_window_indices, 'UniformOutput', false);
+generalised_variance_first = cellfun(@(x, y) exp(x(y)), genvar, first_idx, 'UniformOutput', false);
+generalised_variance_precise = cellfun(@(x, y) exp(x(y)), genvar, precise_idx, 'UniformOutput', false);
+generalised_variance_random = cellfun(@(x, y) exp(x(y)), genvar, imprecise_idx, 'UniformOutput', false);
 
 mean_gv_first = cellfun(@mean, generalised_variance_first);
 mean_gv_precise = cellfun(@mean, generalised_variance_precise);
 mean_gv_random = cellfun(@mean, generalised_variance_random);
 
+figure
+my_errorbar_plot(mean_gv_first, mean_gv_precise, mean_gv_random)
+
+
 % Plotting
 figure
-my_errorbar_plot([generalised_variance_first{:}], [generalised_variance_precise{:}], [generalised_variance_random{:}])
+my_simple_errorbar_plot([generalised_variance_first{:}], [generalised_variance_precise{:}], [generalised_variance_random{:}])
 
 % Prepare groups for ANOVA
 condition_groups = [ones(1, length([generalised_variance_first{:}])), 2*ones(1, length([generalised_variance_precise{:}])), 3*ones(1, length([generalised_variance_random{:}]))];
@@ -647,9 +656,6 @@ animal_groups = [animal_groups_first, animal_groups_precise, animal_groups_rando
 comp_groups = num2cell(comp(:, 1:2), 2);
 sig_ind = comp(:, 6) < 0.05;
 sigstar(comp_groups(sig_ind), comp(sig_ind, 6))
-
-figure
-my_errorbar_plot(mean_gv_first, mean_gv_precise, mean_gv_random)
 
 
 %% Cluster TCA factors based on spatial profiles
@@ -1476,7 +1482,8 @@ for ianimal = 1:n_animals
 
     area_indices = {is_dms, is_dls, is_acc};
 
-    [neurons, spatial_bins, trials] = size(all_activity);
+    [neurons, spatial_bins, ~] = size(all_activity);
+    trials = 50;
     window_size = 5;
     half_window = floor(window_size / 2);
 
@@ -1604,7 +1611,7 @@ for ianimal = 1:n_animals
     end
 
     subplot(3, 2, 6)
-    shadedErrorBar(1:trials, mean(avg_corrs(is_acc, :), 'omitmissing'), sem(avg_corrs(is_acc, :)), 'lineprops', {'Color', color_acc})
+    shadedErrorBar(1:trials, mean(avg_corrs(is_acc, :), 'omitmissing'), sem(avg_corrs(is_acc, 1:50)), 'lineprops', {'Color', color_acc})
     ylabel('Corr')
     xlabel('Trials')
     title('ACC Only')
@@ -1617,28 +1624,32 @@ for ianimal = 1:n_animals
 
     % save_to_svg(sprintf('average_trial_to_trial_correlation_animal%d', ianimal))
 
-
 end
 
 figure
-tiledlayout('flow');
+t = tiledlayout('flow');
 for ianimal = 1:n_animals
     nexttile
     pop_corr = avg_population_corrs{ianimal}; % [areas x trials]
-    trials = 1:size(pop_corr, 2);
+    % trials = 1:size(pop_corr, 2);
+    trials = 1:50;
+
     hold on
     for a = 1:numel(areas)
         if any(~isnan(pop_corr(a, :)))
-            plot(trials, pop_corr(a, :), 'Color', area_colors{a}, 'LineWidth', 1);
+            plot(trials, pop_corr(a, trials), 'Color', area_colors{a}, 'LineWidth', 1);
         end
+    end
+    if ianimal == 1
+        legend(areas, 'Location', 'best');
     end
 end
 
-xlabel('Trial Number');
-ylabel('Population Correlation (Pearson''s corr2)');
-title('Population-Level Trial-to-Trial Correlations per Area');
-legend(areas, 'Location', 'best');
-hold off;
+xlabel(t, 'Trial Number');
+ylabel(t, 'Population Correlation (Pearson''s corr2)');
+title(t, 'Population-Level Trial-to-Trial Correlations per Area');
+
+
 
 % close all
 % figure
@@ -1671,7 +1682,8 @@ avg_lick_corrs = cell(1, n_animals);
 avg_occupancy_corrs = cell(1, n_animals);
 
 for ianimal = 1:n_animals
-    n_trials = preprocessed_data(ianimal).n_trials;
+    % n_trials = preprocessed_data(ianimal).n_trials;
+    n_trials = 50;
 
     lick_data = preprocessed_data(ianimal).spatial_binned_data.licks(1:n_trials, :);
     occupancy_data = preprocessed_data(ianimal).spatial_binned_data.durations(1:n_trials, :);
@@ -1754,7 +1766,8 @@ figure
 t = tiledlayout('flow', 'TileSpacing', 'compact');
 
 for ianimal = 1:n_animals
-    n_trials = preprocessed_data(ianimal).n_trials;
+    % n_trials = preprocessed_data(ianimal).n_trials;
+    n_trials = 50;
     avg_lick_corrs_animal = avg_lick_corrs{ianimal};  % This is now a vector
     avg_neuron_corrs_animal = mean(avg_neuron_corrs{ianimal}, 'omitnan');  % Mean over neurons, size [1 x n_trials]
     
@@ -1865,7 +1878,9 @@ t = tiledlayout('flow', 'TileSpacing', 'compact');
 zscored_lick_errors_all = {preprocessed_data(:).zscored_lick_errors};
 
 for ianimal = 1:n_animals
-    n_trials = preprocessed_data(ianimal).n_trials;
+    % n_trials = preprocessed_data(ianimal).n_trials;
+    n_trials = 50;
+
     avg_neuron_corrs_animal = mean(avg_neuron_corrs{ianimal}, 'omitnan');  % Mean over neurons
     zscored_lick_errors_animal = zscored_lick_errors_all{ianimal};
     
@@ -2106,20 +2121,21 @@ precise_idx = cell(1, n_animals);
 imprecise_idx = cell(1, n_animals);
 
 for ianimal = 1:n_animals
-    n_trials = preprocessed_data(ianimal).n_trials;
-    
+    % n_trials = preprocessed_data(ianimal).n_trials;
+    n_trials = 50;
+
     % First 3 trials
     temp_first_idx = false(1, n_trials);
     temp_first_idx(1:min(3, n_trials)) = true; % Adjust for animals with fewer than 3 trials
     first_idx{ianimal} = temp_first_idx;
     
     % Precise trials (z-scored lick error <= -2)
-    precise_idx{ianimal} = zscored_lick_errors_all{ianimal} <= -2;
+    precise_idx{ianimal} = zscored_lick_errors_all{ianimal}(1:n_trials) <= -2;
     % Exclude the first 3 trials
     precise_idx{ianimal}(1:min(3, n_trials)) = false;
     
     % Imprecise trials (z-scored lick error > -1)
-    imprecise_idx{ianimal} = zscored_lick_errors_all{ianimal} > -1;
+    imprecise_idx{ianimal} = zscored_lick_errors_all{ianimal}(1:n_trials) > -1;
     % Exclude the first 3 trials
     imprecise_idx{ianimal}(1:min(3, n_trials)) = false;
 end
