@@ -137,7 +137,7 @@ else
         spatial_binned_fr_all = cat(3, spatial_binned_data.firing_rates{1:n_trials});
         spatial_binned_fr_all = spatial_binned_fr_all(:, :, 1:n_trials);
 
-        z_spatial_binned_fr_all = zscore(spatial_binned_fr_all, [], [2, 3]);
+        z_spatial_binned_fr_all = nan_zscore(spatial_binned_fr_all, [2, 3]);
 
         % Cross-area pairwise correlations
         DMS_data = spatial_binned_fr_all(is_dms, :, :);
