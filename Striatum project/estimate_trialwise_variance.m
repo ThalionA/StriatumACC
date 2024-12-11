@@ -24,7 +24,7 @@ genVar = genVar/n_neurons;
 window_size = 5;
 
 figure
-shadedErrorBar(1:n_trials, movmean(genVar, window_size), movstd(genVar, window_size)/sqrt(window_size))
+shadedErrorBar(1:n_trials, movmean(genVar, window_size, 'omitmissing'), movstd(genVar, window_size, 'omitmissing')/sqrt(window_size))
 
 
 v = genVar;
