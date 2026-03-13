@@ -10,9 +10,25 @@ function change_point_mean = find_change_points(trialDurations_vr, trial_metrics
         return
     end
 
-    [~, loc1] = min(abs(duration_peaks - trial_licks_change));
-    [~, loc2] = min(abs(duration_peaks - trial_success_change));
-    most_likely_change_duration = mean([duration_peaks(loc1), duration_peaks(loc2)]);
+    try
+        [~, loc1] = min(abs(duration_peaks - trial_licks_change));
+    catch
+        loc1 = nan;
+    end
 
-    change_point_mean = floor(mean([trial_licks_change, trial_success_change, most_likely_change_duration]));
+    try
+        [~, loc2] = min(abs(duration_peaks - trial_success_change));
+    catch
+        loc2 = nan;
+    end
+
+    if isnan(loc1)
+        most_likely_change_duration = duration_peaks(loc2);
+    elseif isnan(loc2)
+        most_likely_change_duration = duration_peaks(loc1);
+    else
+        most_likely_change_duration = mean([duration_peaks(loc1), duration_peaks(loc2)]);
+    end
+
+    change_point_mean = floor(mean([trial_licks_change, trial_success_change, most_likely_change_duration], 'omitmissing'));
 end

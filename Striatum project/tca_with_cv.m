@@ -1,19 +1,16 @@
-function [best_mdl, variance_explained, mean_cv_errors, sem_cv_errors] = tca_with_cv(data, lick_errors, tca_type, normalisation_to_apply, cross_validation_fold, maxNumFactors, max_iterations, xlines_to_plot)
+function [best_mdl, variance_explained, mean_cv_errors, sem_cv_errors] = tca_with_cv(data, tca_type, normalisation_to_apply, cross_validation_fold, maxNumFactors, max_iterations)
 % tca_with_cv performs tensor component analysis with cross-validation.
 
 % Input argument validation and default values
 arguments
     data
-    lick_errors
     tca_type (1,:) char {mustBeMember(tca_type, {'cp_als', 'cp_nmu', 'cp_orth_als'})} = 'cp_als'
     normalisation_to_apply (1,:) char {mustBeMember(normalisation_to_apply, {'none', 'z-score', 'min-max'})} = 'none'
     cross_validation_fold (1,1) double {mustBeInteger, mustBePositive} = 5
     maxNumFactors (1,1) double {mustBeInteger, mustBePositive} = 10
     max_iterations (1,1) double {mustBeInteger, mustBePositive} = 200
-    xlines_to_plot (1,3) double = nan(1,3)
 end
 
-clc
 
 % Extract size of the data
 [num_neurons, num_bins, n_trials] = size(data);
@@ -48,7 +45,7 @@ options = struct('maxiters', max_iterations, 'tol', 1e-6, 'printitn', 0);
 for nFactors = 1:maxNumFactors
     fprintf('Testing %d factors...\n', nFactors);
     for ifold = 1:K
-        fprintf('  Fold %d/%d\n', ifold, K);
+        % fprintf('  Fold %d/%d\n', ifold, K);
         % Split data into training and testing sets
         test_idx = c.test(ifold);
         train_idx = c.training(ifold);
@@ -66,6 +63,9 @@ for nFactors = 1:maxNumFactors
                     P = cp_als(data_train, nFactors, options);
                 case 'cp_nmu'
                     P = cp_nmu(data_train, nFactors, options);
+                    % options.ortho_modes = 2;
+                    % options.lambda_ortho = 0.1;
+                    % P = cp_nmu_ortho(data_train, nFactors, options);
                 case 'cp_orth_als'
                     P = cp_orth_als(data_train, nFactors, options);
                 otherwise

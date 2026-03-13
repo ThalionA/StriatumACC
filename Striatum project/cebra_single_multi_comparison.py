@@ -152,7 +152,6 @@ multi_cebra_model = CEBRA(
     device='cuda_if_available',
     verbose=True,
     time_offsets=MODEL_TIME_OFFSETS,
-    hybrid=True
 )
 
 multi_cebra_model.fit(animal_neural_data_list, animal_continuous_label_list)

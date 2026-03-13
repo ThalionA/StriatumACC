@@ -13,25 +13,32 @@ function [darkData, corridorData] = separate_dark_and_corridor_periods(trialData
     end
 
     % Find corridor start indices
-    corridor_start_idx_vr = cellfun(@(x) find(x > 6, 1), trialData.trial_world);
-    corridor_start_time_vr = cellfun(@(x, y) x(find(y > 6, 1) + 1), trialData.trial_times_zeroed, trialData.trial_world);
+    % corridor_start_idx_vr = cellfun(@(x) find(x > 6, 1), trialData.trial_world);
+    % corridor_start_time_vr = cellfun(@(x, y) x(find(y > 6, 1) + 1), trialData.trial_times_zeroed, trialData.trial_world);
 
     for itrial = 1:n_trials
-        % Find corresponding NPX indices
-        [~, corridor_start_idx_npx] = min(abs(npx_times_trials{itrial} - corridor_start_time_vr(itrial)));
+        try
+            corridor_start_idx_vr(itrial) = find(trialData.trial_world{itrial} > 6, 1);
+            corridor_start_time_vr(itrial) = trialData.trial_times_zeroed{itrial}(corridor_start_idx_vr(itrial) + 1);
 
-        % Dark period
-        darkData.binned_spikes{itrial} = binned_spikes_trials{itrial}(:, 1:corridor_start_idx_npx-1);
-        darkData.trial_position{itrial} = trialData.trial_position{itrial}(1:corridor_start_idx_vr(itrial)-1);
-        darkData.trial_licks{itrial} = trialData.trial_licks{itrial}(1:corridor_start_idx_vr(itrial)-1);
-        darkData.trial_reward{itrial} = trialData.trial_reward{itrial}(1:corridor_start_idx_vr(itrial)-1);
-        darkData.trial_times{itrial} = trialData.trial_times_zeroed{itrial}(1:corridor_start_idx_vr(itrial)-1);
-
-        % Corridor period
-        corridorData.binned_spikes{itrial} = binned_spikes_trials{itrial}(:, corridor_start_idx_npx:end);
-        corridorData.trial_position{itrial} = trialData.trial_position{itrial}(corridor_start_idx_vr(itrial):end);
-        corridorData.trial_licks{itrial} = trialData.trial_licks{itrial}(corridor_start_idx_vr(itrial):end);
-        corridorData.trial_reward{itrial} = trialData.trial_reward{itrial}(corridor_start_idx_vr(itrial):end);
-        corridorData.trial_times{itrial} = trialData.trial_times_zeroed{itrial}(corridor_start_idx_vr(itrial):end);
+            % Find corresponding NPX indices
+            [~, corridor_start_idx_npx] = min(abs(npx_times_trials{itrial} - corridor_start_time_vr(itrial)));
+    
+            % Dark period
+            darkData.binned_spikes{itrial} = binned_spikes_trials{itrial}(:, 1:corridor_start_idx_npx-1);
+            darkData.trial_position{itrial} = trialData.trial_position{itrial}(1:corridor_start_idx_vr(itrial)-1);
+            darkData.trial_licks{itrial} = trialData.trial_licks{itrial}(1:corridor_start_idx_vr(itrial)-1);
+            darkData.trial_reward{itrial} = trialData.trial_reward{itrial}(1:corridor_start_idx_vr(itrial)-1);
+            darkData.trial_times{itrial} = trialData.trial_times_zeroed{itrial}(1:corridor_start_idx_vr(itrial)-1);
+    
+            % Corridor period
+            corridorData.binned_spikes{itrial} = binned_spikes_trials{itrial}(:, corridor_start_idx_npx:end);
+            corridorData.trial_position{itrial} = trialData.trial_position{itrial}(corridor_start_idx_vr(itrial):end);
+            corridorData.trial_licks{itrial} = trialData.trial_licks{itrial}(corridor_start_idx_vr(itrial):end);
+            corridorData.trial_reward{itrial} = trialData.trial_reward{itrial}(corridor_start_idx_vr(itrial):end);
+            corridorData.trial_times{itrial} = trialData.trial_times_zeroed{itrial}(corridor_start_idx_vr(itrial):end);
+        catch
+            continue
+        end
     end
 end

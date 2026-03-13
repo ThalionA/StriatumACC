@@ -1,122 +1,155 @@
-%% Run preprocessing analysis
+%% Run preprocessing analysis (Control Data Aligned)
 clearvars -except all_data
 clc
 
-reward_zone_start_cm = 125; % in cm
+% --- Constants ---
+reward_zone_start_cm = 125; 
 visual_zone_start_au = 80;
 reward_zone_start_au = 100;
 reward_zone_end_au = 135;
+corridor_end_au = 200;
+bin_size = 4; 
 
-bin_size = 4; % x1.25 = cm
-% bin_edges = 0:bin_size:200;
-% bin_edges(end) = 202;
-
-% Modified code:
-bin_edges = 0:bin_size:200;
-bin_edges(end) = 200 + bin_size;
-
+bin_edges = 0:bin_size:corridor_end_au;
+bin_edges(end) = corridor_end_au + bin_size;
 bin_centres = bin_edges(1:end-1) + diff(bin_edges)/2;
 num_bins = numel(bin_centres);
 
-% Adjust reward zone bins accordingly
+visual_zone_start_bins = visual_zone_start_au/bin_size;
 reward_zone_start_bins = reward_zone_start_au / bin_size;
 reward_zone_end_bins = reward_zone_end_au / bin_size;
 
-% Check if preprocessed data exists
-if exist('Striatum project/preprocessed_data_control.mat', 'file')
-    fprintf('Loading preprocessed data...\n');
+% --- Load Data ---
+if exist('preprocessed_data_control.mat', 'file')
+    fprintf('Loading existing preprocessed control data...\n');
     load('preprocessed_data_control.mat', 'preprocessed_data');
-
     n_animals = numel(preprocessed_data);
 else
     if ~exist('all_data', 'var')
         load('all_data_control.mat');
     end
 
+    fr_threshold = 0.05; % Hz (Aligned to task)
     n_animals = numel(all_data);
 
-    fprintf('Processing data for all animals...\n');
-    preprocessed_data = struct();
+    % --- Step 1: Filter Low Firing Neurons (Robustly) ---
+    fprintf('Filtering low-firing neurons...\n');
+    for ianimal = 1:n_animals
+        keep_neurons = all_data(ianimal).avg_fr_all >= fr_threshold;
+
+        all_data(ianimal).final_spikes = all_data(ianimal).final_spikes(keep_neurons, :);
+        all_data(ianimal).final_areas = all_data(ianimal).final_areas(keep_neurons);
+        all_data(ianimal).avg_fr_all = all_data(ianimal).avg_fr_all(keep_neurons);
+
+        % ROBUSTNESS: Check if neuron types exist before indexing
+        if isfield(all_data(ianimal), 'final_neurontypes') && ~isempty(all_data(ianimal).final_neurontypes)
+            all_data(ianimal).final_neurontypes = all_data(ianimal).final_neurontypes(keep_neurons, :);
+        else
+            % Create dummy NaNs if missing so downstream code doesn't break
+            n_kept = sum(keep_neurons);
+            all_data(ianimal).final_neurontypes = nan(n_kept, 1); 
+        end
+    end
+
+    fprintf('Processing data for all control animals...\n');
+    
+    % PREALLOCATION: Initialize struct array to avoid dynamic growing
+    preprocessed_data(n_animals) = struct();
 
     for ianimal = 1:n_animals
-        fprintf('Processing data for animal %d...\n', ianimal);
+        fprintf('Processing animal %d/%d (ID: %d)...\n', ianimal, n_animals, all_data(ianimal).mouseid);
 
-        % Cut data per trial
+        % 1. Cut data and align indices
         trialData = cut_data_per_trial(all_data, ianimal);
-
-        % Reorganize spikes by area
         all_data = reorganize_spikes_by_area(all_data, ianimal);
 
-        % Align neural data
         n_npx_datapoints = length(all_data(ianimal).npx_time);
         npxStartIdx = interp1(all_data(ianimal).npx_time, 1:n_npx_datapoints, trialData.trialStartTimes_vr, 'nearest', 'extrap');
-        npxEndIdx = interp1(all_data(ianimal).npx_time, 1:n_npx_datapoints, trialData.trialEndTimes_vr, 'nearest', 'extrap');
+        npxEndIdx   = interp1(all_data(ianimal).npx_time, 1:n_npx_datapoints, trialData.trialEndTimes_vr, 'nearest', 'extrap');
 
-        % Extract binned spikes per trial
+        % 2. Extract Trial Data
         [binned_spikes_trials, npx_times_trials] = extract_binned_spikes(all_data, ianimal, npxStartIdx, npxEndIdx);
-
-        % Compute trial metrics
         trial_metrics = compute_trial_metrics(trialData);
-
-        % Find change points
+        
         mov_window_size = 5;
-        % change_point_mean = find_change_points(trialData.trialDurations_vr, trial_metrics, mov_window_size);
-
-        % Determine number of trials to process
+        change_point_mean = find_change_points(trialData.trialDurations_vr, trial_metrics, mov_window_size);
         n_trials = trialData.n_trials - 1;
 
-        % Compute firing rates for DMS, DLS, and ACC
+        % 3. Separate Periods & Filter Bad Trials
+        [darkData, corridorData] = separate_dark_and_corridor_periods(trialData, binned_spikes_trials, npx_times_trials);
+        
+        % Robust check for empty rewards
+        trials_to_exclude = cellfun(@isempty, corridorData.trial_reward);
+        goodTrials = ~trials_to_exclude;
+
+        % Filter Function for fields
+        filterFields = @(s) structfun(@(x) x(goodTrials), s, 'UniformOutput', false); 
+        
+        % Apply filtering manually to ensure structure consistency
+        fNames = fieldnames(trialData);
+        for i = 1:numel(fNames)
+            if numel(trialData.(fNames{i})) == trialData.n_trials
+                 if iscell(trialData.(fNames{i})) || isnumeric(trialData.(fNames{i}))
+                    trialData.(fNames{i}) = trialData.(fNames{i})(goodTrials);
+                 end
+            end
+        end
+        
+        npxStartIdx = npxStartIdx(goodTrials);
+        npxEndIdx   = npxEndIdx(goodTrials);
+        n_trials = sum(goodTrials);
+
+        % 4. Lick Analysis
+        trial_lick_positions = cellfun(@(x,y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
+        
+        trial_lick_errors = nan(1, n_trials);
+        shuffled_lick_error_means = nan(1, n_trials);
+        shuffled_lick_error_stds = nan(1, n_trials);
+        
+        for itrial = 1:n_trials
+            try
+                [trial_lick_errors(itrial), shuffled_lick_error_means(itrial), shuffled_lick_error_stds(itrial), ~] = ...
+                    calculate_lick_precision(trial_lick_positions{itrial}, reward_zone_start_au);
+            catch
+                % Keep NaNs
+            end
+        end
+        
+        % Lick fraction calculation
+        calc_frac = @(x) (sum((x > reward_zone_start_au - 20) & (x < reward_zone_start_au)) + 1) / (sum((x > 0) & (x < reward_zone_start_au)) + 1);
+        trial_lick_fractions = cellfun(calc_frac, trial_lick_positions);
+
+        % 5. Neural Data Re-binning
         is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
         is_dls = strcmp(all_data(ianimal).final_areas, 'DLS');
         is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
 
-        final_spikes_dms = all_data(ianimal).final_spikes(is_dms, :);
-        final_spikes_dls = all_data(ianimal).final_spikes(is_dls, :);
-        final_spikes_acc = all_data(ianimal).final_spikes(is_acc, :);
-
-        binned_spikes_trials_dms = arrayfun(@(s, e) final_spikes_dms(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
-        binned_spikes_trials_dls = arrayfun(@(s, e) final_spikes_dls(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
-        binned_spikes_trials_acc = arrayfun(@(s, e) final_spikes_acc(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+        % Helper for slicing spikes
+        slice_spikes = @(spikes) arrayfun(@(s,e) spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
+        
+        binned_spikes_trials_dms = slice_spikes(all_data(ianimal).final_spikes(is_dms, :));
+        binned_spikes_trials_dls = slice_spikes(all_data(ianimal).final_spikes(is_dls, :));
+        binned_spikes_trials_acc = slice_spikes(all_data(ianimal).final_spikes(is_acc, :));
 
         [trial_average_fr_dms, trial_sem_fr_dms] = compute_firing_rates(binned_spikes_trials_dms, trialData.trialDurations_vr);
         [trial_average_fr_dls, trial_sem_fr_dls] = compute_firing_rates(binned_spikes_trials_dls, trialData.trialDurations_vr);
         [trial_average_fr_acc, trial_sem_fr_acc] = compute_firing_rates(binned_spikes_trials_acc, trialData.trialDurations_vr);
 
-        % Separate dark and corridor periods
-        [darkData, corridorData] = separate_dark_and_corridor_periods(trialData, binned_spikes_trials, npx_times_trials);
-        trial_lick_positions = cellfun(@(x, y) x(logical(y)), corridorData.trial_position, corridorData.trial_licks, 'UniformOutput', false);
-
-        % Calculate lick performance
-        [trial_lick_errors, shuffled_lick_error_means, shuffled_lick_error_stds, ~] = cellfun(@(x) calculate_lick_precision(x, reward_zone_start_au), trial_lick_positions);
-        trial_lick_fractions = cellfun(@(x) (sum((x > reward_zone_start_au - 20) & x < reward_zone_start_au) + 1) / (sum(x > 0 & x < reward_zone_start_au) + 1), trial_lick_positions);
-
-        % Limit metrics to n_trials
-        trial_lick_numbers = trial_metrics.trial_lick_no(1:n_trials);
-        trial_lick_errors = trial_lick_errors(1:n_trials);
-        shuffled_lick_error_means = shuffled_lick_error_means(1:n_trials);
-        shuffled_lick_error_stds = shuffled_lick_error_stds(1:n_trials);
-        trial_lick_fractions = trial_lick_fractions(1:n_trials);
-        trial_lick_positions = trial_lick_positions(1:n_trials);
-
-        % Handle outliers
+        % Outlier Handling
         outlier_trials = isoutlier(trial_lick_errors, "percentiles", [0, 99]);
-        trial_lick_errors(outlier_trials) = nan;
-        trial_lick_errors(1) = nan;
-        shuffled_lick_error_means(outlier_trials) = nan;
-        shuffled_lick_error_means(1) = nan;
-
+        trial_lick_errors(outlier_trials) = nan; 
+        trial_lick_errors(1) = nan; % Explicitly remove first trial
+        
+        shuffled_lick_error_means(outlier_trials) = nan; shuffled_lick_error_means(1) = nan;
         zscored_lick_errors = (trial_lick_errors - shuffled_lick_error_means) ./ shuffled_lick_error_stds;
 
-        % Perform spatial binning
+        % 6. Spatial Binning & Dark Data
         spatial_binned_data = spatial_binning(corridorData, bin_edges, num_bins);
-
-        n_units = size(darkData.binned_spikes{1}, 1);
-
-        % Bin dark data in bins
-        temporal_bin_duration = 100; % in ms
-        temp_bin_edges = 1:temporal_bin_duration:5001;
+        
+        % Temporal Binning (Dark) - Vectorized where possible
+        n_units = size(all_data(ianimal).final_spikes, 1);
+        temp_bin_edges = 1:100:5001;
         num_temp_bins = numel(temp_bin_edges) - 1;
-
         temp_binned_dark_spikes = nan(n_units, num_temp_bins, n_trials);
 
         for itrial = 1:n_trials
@@ -124,161 +157,139 @@ else
             for ibin = 1:num_temp_bins
                 idx_in_bin = (bin_idx == ibin);
                 if any(idx_in_bin)
-                    % Compute total spikes
                     temp_binned_dark_spikes(:, ibin, itrial) = sum(darkData.binned_spikes{itrial}(:, idx_in_bin), 2);
                 end
             end
         end
-        temp_binned_dark_fr = temp_binned_dark_spikes / (temporal_bin_duration / 1000);
-
+        temp_binned_dark_fr = temp_binned_dark_spikes / 0.1; % 100ms = 0.1s
         z_temp_binned_dark_fr = zscore(temp_binned_dark_fr, [], [2, 3]);
 
-        % Prepare data for TCA
+        % 7. Data Preparation for Analysis
         spatial_binned_fr_all = cat(3, spatial_binned_data.firing_rates{1:n_trials});
-        spatial_binned_fr_all = spatial_binned_fr_all(:, :, 1:n_trials);
-
+        if size(spatial_binned_fr_all, 3) > n_trials
+            spatial_binned_fr_all = spatial_binned_fr_all(:, :, 1:n_trials);
+        end
         z_spatial_binned_fr_all = nan_zscore(spatial_binned_fr_all, [2, 3]);
 
-        % Cross-area pairwise correlations
-        DMS_data = spatial_binned_fr_all(is_dms, :, :);
+        % --- OPTIMIZED: Vectorized Correlations ---
+        DMS_data = spatial_binned_fr_all(is_dms, :, :); 
         DLS_data = spatial_binned_fr_all(is_dls, :, :);
         ACC_data = spatial_binned_fr_all(is_acc, :, :);
-        n_neurons_DMS = sum(is_dms);
-        n_neurons_DLS = sum(is_dls);
-        n_neurons_ACC = sum(is_acc);
-        n_total_neurons = size(spatial_binned_fr_all, 1);
-
+        
+        n_neurons_DMS = sum(is_dms); n_neurons_DLS = sum(is_dls); n_neurons_ACC = sum(is_acc);
         all_cross_area_correlations_DMSACC = nan(n_trials, n_neurons_DMS, n_neurons_ACC);
         all_cross_area_correlations_DMSDLS = nan(n_trials, n_neurons_DMS, n_neurons_DLS);
-
+        
         for itrial = 1:n_trials
-            % Get trial data
-            DMS_trial = squeeze(DMS_data(:, :, itrial)); % [n_neurons_DMS x n_spatial_bins]
-            DLS_trial = squeeze(DLS_data(:, :, itrial)); % [n_neurons_DLS x n_spatial_bins]
-            ACC_trial = squeeze(ACC_data(:, :, itrial)); % [n_neurons_ACC x n_spatial_bins]
-
-            % Compute correlations
-            for iNeuron_DMS = 1:n_neurons_DMS
-                for iNeuron_ACC = 1:n_neurons_ACC
-                    all_cross_area_correlations_DMSACC(itrial, iNeuron_DMS, iNeuron_ACC) = corr(DMS_trial(iNeuron_DMS, :)', ACC_trial(iNeuron_ACC, :)');
-                end
-
-                for iNeuron_DLS = 1:n_neurons_DLS
-                    all_cross_area_correlations_DMSDLS(itrial, iNeuron_DMS, iNeuron_DLS) = corr(DMS_trial(iNeuron_DMS, :)', DLS_trial(iNeuron_DLS, :)');
-                end
+            DMS_trial = squeeze(DMS_data(:, :, itrial))'; 
+            ACC_trial = squeeze(ACC_data(:, :, itrial))';
+            DLS_trial = squeeze(DLS_data(:, :, itrial))';
+            
+            if ~isempty(DMS_trial) && ~isempty(ACC_trial)
+                all_cross_area_correlations_DMSACC(itrial, :, :) = corr(DMS_trial, ACC_trial, 'Rows', 'complete');
+            end
+            if ~isempty(DMS_trial) && ~isempty(DLS_trial)
+                all_cross_area_correlations_DMSDLS(itrial, :, :) = corr(DMS_trial, DLS_trial, 'Rows', 'complete');
             end
         end
+        
         mean_cross_area_corr_DMSACC = squeeze(mean(all_cross_area_correlations_DMSACC, [2, 3], 'omitnan'));
         mean_cross_area_corr_DMSDLS = squeeze(mean(all_cross_area_correlations_DMSDLS, [2, 3], 'omitnan'));
-
         mean_abs_cross_area_corr_DMSACC = squeeze(mean(abs(all_cross_area_correlations_DMSACC), [2, 3], 'omitnan'));
         mean_abs_cross_area_corr_DMSDLS = squeeze(mean(abs(all_cross_area_correlations_DMSDLS), [2, 3], 'omitnan'));
 
-        % Perform TCA
-        [best_mdl, variance_explained, mean_cv_errors, sem_cv_errors] = tca_with_cv(spatial_binned_fr_all, zscored_lick_errors, 'cp_nmu', 'min-max', 5, 10, 50);
-
-        % Perform PCA
-        DMS_data_reshaped = reshape(DMS_data, n_neurons_DMS, []);
-        DLS_data_reshaped = reshape(DLS_data, n_neurons_DLS, []);
-        ACC_data_reshaped = reshape(ACC_data, n_neurons_ACC, []);
+        % 8. PCA (Stim & Dark)
+        calc_dim = @(data, N) find(cumsum(pca(data', 'Centered', true)) >= 90, 1) / N;
+        
+        n_total_neurons = size(spatial_binned_fr_all, 1);
         stim_data_reshaped = reshape(spatial_binned_fr_all, n_total_neurons, []);
-
         [~, ~, ~, ~, explained_stim] = pca(stim_data_reshaped', 'Centered', true);
         stim_dimensionality_all = find(cumsum(explained_stim) >= 90, 1) / n_total_neurons;
+        
+        dark_data_reshaped = reshape(temp_binned_dark_fr, n_total_neurons, []);
+        [~, ~, ~, ~, explained_dark] = pca(dark_data_reshaped', 'Centered', true);
+        dark_dimensionality_all = find(cumsum(explained_dark) >= 90, 1) / n_total_neurons;
 
-        [~, ~, ~, ~, explained_stim_DMS] = pca(DMS_data_reshaped', 'Centered', true);
-        stim_dimensionality_DMS = find(cumsum(explained_stim_DMS) >= 90, 1) / n_neurons_DMS;
+        DMS_reshaped = reshape(DMS_data, n_neurons_DMS, []);
+        DLS_reshaped = reshape(DLS_data, n_neurons_DLS, []);
+        ACC_reshaped = reshape(ACC_data, n_neurons_ACC, []);
+        
+        stim_dimensionality_DMS = calc_dim(DMS_reshaped, n_neurons_DMS);
+        stim_dimensionality_DLS = calc_dim(DLS_reshaped, n_neurons_DLS);
+        stim_dimensionality_ACC = calc_dim(ACC_reshaped, n_neurons_ACC);
 
-        [~, ~, ~, ~, explained_stim_DLS] = pca(DLS_data_reshaped', 'Centered', true);
-        stim_dimensionality_DLS = find(cumsum(explained_stim_DLS) >= 90, 1) / n_neurons_DLS;
+        DMS_dark = reshape(temp_binned_dark_fr(is_dms,:,:), n_neurons_DMS, []);
+        DLS_dark = reshape(temp_binned_dark_fr(is_dls,:,:), n_neurons_DLS, []);
+        ACC_dark = reshape(temp_binned_dark_fr(is_acc,:,:), n_neurons_ACC, []);
 
-        [~, ~, ~, ~, explained_stim_ACC] = pca(ACC_data_reshaped', 'Centered', true);
-        stim_dimensionality_ACC = find(cumsum(explained_stim_ACC) >= 90, 1) / n_neurons_ACC;
-
-        % Calculate generalized variance
+        dark_dimensionality_DMS = calc_dim(DMS_dark, n_neurons_DMS);
+        dark_dimensionality_DLS = calc_dim(DLS_dark, n_neurons_DLS);
+        dark_dimensionality_ACC = calc_dim(ACC_dark, n_neurons_ACC);
+        
+        % 9. Generalized Variance
         generalized_variances_stim = zeros(1, n_trials);
         generalized_variances_dark = zeros(1, n_trials);
-
-        for itrial = 1:n_trials
-            % Stimulus period
-            X_stim = spatial_binned_fr_all(:, :, itrial);
-            singular_values_stim = svd(X_stim, 'econ');
-            generalized_variances_stim(itrial) = sum(log(singular_values_stim .^ 2)) / n_total_neurons;
-
-            % Dark period
-            X_dark = temp_binned_dark_fr(:, :, itrial);
-            singular_values_dark = svd(X_dark, 'econ');
-            generalized_variances_dark(itrial) = sum(log(singular_values_dark .^ 2)) / n_total_neurons;
+        
+        try 
+            sv_stim = pagesvd(spatial_binned_fr_all, 'econ');
+            sv_dark = pagesvd(temp_binned_dark_fr, 'econ');
+            generalized_variances_stim = squeeze(sum(log(sv_stim.^2), 1) / n_total_neurons)';
+            generalized_variances_dark = squeeze(sum(log(sv_dark.^2), 1) / n_total_neurons)';
+        catch
+            for itrial = 1:n_trials
+                generalized_variances_stim(itrial) = sum(log(svd(spatial_binned_fr_all(:,:,itrial), 'econ').^2)) / n_total_neurons;
+                generalized_variances_dark(itrial) = sum(log(svd(temp_binned_dark_fr(:,:,itrial), 'econ').^2)) / n_total_neurons;
+            end
         end
 
-        % Store all relevant variables into preprocessed_data struct
+        % --- Save Results (Structurally identical to Task script) ---
         preprocessed_data(ianimal).trialData = trialData;
         preprocessed_data(ianimal).is_dms = is_dms;
         preprocessed_data(ianimal).is_dls = is_dls;
         preprocessed_data(ianimal).is_acc = is_acc;
-        preprocessed_data(ianimal).binned_spikes_trials = binned_spikes_trials(1:n_trials);
-        preprocessed_data(ianimal).npx_times_trials = npx_times_trials(1:n_trials);
+        
+        preprocessed_data(ianimal).binned_spikes_trials = binned_spikes_trials;
+        preprocessed_data(ianimal).npx_times_trials = npx_times_trials;
+
         preprocessed_data(ianimal).trial_metrics = trial_metrics;
-        preprocessed_data(ianimal).trial_average_fr_dms = trial_average_fr_dms(1:n_trials);
-        preprocessed_data(ianimal).trial_sem_fr_dms = trial_sem_fr_dms(1:n_trials);
-        preprocessed_data(ianimal).trial_average_fr_dls = trial_average_fr_dls(1:n_trials);
-        preprocessed_data(ianimal).trial_sem_fr_dls = trial_sem_fr_dls(1:n_trials);
-        preprocessed_data(ianimal).trial_average_fr_acc = trial_average_fr_acc(1:n_trials);
-        preprocessed_data(ianimal).trial_sem_fr_acc = trial_sem_fr_acc(1:n_trials);
-        % preprocessed_data(ianimal).change_point_mean = change_point_mean;
+        preprocessed_data(ianimal).change_point_mean = change_point_mean;
+        
+        preprocessed_data(ianimal).trial_average_fr_dms = trial_average_fr_dms;
+        preprocessed_data(ianimal).trial_sem_fr_dms = trial_sem_fr_dms;
+        preprocessed_data(ianimal).trial_average_fr_dls = trial_average_fr_dls;
+        preprocessed_data(ianimal).trial_sem_fr_dls = trial_sem_fr_dls;
+        preprocessed_data(ianimal).trial_average_fr_acc = trial_average_fr_acc;
+        preprocessed_data(ianimal).trial_sem_fr_acc = trial_sem_fr_acc;
+
         preprocessed_data(ianimal).darkData = darkData;
         preprocessed_data(ianimal).corridorData = corridorData;
+
         preprocessed_data(ianimal).trial_lick_positions = trial_lick_positions;
         preprocessed_data(ianimal).trial_lick_errors = trial_lick_errors;
         preprocessed_data(ianimal).shuffled_lick_error_means = shuffled_lick_error_means;
         preprocessed_data(ianimal).shuffled_lick_error_stds = shuffled_lick_error_stds;
         preprocessed_data(ianimal).trial_lick_fractions = trial_lick_fractions;
         preprocessed_data(ianimal).zscored_lick_errors = zscored_lick_errors;
-        preprocessed_data(ianimal).spatial_binned_data = spatial_binned_data;
+        
+        preprocessed_data(ianimal).spatial_binned_data = spatial_binned_data; 
         preprocessed_data(ianimal).temp_binned_dark_fr = temp_binned_dark_fr;
+        
         preprocessed_data(ianimal).spatial_binned_fr_all = spatial_binned_fr_all;
         preprocessed_data(ianimal).z_spatial_binned_fr_all = z_spatial_binned_fr_all;
+        
         preprocessed_data(ianimal).mean_cross_area_corr_DMSACC = mean_cross_area_corr_DMSACC;
         preprocessed_data(ianimal).mean_cross_area_corr_DMSDLS = mean_cross_area_corr_DMSDLS;
         preprocessed_data(ianimal).mean_abs_cross_area_corr_DMSACC = mean_abs_cross_area_corr_DMSACC;
         preprocessed_data(ianimal).mean_abs_cross_area_corr_DMSDLS = mean_abs_cross_area_corr_DMSDLS;
-        preprocessed_data(ianimal).tca_best_mdl = best_mdl;
-        preprocessed_data(ianimal).tca_variance_explained = variance_explained;
-        preprocessed_data(ianimal).tca_mean_cv_errors = mean_cv_errors;
-        preprocessed_data(ianimal).tca_sem_cv_errors = sem_cv_errors;
-        preprocessed_data(ianimal).pca_explained_all = explained_stim;
-        preprocessed_data(ianimal).pca_stim_dimensionality_all = stim_dimensionality_all;
-        preprocessed_data(ianimal).pca_explained_dms = explained_stim_DMS;
-        preprocessed_data(ianimal).pca_stim_dimensionality_dms = stim_dimensionality_DMS;
-        preprocessed_data(ianimal).pca_explained_dls = explained_stim_DLS;
-        preprocessed_data(ianimal).pca_stim_dimensionality_dls = stim_dimensionality_DLS;
-        preprocessed_data(ianimal).pca_explained_acc = explained_stim_ACC;
-        preprocessed_data(ianimal).pca_stim_dimensionality_acc = stim_dimensionality_ACC;
-        preprocessed_data(ianimal).generalized_variances_stim = generalized_variances_stim;
-        preprocessed_data(ianimal).generalized_variances_dark = generalized_variances_dark;
-        preprocessed_data(ianimal).n_trials = n_trials;  % Store n_trials
+        
+        preprocessed_data(ianimal).n_trials = n_trials;
+        preprocessed_data(ianimal).final_neurontypes = all_data(ianimal).final_neurontypes;
 
         fprintf('Done with animal %d\n', ianimal);
     end
 
-    % Save the preprocessed data struct
+    % Save the preprocessed control data struct
     save('preprocessed_data_control.mat', 'preprocessed_data', '-v7.3');
-end
-
-% Define colors for each area
-color_dms = [0, 0.4470, 0.7410];       % Deep Blue for DMS
-color_dls =  [0.4660, 0.6740, 0.1880];  % Forest Green for DLS
-color_acc = [0.8500, 0.3250, 0.0980];  % Crimson Red for ACC
-
-% Initialize logical indices for first vs rest
-first_idx = cell(1, n_animals);
-rest_idx = cell(1, n_animals);
-for ianimal = 1:n_animals
-    n_trials = preprocessed_data(ianimal).n_trials;
-    temp_first_idx = false(1, n_trials);
-    temp_first_idx(1:min(3, n_trials)) = true;
-    first_idx{ianimal} = temp_first_idx;
-    rest_idx{ianimal} = ~temp_first_idx;
 end
 
 %% Plot area dimensionality
@@ -303,7 +314,7 @@ comp_groups = num2cell(comp(:, 1:2), 2);
 sig_ind = comp(:, 6) < 0.05;
 sigstar(comp_groups(sig_ind), comp(sig_ind, 6))
 
-save_to_svg('area_stim_dimensionality_control')
+% save_to_svg('area_stim_dimensionality_control')
 
 
 %% Dark dimensionality
@@ -425,7 +436,7 @@ sigstar({[1, 2]}, p_val)
 
 %% Cluster TCA factors based on spatial profiles
 
-num_clusters = 4; % Adjust as needed
+num_clusters = 3; % Adjust as needed
 
 
 % Initialize logical indices for first trials and rest
@@ -1180,15 +1191,17 @@ for ianimal = 1:n_animals
     colorbar
     % xline(preprocessed_data(ianimal).change_point_mean, 'LineWidth', 1)
 
-    subplot(3, 2, 2)
-    shadedErrorBar(1:trials, mean(avg_corrs(is_dms, :), 'omitmissing'), sem(avg_corrs(is_dms, :)), 'lineprops', {'Color', color_dms})
-    ylabel('Corr')
-    xlabel('Trials')
-    title('DMS Only')
-    axis tight
-    % ylim([-0.05, 0.5])
+    if sum(is_dms) > 1
+        subplot(3, 2, 2)
+        shadedErrorBar(1:trials, mean(avg_corrs(is_dms, :), 'omitmissing'), sem(avg_corrs(is_dms, :)), 'lineprops', {'Color', color_dms})
+        ylabel('Corr')
+        xlabel('Trials')
+        title('DMS Only')
+        axis tight
+        % ylim([-0.05, 0.5])
+    end
 
-    if any(is_dls)
+    if sum(is_dls) > 1
         subplot(3, 2, 4)
         shadedErrorBar(1:trials, mean(avg_corrs(is_dls, :), 'omitmissing'), sem(avg_corrs(is_dls, :)), 'lineprops', {'Color', color_dls})
         ylabel('Corr')
@@ -1198,7 +1211,7 @@ for ianimal = 1:n_animals
         % ylim([-0.05, 0.5])
     end
 
-    if any(is_acc)
+    if sum(is_acc) > 1
         subplot(3, 2, 6)
         shadedErrorBar(1:trials, mean(avg_corrs(is_acc, :), 'omitnan'), sem(avg_corrs(is_acc, :)), 'lineprops', {'Color', color_acc})
         ylabel('Corr')
@@ -1280,7 +1293,7 @@ for ianimal = 1:n_animals
 
     window_size = 5;
     half_window = floor(window_size / 2);
-    trials = n_trials;
+    trials = 50;
 
     avg_lick_corrs_animal = nan(1, trials);
     avg_occupancy_corrs_animal = nan(1, trials);
@@ -1879,7 +1892,7 @@ xlabel(t, 'Lick Stability')
 ylabel(t, 'Lick Error')
 %% Lick heatmap
 
-ianimal = 1;
+ianimal = 2;
 licks_to_plot = preprocessed_data(ianimal).spatial_binned_data.licks;
 licks_to_plot(licks_to_plot > quantile(licks_to_plot, 0.99, 'all')) = nan;
 

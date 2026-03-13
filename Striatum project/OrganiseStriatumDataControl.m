@@ -1,132 +1,144 @@
+%% ================= Configuration & Path Setup =================
+% Control IDs: [407, 513, 515, 817, 1205]
 all_mouse_ids = [407, 513, 515, 817, 1205];
 num_mice = numel(all_mouse_ids);
 
-%% import the depth data
+% --- Import Depth Data for Controls ---
 opts = delimitedTextImportOptions("NumVariables", 9);
-
-% Specify range and delimiter
 opts.DataLines = [2, Inf];
 opts.Delimiter = ",";
-
-% Specify column names and types
 opts.VariableNames = ["MouseID", "ACCStart", "ACCEnd", "StriatumStart", "StriatumEnd", "DMSStart", "DMSEnd", "DLSStart", "DLSEnd"];
 opts.VariableTypes = ["double", "double", "double", "double", "double", "double", "double", "double", "double"];
-
-% Specify file level properties
 opts.ExtraColumnsRule = "ignore";
 opts.EmptyLineRule = "read";
 
-% Import the data
-NeuropixelsDepthData = readtable("/RawDataControl/Neuropixels_Depth_Data_control.csv", opts);
+% Path to your control depth CSV
+depth_file_path = "./RawDataControl/Neuropixels_Depth_Data_control.csv";
+if isfile(depth_file_path)
+    NeuropixelsDepthData = readtable(depth_file_path, opts);
+else
+    error('Control depth data file not found at: %s', depth_file_path);
+end
 
-%% process each mouse
+% --- Preallocate Output Structure ---
+all_data = struct('mouseid', cell(1, num_mice), ...
+                  'final_spikes', [], 'final_areas', [], 'final_neurontypes', [], ...
+                  'npx_time', [], 'corrected_vr_time', [], 'corrected_licks', [], ...
+                  'vr_position', [], 'vr_world', [], 'vr_reward', [], 'vr_trial', [], ...
+                  'avg_fr_all', [], 'average_DMS_fr', [], 'average_DLS_fr', [], ...
+                  'average_ACC_fr', [], 'average_lick_rate', []);
 
+%% ================= Processing Loop =================
 for imouse = 1:num_mice
-
-    filename = ['./RawDataControl/' num2str(all_mouse_ids(imouse)) '_raw.mat'];
-    load(filename);
-
-    num_units = size(binned_spikes, 1);
-
-    % Assign areas to units based on depths
-    unit_areas = cell(1, num_units);
-
-    depths = NeuropixelsDepthData(NeuropixelsDepthData.MouseID == all_mouse_ids(imouse), :);
-
-    unit_areas(goodcluster2(:, 2) >= depths.DMSStart & goodcluster2(:, 2) <= depths.DMSEnd) = {'DMS'};
-    unit_areas(goodcluster2(:, 2) >= depths.DLSStart & goodcluster2(:, 2) <= depths.DLSEnd) = {'DLS'};
-    unit_areas(goodcluster2(:, 2) >= depths.ACCStart & goodcluster2(:, 2) <= depths.ACCEnd) = {'ACC'};
-
-    units_to_keep = cellfun(@(x) ~isempty(x), unit_areas);
-
-    % Keep only aligned spike data from DMS and ACC
-    npx_start_frame = ceil(VR_times_synched(1)*1000);
-    npx_end_frame = floor(VR_times_synched(end)*1000);
-
-    final_spikes = binned_spikes(units_to_keep, npx_start_frame:npx_end_frame);
-    final_areas = unit_areas(units_to_keep);
-    clear binned_spikes
+    fprintf('Processing Control Animal %d/%d (ID: %d)...\n', imouse, num_mice, all_mouse_ids(imouse));
     
-    % Correct time
-    corrected_vr_time = (VR_times_synched - VR_times_synched(1))*1000;
+    % --- 1. Load Raw Data ---
+    raw_filename = ['./RawDataControl/' num2str(all_mouse_ids(imouse)) '_raw.mat'];
+    if ~isfile(raw_filename)
+        warning('Raw file not found for mouse %d. Skipping.', all_mouse_ids(imouse));
+        continue;
+    end
+    RawDat = load(raw_filename, 'binned_spikes', 'goodcluster2', 'VR_times_synched', 'VR_data');
+    num_units = size(RawDat.binned_spikes, 1);
+    
+    % --- 2. Load Neuron Types (Matching Task Pipeline) ---
+    % Assuming the neurontype files for controls follow the same naming convention
+    nt_filename = ['./RawDataControl/' num2str(all_mouse_ids(imouse)) '_neurontype2025.mat'];
+    raw_neurontype = [];
+    if isfile(nt_filename)
+        tmp_nt = load(nt_filename, 'neurontype');
+        if isfield(tmp_nt, 'neurontype')
+            raw_neurontype = tmp_nt.neurontype;
+            % Ensure dimensions match
+            if size(raw_neurontype, 1) ~= num_units
+                warning('Mismatch in unit count for neurontype file (Mouse %d). Filling with NaNs.', all_mouse_ids(imouse));
+                raw_neurontype = nan(num_units, 1);
+            end
+
+            if size(raw_neurontype, 2) < 5
+                raw_neurontype(raw_neurontype(:,3)>=0.4 & raw_neurontype(:,4)<=40,5) = 1; %MSN
+                raw_neurontype(raw_neurontype(:,3)<0.4 & raw_neurontype(:,2)<0.1,5) = 2;  %FSN
+                raw_neurontype(raw_neurontype(:,3)>=0.4 & raw_neurontype(:,4)>40,5) = 3;  %TAN
+                raw_neurontype(raw_neurontype(:,3)<0.4 & raw_neurontype(:,2)>=0.1,5) = 4; %UIN (Unidentified)
+            end
+        else
+            warning('File found but variable ''neurontype'' missing for mouse %d. Filling with NaNs.', all_mouse_ids(imouse));
+            raw_neurontype = nan(num_units, 1);
+        end
+    else
+        % File missing: Fill with NaNs silently (or warn if you prefer)
+        % fprintf('  No neurontype file found. Filling with NaNs.\n');
+        raw_neurontype = nan(num_units, 1);
+    end
+
+    % --- 3. Assign Areas based on Depths ---
+    unit_areas = cell(num_units, 1);
+    depths = NeuropixelsDepthData(NeuropixelsDepthData.MouseID == all_mouse_ids(imouse), :);
+    
+    if isempty(depths)
+        warning('No depth data for mouse %d. Skipping.', all_mouse_ids(imouse));
+        units_to_keep = false(num_units, 1);
+    else
+        unit_depths = RawDat.goodcluster2(:, 2);
+        is_dms = unit_depths >= depths.DMSStart & unit_depths <= depths.DMSEnd;
+        is_dls = unit_depths >= depths.DLSStart & unit_depths <= depths.DLSEnd;
+        is_acc = unit_depths >= depths.ACCStart & unit_depths <= depths.ACCEnd;
+        
+        unit_areas(is_dms) = {'DMS'};
+        unit_areas(is_dls) = {'DLS'};
+        unit_areas(is_acc) = {'ACC'};
+        units_to_keep = ~cellfun(@isempty, unit_areas);
+    end
+
+    % --- 4. Slicing and Alignment ---
+    % Convert seconds to ms (1kHz bins)
+    npx_start_frame = ceil(RawDat.VR_times_synched(1)*1000);
+    npx_end_frame = floor(RawDat.VR_times_synched(end)*1000);
+    
+    % Clamp frames to matrix bounds
+    npx_start_frame = max(1, npx_start_frame);
+    npx_end_frame = min(size(RawDat.binned_spikes, 2), npx_end_frame);
+    
+    % Filter spikes, areas, and types
+    final_spikes = RawDat.binned_spikes(units_to_keep, npx_start_frame:npx_end_frame);
+    final_areas = unit_areas(units_to_keep);
+    final_neurontypes = raw_neurontype(units_to_keep, :);
+
+    % Sync VR time to start at 0
+    corrected_vr_time = (RawDat.VR_times_synched - RawDat.VR_times_synched(1))*1000;
     npx_time = 0:1:size(final_spikes, 2)-1;
 
-    % Process licks
-    corrected_licks = process_licks(VR_data(8, :) >= 1, corrected_vr_time, 100);
+    % Process Licks (Assumes process_licks function is in path)
+    is_lick = RawDat.VR_data(8, :) >= 1; 
+    corrected_licks = process_licks(is_lick, corrected_vr_time, 100);
 
+    % --- 5. Populate Struct ---
     all_data(imouse).mouseid = all_mouse_ids(imouse);
     all_data(imouse).final_spikes = final_spikes;
     all_data(imouse).final_areas = final_areas;
+    all_data(imouse).final_neurontypes = final_neurontypes;
     all_data(imouse).npx_time = npx_time;
     all_data(imouse).corrected_vr_time = corrected_vr_time;
     all_data(imouse).corrected_licks = corrected_licks';
-    all_data(imouse).vr_position = VR_data(2, :);
-    all_data(imouse).vr_world = VR_data(5, :);
-    all_data(imouse).vr_reward = VR_data(6, :);
-    all_data(imouse).vr_trial = VR_data(7, :);
+    
+    % VR Data Map
+    all_data(imouse).vr_position = RawDat.VR_data(2, :);
+    all_data(imouse).vr_world = RawDat.VR_data(5, :);
+    all_data(imouse).vr_reward = RawDat.VR_data(6, :);
+    all_data(imouse).vr_trial = RawDat.VR_data(7, :);
 
-
-    % Simple processing for average firing rates across entire experiment
-    average_firing_rates = sum(final_spikes, 2)/((corrected_vr_time(end)-corrected_vr_time(1))/1000);
-    average_DMS_fr = average_firing_rates(strcmp(final_areas, 'DMS'));
-    average_DLS_fr = average_firing_rates(strcmp(final_areas, 'DLS'));
-    average_ACC_fr = average_firing_rates(strcmp(final_areas, 'ACC'));
-
-    % Simple average lick rate
-    average_lick_rate = sum(corrected_licks)/((corrected_vr_time(end)-corrected_vr_time(1))/1000);
-
+    % --- 6. Firing Rate Stats ---
+    duration_sec = (corrected_vr_time(end)-corrected_vr_time(1))/1000;
+    average_firing_rates = sum(final_spikes, 2) / duration_sec;
+    
     all_data(imouse).avg_fr_all = average_firing_rates;
-    all_data(imouse).average_DMS_fr = average_DMS_fr;
-    all_data(imouse).average_DLS_fr = average_DLS_fr;
-    all_data(imouse).average_ACC_fr = average_ACC_fr;
-    all_data(imouse).average_lick_rate = average_lick_rate;
-
-    fprintf('Done with animal %d\n', imouse)
+    all_data(imouse).average_DMS_fr = average_firing_rates(strcmp(final_areas, 'DMS'));
+    all_data(imouse).average_DLS_fr = average_firing_rates(strcmp(final_areas, 'DLS'));
+    all_data(imouse).average_ACC_fr = average_firing_rates(strcmp(final_areas, 'ACC'));
+    all_data(imouse).average_lick_rate = sum(corrected_licks) / duration_sec;
 end
 
-save('all_data_control.mat', 'all_data', '-v7.3')
-
-%% 
-
-average_DMS_fr_all = {all_data(:).average_DMS_fr};
-average_DLS_fr_all = {all_data(:).average_DLS_fr};
-average_ACC_fr_all = {all_data(:).average_ACC_fr};
-
-average_lick_rate_all = [all_data(:).average_lick_rate];
-
-median_DMS_fr_animals = cellfun(@median, average_DMS_fr_all);
-median_DLS_fr_animals = cellfun(@median, average_DLS_fr_all);
-median_ACC_fr_animals = cellfun(@median, average_ACC_fr_all);
-
-figure
-my_errorbar_plot([median_DMS_fr_animals', median_DLS_fr_animals', median_ACC_fr_animals'], true)
-xticklabels({'DMS', 'DLS', 'ACC'})
-ylabel('average FR')
-% [~, pval] = ttest(median_ACC_fr_animals, median_DMS_fr_animals);
-% sigstar([1, 2], pval)
-% save_to_svg(['avg_fr_' num2str(all_mouse_ids(imouse))])
-
-all_DMS_frs = cat(1, average_DMS_fr_all{:});
-all_DLS_frs = cat(1, average_DLS_fr_all{:});
-all_ACC_frs = cat(1, average_ACC_fr_all{:});
-
-figure
-my_errorbar_plot({all_DMS_frs, all_DLS_frs, all_ACC_frs})
-xticklabels({'DMS', 'DLS', 'ACC'})
-ylabel('average FR')
-% [~, pval] = ttest2(all_ACC_frs, all_DMS_frs);
-% sigstar([1, 2], pval)
-
-
-figure
-subplot(1, 2, 1)
-scatter(median_ACC_fr_animals, average_lick_rate_all, 'filled', 'MarkerEdgeColor', 'w')
-lsline
-title('ACC')
-xlabel('average FR')
-ylabel('average lick rate')
-subplot(1, 2, 2)
-scatter(median_DMS_fr_animals, average_lick_rate_all, 'filled', 'MarkerEdgeColor', 'w')
-lsline
-title('DMS')
-xlabel('average FR')
+% Cleanup
+all_data(cellfun(@isempty, {all_data.mouseid})) = [];
+save('all_data_control.mat', 'all_data', '-v7.3');
+fprintf('Success: %d control mice processed.\n', length(all_data));
