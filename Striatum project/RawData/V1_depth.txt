@@ -1,0 +1,33 @@
+1212_M3_V1 
+
+V1 1100-2350 %L1 might be damaged
+CA1 200-650
+DG 0-200
+
+
+1206_M2_V1
+V1 1880 -2800 % L1 might be damaged
+CA1/RHP 1160-1760 
+DG 400-1160
+LP: 0-400
+
+
+1201_M1_V1
+V1 2500-3500  %good close to RSP 
+CA1 1800-2400
+DG: 1400-1800
+CA3: 1100-1400
+LG: 600-1000
+
+1106_M3_V1
+V1 2000-2500 % L1 might be damaged
+RHP  0-1650
+
+
+1105 M2 V1
+V1 1800-2700 % L1 might be damaged
+RHP   1100-1600
+SC 0-1000
+
+
+
