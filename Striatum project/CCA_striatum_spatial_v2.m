@@ -37,14 +37,14 @@ cfg.task_lp_min_consecutive = 7;
 
 % --- CCA / PCA Parameters ---
 pca_selection_method = 'variance'; 
-pca_variance_threshold = 90;       
+pca_variance_threshold = 70;       
 n_components_reduced = 3;          
 num_ccs_analyze = 3;               
 n_trials_window = -3:3;            
 n_bins_window = -3:3;              
-n_shuffles = 50;                   
+n_shuffles = 250;                   
 max_shift_bins = 2;                
-min_units_per_region = 3;
+min_units_per_region = 5;
 TRUNCATE_AT_DISENGAGEMENT = true;
 
 % --- Plotting / Spatial Parameters ---
