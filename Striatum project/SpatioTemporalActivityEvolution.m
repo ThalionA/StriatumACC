@@ -1009,6 +1009,185 @@ for ds_idx = 1:size(datasets, 1)
 end
 fprintf('--- 3x4 Spatiotemporal Grids Complete ---\n\n');
 
+%% ================= Scatter & KDE Density Plots: Activity Transitions =================
+fprintf('--- Generating Scatter and KDE Density Plots [Area x Cell Type] ---\n');
+
+% --- 1. Configuration for Grids ---
+target_areas = {'DMS', 'DLS', 'ACC'};
+target_types = [1, 2, 3]; % Explicitly excluding 4 (Unclassified)
+type_names   = {'MSN', 'FSN', 'TAN'};
+
+num_areas = length(target_areas);
+num_types = length(target_types);
+datasets = {1, 'Task'; 2, 'Control'};
+
+% Define the target trials for comparison against Trial 1
+target_trials = [4, 10, 21];
+trial_labels  = {'Trial 4 (Early)', 'Trial 10 (Mid)', 'Trial 21 (Expert)'};
+
+% Tight, fixed axes for direct comparison across all plots
+ax_min = -1.5;
+ax_max = 1.5;
+
+% --- 2. Generate Grids for Task and (if present) Control ---
+for ds_idx = 1:size(datasets, 1)
+    group_id = datasets{ds_idx, 1};
+    ds_name  = datasets{ds_idx, 2};
+    
+    % Check if data exists in the main pre-loaded tensor
+    group_mask = (lbls_full.group == group_id);
+    
+    if sum(group_mask) == 0
+        fprintf('Skipping %s dataset (no data found in combined tensor).\n', ds_name);
+        continue;
+    end
+    
+    % Loop over each trial comparison
+    for comp_idx = 1:length(target_trials)
+        tr_target = target_trials(comp_idx);
+        tr_label  = trial_labels{comp_idx};
+        
+        fprintf('Generating Trial 1 vs %d plots for: %s\n', tr_target, ds_name);
+        
+        % --- Initialize Figure 1: Scatter Plot ---
+        fig_scatter = figure('Name', sprintf('[%s] Scatter Tr1 vs Tr%d', ds_name, tr_target), ...
+                             'Position', [50, 100, 350 * num_areas, 300 * num_types], 'Color', 'w');
+        t_scatter = tiledlayout(fig_scatter, num_types, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
+        
+        % --- Initialize Figure 2: KDE Density Contour Plot ---
+        fig_density = figure('Name', sprintf('[%s] KDE Density Tr1 vs Tr%d', ds_name, tr_target), ...
+                             'Position', [100 + 350*num_areas, 100, 350 * num_areas, 300 * num_types], 'Color', 'w');
+        t_density = tiledlayout(fig_density, num_types, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
+        
+        % Loop over Types (Rows) then Areas (Cols)
+        for i_type = 1:num_types
+            current_type_idx = target_types(i_type);
+            current_type_name = type_names{i_type};
+            
+            for i_area = 1:num_areas
+                current_area = target_areas{i_area};
+                
+                try
+                    area_color = cfg.plot.colors.area_map(current_area);
+                catch
+                    area_color = [0.2 0.2 0.2];
+                end
+                
+                % Intersect Group, Area, and specific Neuron Type
+                idx_target = group_mask & strcmp(lbls_full.area, current_area) & (lbls_full.ntype == current_type_idx);
+                n_units = sum(idx_target);
+                
+                % Set up axes for both figures
+                ax_scat = nexttile(t_scatter); hold(ax_scat, 'on');
+                ax_dens = nexttile(t_density); hold(ax_dens, 'on');
+                
+                if n_units > 0
+                    target_tensor = tensor_full_z(idx_target, :, :);
+                    max_tensor_tr = size(target_tensor, 3);
+                    
+                    % Ensure we don't index beyond the tensor's 3rd dimension
+                    if tr_target > max_tensor_tr
+                        n_valid = 0; 
+                    else
+                        % Mean across space (dimension 2)
+                        act_tr1 = squeeze(mean(target_tensor(:, :, 1), 2, 'omitnan'));
+                        act_trX = squeeze(mean(target_tensor(:, :, tr_target), 2, 'omitnan'));
+                        
+                        % Handle 1D squeeze edge cases if only 1 unit passes
+                        if n_units == 1
+                            act_tr1 = mean(target_tensor(:, :, 1), 2, 'omitnan');
+                            act_trX = mean(target_tensor(:, :, tr_target), 2, 'omitnan');
+                        end
+                        
+                        % Filter NaNs (e.g., mice that disengaged before the target trial)
+                        valid_idx_pts = ~isnan(act_tr1) & ~isnan(act_trX);
+                        cln_tr1 = act_tr1(valid_idx_pts);
+                        cln_trX = act_trX(valid_idx_pts);
+                        n_valid = length(cln_tr1);
+                    end
+                    
+                    if n_valid > 3
+                        % ================= PLOT 1: SCATTER =================
+                        scatter(ax_scat, cln_tr1, cln_trX, 25, area_color, 'filled', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeColor', 'none');
+                        plot(ax_scat, [ax_min ax_max], [ax_min ax_max], 'k--', 'LineWidth', 1); % Unity Line
+                        
+                        [r, p] = corr(cln_tr1, cln_trX);
+                        text(ax_scat, 0.05, 0.95, sprintf('r = %.2f\np = %.3f\nn = %d', r, p, n_valid), ...
+                            'Units', 'normalized', 'VerticalAlignment', 'top', 'FontSize', 9);
+                        
+                        % ================= PLOT 2: KDE DENSITY CONTOUR =================
+                        if n_valid > 5 
+                            % Create a 2D evaluation grid restricted to the tighter axes
+                            pts = 60;
+                            x_grid = linspace(ax_min, ax_max, pts);
+                            y_grid = linspace(ax_min, ax_max, pts);
+                            [X_eval, Y_eval] = meshgrid(x_grid, y_grid);
+                            
+                            % Compute 2D Kernel Density Estimate
+                            [f_density, ~] = ksdensity([cln_tr1, cln_trX], [X_eval(:), Y_eval(:)]);
+                            Z_density = reshape(f_density, pts, pts);
+                            
+                            % Plot filled contour
+                            contourf(ax_dens, X_eval, Y_eval, Z_density, 15, 'LineStyle', 'none');
+                            colormap(ax_dens, 'parula');
+                        else
+                            scatter(ax_dens, cln_tr1, cln_trX, 25, area_color, 'filled');
+                            text(ax_dens, 0.05, 0.95, 'Too few units for KDE', 'Units', 'normalized', 'VerticalAlignment', 'top');
+                        end
+                        
+                        % Add unity line over the density plot
+                        plot(ax_dens, [ax_min ax_max], [ax_min ax_max], 'w--', 'LineWidth', 1.5);
+                        
+                    else
+                        for ax = [ax_scat, ax_dens]
+                            text(ax, 0.5, 0.5, 'Insufficient valid trials', 'HorizontalAlignment', 'center', 'Color', [0.5 0.5 0.5]);
+                        end
+                    end
+                else
+                    for ax = [ax_scat, ax_dens]
+                        text(ax, 0.5, 0.5, 'No Units', 'HorizontalAlignment', 'center', 'Color', [0.5 0.5 0.5]);
+                    end
+                end
+                
+                % Apply STRICT formatting and limits to BOTH axes
+                for ax = [ax_scat, ax_dens]
+                    axis(ax, 'square');
+                    xlim(ax, [ax_min ax_max]);
+                    ylim(ax, [ax_min ax_max]);
+                    set(ax, 'XTick', -1.5:0.5:1.5, 'YTick', -1.5:0.5:1.5);
+                    box(ax, 'on'); grid(ax, 'on');
+                end
+                
+                % --- Add Labels ---
+                if i_type == num_types
+                    xlabel(ax_scat, 'Mean Z-Score (Trial 1)', 'FontSize', 11);
+                    xlabel(ax_dens, 'Mean Z-Score (Trial 1)', 'FontSize', 11);
+                end
+                if i_area == 1
+                    ylabel(ax_scat, sprintf('%s\nMean Z-Score (%s)', current_type_name, tr_label), 'FontSize', 11, 'FontWeight', 'bold');
+                    ylabel(ax_dens, sprintf('%s\nMean Z-Score (%s)', current_type_name, tr_label), 'FontSize', 11, 'FontWeight', 'bold');
+                end
+                if i_type == 1
+                    title(ax_scat, sprintf('%s', current_area), 'FontSize', 13);
+                    title(ax_dens, sprintf('%s', current_area), 'FontSize', 13);
+                end
+            end
+        end
+        
+        title(t_scatter, sprintf('%s: Unit Activity Shift (Trial 1 vs %s)', ds_name, tr_label), 'FontSize', 16);
+        title(t_density, sprintf('%s: KDE Activity Density (Trial 1 vs %s)', ds_name, tr_label), 'FontSize', 16);
+        
+        % Save Figures
+        clean_name_scatter = regexprep(sprintf('[%s]_Scatter_Tr1_vs_Tr%d', ds_name, tr_target), '[\[\]\s:]', '_'); 
+        save_to_svg(clean_name_scatter);
+        
+        clean_name_density = regexprep(sprintf('[%s]_KDEDensity_Tr1_vs_Tr%d', ds_name, tr_target), '[\[\]\s:]', '_'); 
+        figure(fig_density); % Bring to front to ensure proper saving
+        save_to_svg(clean_name_density);
+        
+    end % End loop over target_trials
+end % End loop over datasets
+fprintf('--- Scatter and KDE Density Plots Complete ---\n\n');
 
 %% 14. Spatial Profile of Population Skewness (Hierarchical, Z-Scored)
 fprintf('--- Generating Hierarchical Spatial Profiles of Population Skewness ---\n');
