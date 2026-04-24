@@ -479,7 +479,7 @@ end
 
 %% Area-specific ensembles
 
-area_to_plot = 'DLS';
+area_to_plot = 'V1';
 
 for iensemble = 1:total_ensembles
 
@@ -547,6 +547,7 @@ for ianimal = unique(labels_valid.mouse_labels)'
     is_dms = task_data_to_pass(ianimal).is_dms;
     is_dls = task_data_to_pass(ianimal).is_dls;
     is_acc = task_data_to_pass(ianimal).is_acc;
+    is_v1 = task_data_to_pass(ianimal).is_v1;
 
     if any(contains(cfg.areas_to_include, 'DMS'))
         all_idx_to_keep(is_dms) = true;
@@ -558,6 +559,10 @@ for ianimal = unique(labels_valid.mouse_labels)'
 
     if any(contains(cfg.areas_to_include, 'ACC'))
         all_idx_to_keep(is_acc) = true;
+    end
+
+    if any(contains(cfg.areas_to_include, 'V1'))
+        all_idx_to_keep(is_v1) = true;
     end
 
 
@@ -785,6 +790,7 @@ for ianimal = unique(labels_valid.mouse_labels)'
     is_dms = task_data_to_pass(ianimal).is_dms;
     is_dls = task_data_to_pass(ianimal).is_dls;
     is_acc = task_data_to_pass(ianimal).is_acc;
+    is_v1 = task_data_to_pass(ianimal).is_v1;
 
     if any(contains(cfg.areas_to_include, 'DMS'))
         all_idx_to_keep(is_dms) = true;
@@ -796,6 +802,10 @@ for ianimal = unique(labels_valid.mouse_labels)'
 
     if any(contains(cfg.areas_to_include, 'ACC'))
         all_idx_to_keep(is_acc) = true;
+    end
+
+    if any(contains(cfg.areas_to_include, 'V1'))
+        all_idx_to_keep(is_v1) = true;
     end
 
 
