@@ -34,14 +34,44 @@ function [supermouse_tensor_raw, combined_labels, tensor_info] = buildCombinedTe
             end
             common_fields{end+1} = 'final_neurontypes';
             control_fields{end+1} = 'final_neurontypes';
-            fprintf('    Rescuing "final_neurontypes" from task data (padding control with empty).\n');
+            fprintf('    Rescuing "final_neurontypes" from task data.\n');
         elseif ~isfield(task_data, 'final_neurontypes') && isfield(control_data, 'final_neurontypes')
             for t = 1:length(task_data)
                 task_data(t).final_neurontypes = [];
             end
             common_fields{end+1} = 'final_neurontypes';
             task_fields{end+1} = 'final_neurontypes';
-            fprintf('    Rescuing "final_neurontypes" from control data (padding task with empty).\n');
+            fprintf('    Rescuing "final_neurontypes" from control data.\n');
+        end
+        
+        % --- RESCUE AREA LOGICALS (e.g., is_v1) ---
+        if isfield(cfg, 'area_field_map')
+            area_fields_to_check = values(cfg.area_field_map);
+            for f = 1:length(area_fields_to_check)
+                curr_field = area_fields_to_check{f};
+                
+                % If area is in task but not control (e.g., V1)
+                if isfield(task_data, curr_field) && ~isfield(control_data, curr_field)
+                    for c = 1:length(control_data)
+                        % Pad control with 'false' array matching its neuron count
+                        n_ctrl_neurons = size(control_data(c).spatial_binned_fr_all, 1);
+                        control_data(c).(curr_field) = false(n_ctrl_neurons, 1);
+                    end
+                    common_fields{end+1} = curr_field;
+                    control_fields{end+1} = curr_field;
+                    fprintf('    Rescuing "%s" from task data.\n', curr_field);
+                    
+                % If area is in control but not task
+                elseif ~isfield(task_data, curr_field) && isfield(control_data, curr_field)
+                    for t = 1:length(task_data)
+                        n_task_neurons = size(task_data(t).spatial_binned_fr_all, 1);
+                        task_data(t).(curr_field) = false(n_task_neurons, 1);
+                    end
+                    common_fields{end+1} = curr_field;
+                    task_fields{end+1} = curr_field;
+                    fprintf('    Rescuing "%s" from control data.\n', curr_field);
+                end
+            end
         end
         % ----------------------------------
         
