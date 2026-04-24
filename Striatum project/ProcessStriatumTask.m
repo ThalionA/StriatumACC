@@ -25,7 +25,7 @@ else
     if ~exist('all_data', 'var')
         load('all_data.mat');
     end
-    fr_threshold = 0.05; % Hz
+    fr_threshold = 0.02; % Hz
     n_animals = numel(all_data);
     
     % --- Step 1: Filter Low Firing Neurons (Robustly) ---
