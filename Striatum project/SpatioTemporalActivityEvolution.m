@@ -1228,7 +1228,7 @@ v_zone = cfg.plot.zone_params.visual_zones_au / bin_size;
 r_zone = cfg.plot.zone_params.reward_zone_au / bin_size;
 n_bins = size(tensor_full_z, 2);
 
-target_areas = {'DMS', 'DLS', 'ACC'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1363,7 +1363,7 @@ end
 epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.epoch_names{3}};
 n_trials_total = size(tensor_full_z, 3);
 
-target_areas = {'DMS', 'DLS', 'ACC'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1492,7 +1492,7 @@ epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.e
 n_bins         = size(tensor_full_z, 2);
 n_trials_total = size(tensor_full_z, 3);
 
-target_areas = {'DMS', 'DLS', 'ACC'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1636,7 +1636,7 @@ target_trials = [1, 4, 21];
 trial_names   = {'Trial 1 (Naive)', 'Trial 4', 'Trial 1 of Expert (Tr 21)'};
 trial_colors  = {[0 0.4470 0.7410], [0.4940 0.1840 0.5560], [0.8500 0.3250 0.0980]};
 
-target_areas = {'DMS', 'DLS', 'ACC'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
 target_types = [1, 2, 3];
 type_names   = {'MSN', 'FSN', 'TAN'};
 
