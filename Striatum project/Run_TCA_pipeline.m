@@ -8,11 +8,12 @@ cfg.control2_data_file = "preprocessed_data_control2.mat";
 
 % --- Analysis Selection ---
 cfg.analysis_mode = 'task_only'; % Options: 'task_only', 'control_only', 'task_and_control'
-cfg.areas_to_include = {'DMS', 'DLS', 'ACC'}; % List areas to keep (e.g., {'DMS', 'DLS', 'ACC'})
+cfg.areas_to_include = {'DMS', 'DLS', 'ACC', 'V1'}; % List areas to keep (e.g., {'DMS', 'DLS', 'ACC'})
+
 % Define mapping from area names to field names in the data struct
 cfg.area_field_map = containers.Map(...
-    {'DMS', 'DLS', 'ACC'}, ...
-    {'is_dms', 'is_dls', 'is_acc'} ...
+    {'DMS', 'DLS', 'ACC', 'V1'}, ...
+    {'is_dms', 'is_dls', 'is_acc', 'is_v1'} ...
     );
 
 % --- Processing Parameters ---
@@ -41,9 +42,11 @@ cfg.plot.zone_params.bin_size = 4;
 cfg.plot.colors.dms = [0, 0.4470, 0.7410];
 cfg.plot.colors.dls = [0.4660, 0.6740, 0.1880];
 cfg.plot.colors.acc = [0.8500, 0.3250, 0.0980];
+cfg.plot.colors.v1  = [0.4940, 0.1840, 0.5560]; % NEW: Purple for V1
+
 cfg.plot.colors.area_map = containers.Map(...
-    {'DMS', 'DLS', 'ACC'}, ...
-    {cfg.plot.colors.dms, cfg.plot.colors.dls, cfg.plot.colors.acc}...
+    {'DMS', 'DLS', 'ACC', 'V1'}, ...
+    {cfg.plot.colors.dms, cfg.plot.colors.dls, cfg.plot.colors.acc, cfg.plot.colors.v1}...
     );
 cfg.plot.colors.epoch_early = [0.298, 0.447, 0.690];
 cfg.plot.colors.epoch_middle = [0.867, 0.518, 0.322];
@@ -353,12 +356,17 @@ end
 % Visualize the distribution of ranges for each area using a box plot
 figure('Name', 'Response Range by Area');
 
-boxplot(response_ranges, labels_valid.area_labels, 'OutlierSize', 3,...
-    'Colors', [cfg.plot.colors.acc;cfg.plot.colors.dls;cfg.plot.colors.dms], 'Widths', 0.75);
+% Dynamically extract the right colors based on the areas present in the data (sorted alphabetically by boxplot)
+present_areas = unique(labels_valid.area_labels);
+box_colors = zeros(length(present_areas), 3);
+for a = 1:length(present_areas)
+    box_colors(a, :) = cfg.plot.colors.area_map(present_areas{a});
+end
 
+boxplot(response_ranges, labels_valid.area_labels, 'OutlierSize', 3,...
+    'Colors', box_colors, 'Widths', 0.75);
 title('Distribution of Firing Rate Range by Brain Area');
 ylabel('Response Range (Max Rate - Min Rate)');
-
 fprintf('Displayed box plot of response ranges.\n\n');
 
 %% ================= Visualize Spatiotemporal Activity by Area and Epoch =================
