@@ -597,9 +597,12 @@ t = tiledlayout(total_ensembles, 1, "TileSpacing", "compact");
 for iensemble = 1:total_ensembles
     nexttile
     hold on
+    % BUGFIX (2026-05-07): the second and third sem(...) calls used the
+    % good_post array instead of bad_pre / bad_post — error bars on the
+    % red and magenta traces were being computed from the wrong data.
     h = shadedErrorBar(1:n_bins, mean(ensemble_activity_good_post{iensemble}, 'omitmissing'), sem(ensemble_activity_good_post{iensemble}), 'lineprops', {'Color', 'g'});
-    g = shadedErrorBar(1:n_bins, mean(ensemble_activity_bad_pre{iensemble}, 'omitmissing'), sem(ensemble_activity_good_post{iensemble}), 'lineprops', {'Color', 'r'});
-    k = shadedErrorBar(1:n_bins, mean(ensemble_activity_bad_post{iensemble}, 'omitmissing'), sem(ensemble_activity_good_post{iensemble}), 'lineprops', {'Color', 'm'});
+    g = shadedErrorBar(1:n_bins, mean(ensemble_activity_bad_pre{iensemble},  'omitmissing'), sem(ensemble_activity_bad_pre{iensemble}),  'lineprops', {'Color', 'r'});
+    k = shadedErrorBar(1:n_bins, mean(ensemble_activity_bad_post{iensemble}, 'omitmissing'), sem(ensemble_activity_bad_post{iensemble}), 'lineprops', {'Color', 'm'});
     
     if iensemble < total_ensembles
         xticks([])

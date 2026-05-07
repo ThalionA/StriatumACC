@@ -29,7 +29,7 @@ else
         load('all_data_control.mat');
     end
 
-    fr_threshold = 0.05; % Hz (Aligned to task)
+    fr_threshold = 0.02; % Hz (Aligned to ProcessStriatumTask.m as of 2026-05-07)
     n_animals = numel(all_data);
 
     % --- Step 1: Filter Low Firing Neurons (Robustly) ---
@@ -724,7 +724,9 @@ for ianimal = 1:n_animals
 end
 
 % Save the preprocessed data struct
-save('preprocessed_data.mat', 'preprocessed_data', '-v7.3');
+% BUGFIX (2026-05-07): was 'preprocessed_data.mat' — silently overwrote
+% the Task preprocessed file. Use the control-specific filename instead.
+save('preprocessed_data_control.mat', 'preprocessed_data', '-v7.3');
 
 
 %% Area-specific TCA plots
@@ -780,7 +782,9 @@ for ianimal = 1:n_animals
     preprocessed_data(ianimal).decoding_performance = decoder_performance(ianimal);
 end
 
-save('preprocessed_data.mat', 'preprocessed_data', '-v7.3');
+% BUGFIX (2026-05-07): was 'preprocessed_data.mat' — silently overwrote
+% the Task preprocessed file. Use the control-specific filename instead.
+save('preprocessed_data_control.mat', 'preprocessed_data', '-v7.3');
 
 
 %% Decoding with behaviour
