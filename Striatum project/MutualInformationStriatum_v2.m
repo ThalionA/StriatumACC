@@ -1,22 +1,18 @@
 %% 1. Configuration & Setup
 clear; clc; close all;
-cfg.data_file = 'preprocessed_data.mat';
-cfg.save_file = 'shannon_mi_results.mat';
-cfg.regions = {'DMS', 'DLS', 'ACC'};
-cfg.colors = {[0 0.4470 0.7410], [0.4660 0.6740 0.1880], [0.8500 0.3250 0.0980]};
-cfg.behav_targets = {'lick_rate', 'velocity'};
+cfg = project_cfg();
+cfg.data_file = cfg.task_data_file;
+cfg.save_file = 'processed_data/shannon_mi_results.mat';
+cfg.regions   = cfg.areas;
+cfg.colors    = mat2cell(cfg.area_colors, ones(size(cfg.area_colors,1),1), 3)';
 
-% --- Information Theory Parameters ---
+% --- Information Theory Parameters (script-specific) ---
 cfg.mi_neural_bins   = 2;  % Number of bins (Bin 1 reserved for exact zeros)
 cfg.mi_behav_bins    = 2;  % Number of bins (Bin 1 reserved for exact zeros)
 cfg.mi_pool_win      = 5;  % Number of spatial bins to pool per window
 cfg.mi_pool_shift    = 1;  % Shift step for the moving window
-cfg.min_valid_trials = 8; % Strict minimum N to compute valid discrete probability distributions
-cfg.max_bin          = 30; % Truncate spatial analysis to RZ + 5 bins
-cfg.target_rz_bin    = 25; % Reward zone start bin
-cfg.lp_z_threshold   = -2; % Z-score threshold for lick precision
-cfg.lp_window        = 10; % Size of the sliding window
-cfg.lp_min_pass      = 7;  % Number of trials within the window that must pass the threshold
+cfg.min_valid_trials = 8;  % Strict minimum N to compute valid discrete probability distributions
+cfg.lp_min_pass      = cfg.lp_min_consecutive;  % alias for legacy code paths below
 
 %% 2. Data Loading & Preprocessing
 fprintf('--- Loading Data ---\n');
@@ -40,18 +36,21 @@ for ianimal = 1:n_animals
     velocity = (4 * 1.25) ./ durations; 
     
     % --- Robust Learning Point (LP) Calculation ---
+    % Refactored 2026-05-07. find_learning_points returns the START of the
+    % qualifying window (the project-wide convention). MI v2 historically
+    % uses the END of that window as its LP, so we shift here to preserve
+    % the existing analysis windows.
     if isfield(preprocessed_data(ianimal), 'learning_point') && ~isempty(preprocessed_data(ianimal).learning_point)
         lp = preprocessed_data(ianimal).learning_point;
     else
-        z_err = preprocessed_data(ianimal).zscored_lick_errors(1:n_trials);
-        lp = NaN; 
-        for t = 1 : (n_trials - cfg.lp_window + 1)
-            window_idx = t : (t + cfg.lp_window - 1);
-            passed_trials = sum(z_err(window_idx) <= cfg.lp_z_threshold);
-            if passed_trials >= cfg.lp_min_pass
-                lp = window_idx(end); 
-                break; 
-            end
+        lp_cfg = struct('lp_z_threshold', cfg.lp_z_threshold, ...
+                        'lp_window',      cfg.lp_window, ...
+                        'lp_min_consecutive', cfg.lp_min_pass);
+        lps_start = find_learning_points(preprocessed_data(ianimal), lp_cfg);
+        if isnan(lps_start)
+            lp = NaN;
+        else
+            lp = lps_start + cfg.lp_window - 1; % MI v2 convention: end-of-window
         end
     end
     
@@ -66,6 +65,7 @@ for ianimal = 1:n_animals
     clean_data(ianimal).is_dms = preprocessed_data(ianimal).is_dms;
     clean_data(ianimal).is_dls = preprocessed_data(ianimal).is_dls;
     clean_data(ianimal).is_acc = preprocessed_data(ianimal).is_acc;
+    clean_data(ianimal).is_v1  = is_v1_safe(preprocessed_data(ianimal));
 end
 
 %% 3. Core Functions for Information Theory
@@ -78,9 +78,13 @@ if exist(cfg.save_file, 'file')
     load(cfg.save_file, 'mi_results');
 else
     fprintf('--- Computing Shannon Mutual Information (Pooled) ---\n');
-    mi_results = struct();
-    
-    for ianimal = 1:n_animals
+    % Preallocate so parfor can write into mi_results(ianimal) safely.
+    mi_results(n_animals).win_centers = [];
+    if isempty(gcp('nocreate'))
+        try, parpool; catch, end %#ok<CTCH>
+    end
+
+    parfor ianimal = 1:n_animals
         fprintf('Processing Animal %d/%d...\n', ianimal, n_animals);
         n_bins = clean_data(ianimal).n_bins;
         n_trials = clean_data(ianimal).n_trials;
@@ -356,7 +360,8 @@ end
 %% 8. Calculate Cross-Area Mutual Information (Information Flow using PC1)
 fprintf('--- Computing Cross-Area Mutual Information ---\n');
 cross_area_file = 'cross_area_mi_results.mat';
-cfg.area_pairs = {'ACC', 'DMS'; 'ACC', 'DLS'; 'DMS', 'DLS'};
+cfg.area_pairs = {'ACC', 'DMS'; 'ACC', 'DLS'; 'DMS', 'DLS'; ...
+                  'V1',  'DMS'; 'V1',  'DLS'; 'V1',  'ACC'};
 if exist(cross_area_file, 'file')
     fprintf('Loading existing Cross-Area MI results...\n');
     load(cross_area_file, 'area_mi_results');

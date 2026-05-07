@@ -28,14 +28,26 @@ all_isdls = cat(2, all_isdls{:})';
 all_isacc = {control_data_raw(:).is_acc};
 all_isacc = cat(2, all_isacc{:})';
 
+% V1 — only present for animals with a V1 probe; pad missing animals with false.
+all_isv1 = arrayfun(@(s) ...
+    (isfield(s,'is_v1') && ~isempty(s.is_v1)) * logical(s.is_v1) ...
+    + ~(isfield(s,'is_v1') && ~isempty(s.is_v1)) * false(size(s.is_dms)), ...
+    control_data_raw, 'UniformOutput', false);
+% Concatenate, tolerate row/col inconsistency
+all_isv1 = cat(2, all_isv1{:});
+if size(all_isv1, 1) == 1, all_isv1 = all_isv1'; end
+
 dms_neurontypes = [sum(all_neurontype_info(:, 5) == 1 & all_isdms), sum(all_neurontype_info(:, 5) == 2 & all_isdms), sum(all_neurontype_info(:, 5) == 3 & all_isdms), sum(all_neurontype_info(:, 5) == 4 & all_isdms)];
 dls_neurontypes = [sum(all_neurontype_info(:, 5) == 1 & all_isdls), sum(all_neurontype_info(:, 5) == 2 & all_isdls), sum(all_neurontype_info(:, 5) == 3 & all_isdls), sum(all_neurontype_info(:, 5) == 4 & all_isdls)];
 acc_neurontypes = [sum(all_neurontype_info(:, 5) == 1 & all_isacc), sum(all_neurontype_info(:, 5) == 2 & all_isacc), sum(all_neurontype_info(:, 5) == 3 & all_isacc), sum(all_neurontype_info(:, 5) == 4 & all_isacc)];
+% V1 has no MSN/FSN/TAN classification — count all V1 units in the
+% Unclassified bucket so the totals reconcile.
+v1_neurontypes  = [0, 0, 0, sum(all_isv1)];
 
 figure
-bar([dms_neurontypes', dls_neurontypes', acc_neurontypes']', 'stacked')
+bar([dms_neurontypes', dls_neurontypes', acc_neurontypes', v1_neurontypes']', 'stacked')
 
-xticklabels({'DMS', 'DLS', 'ACC'})
+xticklabels({'DMS', 'DLS', 'ACC', 'V1'})
 legend({'MSN', 'FS', 'TAN', 'UIN'})
 ylabel('unit count')
 

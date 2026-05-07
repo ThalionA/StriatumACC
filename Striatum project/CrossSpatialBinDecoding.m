@@ -1,16 +1,14 @@
 %% 1. Configuration & Setup
 clear; clc; close all;
 
-cfg.data_file = 'preprocessed_data.mat';
-cfg.save_file = 'cross_spatial_decoding_results.mat';
-cfg.regions = {'DMS', 'DLS', 'ACC'};
-cfg.colors = {[0 0.4470 0.7410], [0.4660 0.6740 0.1880], [0.8500 0.3250 0.0980]};
+% Project-wide constants (areas, colours, ridge, min_units, n_shuffles, ...)
+cfg = project_cfg();
 
-% Decoding parameters
-cfg.ridge_lambda = 1.0; % L2 penalty
-cfg.min_units = 5;      % Minimum units required to decode a region
-cfg.behav_targets = {'lick_rate', 'velocity'};
-cfg.n_shuffles = 100;   
+% Script-specific overrides
+cfg.data_file   = cfg.task_data_file;
+cfg.save_file   = 'processed_data/cross_spatial_decoding_results.mat';
+cfg.regions     = cfg.areas;                                 % alias
+cfg.colors      = mat2cell(cfg.area_colors, ones(size(cfg.area_colors,1),1), 3)';
 cfg.corr_window = 9;    % Moving window (trials) for trial-resolved correlation
 
 %% 2. Data Loading & Preprocessing
@@ -34,10 +32,15 @@ for ianimal = 1:n_animals
     lick_rate = licks ./ durations;
     velocity = (4 * 1.25) ./ durations; 
     
-    z_err = preprocessed_data(ianimal).zscored_lick_errors(1:n_trials);
-    lp = find(conv(double(z_err <= -2), ones(1,7), 'valid') == 7, 1, 'first');
-    if isempty(lp); lp = NaN; end
-    
+    % LP via shared helper. Original convention here was "7 strictly
+    % consecutive trials with z_err <= -2"; we map that to lp_window=7,
+    % lp_min_consecutive=7. Truncate the trace to n_trials first so the
+    % helper sees the same data the inline version did.
+    pd_view = preprocessed_data(ianimal);
+    pd_view.zscored_lick_errors = pd_view.zscored_lick_errors(1:n_trials);
+    lp = find_learning_points(pd_view, struct( ...
+        'lp_z_threshold', -2, 'lp_window', 7, 'lp_min_consecutive', 7));
+
     clean_data(ianimal).neural = preprocessed_data(ianimal).spatial_binned_fr_all(:, :, 1:n_trials);
     clean_data(ianimal).lick_rate = lick_rate'; 
     clean_data(ianimal).velocity = velocity';   
@@ -46,6 +49,7 @@ for ianimal = 1:n_animals
     clean_data(ianimal).is_dms = preprocessed_data(ianimal).is_dms;
     clean_data(ianimal).is_dls = preprocessed_data(ianimal).is_dls;
     clean_data(ianimal).is_acc = preprocessed_data(ianimal).is_acc;
+    clean_data(ianimal).is_v1  = is_v1_safe(preprocessed_data(ianimal));
 end
 
 %% 3. Cross-Spatial Bin Decoding (Target Bin vs. Previous Source Bins)
@@ -77,52 +81,38 @@ else
                 
                 % Initialize 3D storage: [TargetBin x SourceBin x Trial]
                 Y_pred = nan(n_bins, n_bins, n_trials);
-                Y_pred_shuff = nan(n_bins, n_bins, n_trials);
-                
-                shuff_idx = randperm(n_trials);
-                
+
+                % Cache features per source bin so we don't re-extract them
+                % once per shuffle.
+                X_by_source = cell(1, n_bins);
+                for source_b = 1:n_bins
+                    X_raw = squeeze(reg_neural(:, source_b, :));
+                    if size(X_raw, 2) == 1; X_raw = X_raw'; end
+                    X_by_source{source_b} = X_raw';   % [Trials x Units]
+                end
+
+                % --- Real predictions (closed-form PRESS LOO ridge) ---
                 for target_b = 1:n_bins
                     Y = Y_all(target_b, :)';
-                    Y_shuff = Y(shuff_idx);
-                    
-                    % Only decode using current and previous bins
                     for source_b = 1:target_b
-                        X_raw = squeeze(reg_neural(:, source_b, :)); 
-                        if size(X_raw, 2) == 1; X_raw = X_raw'; end
-                        X = X_raw'; % [Trials x Units]
-                        
-                        mu_X = mean(X, 1);
-                        sig_X = std(X, 0, 1);
-                        sig_X(sig_X == 0) = 1; 
-                        X_z = (X - mu_X) ./ sig_X;
-                        
-                        I = eye(size(X_z, 2));
-                        
-                        for test_trial = 1:n_trials
-                            train_mask = true(n_trials, 1);
-                            train_mask(test_trial) = false;
-                            
-                            X_train = X_z(train_mask, :);
-                            X_test  = X_z(test_trial, :);
-                            
-                            % Real
-                            Y_train = Y(train_mask);
-                            W = (X_train' * X_train + cfg.ridge_lambda * I) \ (X_train' * Y_train);
-                            Y_pred(target_b, source_b, test_trial) = X_test * W;
-                            
-                            % Shuffled
-                            Y_train_shuff = Y_shuff(train_mask);
-                            W_shuff = (X_train' * X_train + cfg.ridge_lambda * I) \ (X_train' * Y_train_shuff);
-                            Y_pred_shuff(target_b, source_b, test_trial) = X_test * W_shuff;
-                        end
+                        Y_pred(target_b, source_b, :) = ...
+                            loo_ridge_press(X_by_source{source_b}, Y, cfg.ridge_lambda);
                     end
                 end
-                
+
                 % Calculate trial-resolved moving correlation
                 half_win = floor(cfg.corr_window / 2);
                 moving_r = nan(n_bins, n_bins, n_trials);
-                moving_r_shuff = nan(n_bins, n_bins, n_trials);
+
+                % --- Shuffle distribution: cfg.n_shuffles trial-permutations ---
+                % Online aggregates avoid storing the full 4D tensor.
+                shuff_sum  = zeros(n_bins, n_bins, n_trials);
+                shuff_sum2 = zeros(n_bins, n_bins, n_trials);
+                shuff_cnt  = zeros(n_bins, n_bins, n_trials);
+                shuff_above = zeros(n_bins, n_bins, n_trials); % cumulative count where shuff >= real (computed at end)
+                moving_r_shuff_first = nan(n_bins, n_bins, n_trials);  % keep one shuffle for plotting compat
                 
+                % Real moving correlation
                 for target_b = 1:n_bins
                     for source_b = 1:target_b
                         for t = 1:n_trials
@@ -130,16 +120,58 @@ else
                             if length(win) > 3
                                 r = corrcoef(squeeze(Y_pred(target_b, source_b, win)), Y_all(target_b, win));
                                 moving_r(target_b, source_b, t) = r(1,2);
-                                
-                                r_s = corrcoef(squeeze(Y_pred_shuff(target_b, source_b, win)), Y_all(target_b, win));
-                                moving_r_shuff(target_b, source_b, t) = r_s(1,2);
                             end
                         end
                     end
                 end
-                
+
+                % Shuffle distribution: n_shuffles independent permutations.
+                for s_iter = 1:cfg.n_shuffles
+                    shuff_idx_s = randperm(n_trials);
+                    Y_pred_shuff_s = nan(n_bins, n_bins, n_trials);
+                    for target_b = 1:n_bins
+                        Y_s = Y_all(target_b, shuff_idx_s)';
+                        for source_b = 1:target_b
+                            Y_pred_shuff_s(target_b, source_b, :) = ...
+                                loo_ridge_press(X_by_source{source_b}, Y_s, cfg.ridge_lambda);
+                        end
+                    end
+                    % Compute moving_r for this shuffle
+                    moving_r_s = nan(n_bins, n_bins, n_trials);
+                    for target_b = 1:n_bins
+                        for source_b = 1:target_b
+                            for t = 1:n_trials
+                                win = max(1, t - half_win) : min(n_trials, t + half_win);
+                                if length(win) > 3
+                                    r_s = corrcoef(squeeze(Y_pred_shuff_s(target_b, source_b, win)), Y_all(target_b, win));
+                                    moving_r_s(target_b, source_b, t) = r_s(1, 2);
+                                end
+                            end
+                        end
+                    end
+                    % Online aggregation
+                    valid = ~isnan(moving_r_s);
+                    shuff_sum(valid)   = shuff_sum(valid)   + moving_r_s(valid);
+                    shuff_sum2(valid)  = shuff_sum2(valid)  + moving_r_s(valid).^2;
+                    shuff_cnt(valid)   = shuff_cnt(valid)   + 1;
+                    shuff_above       = shuff_above + double(moving_r_s >= moving_r);
+                    if s_iter == 1
+                        moving_r_shuff_first = moving_r_s; % preserve a single sample for compat
+                    end
+                end
+                shuff_mean = shuff_sum ./ max(shuff_cnt, 1);
+                shuff_var  = max(0, shuff_sum2 ./ max(shuff_cnt, 1) - shuff_mean.^2);
+                shuff_std  = sqrt(shuff_var);
+                empirical_p = shuff_above ./ cfg.n_shuffles;     % one-sided
+
                 decoding_results(ianimal).(region).(target_name).moving_r = moving_r;
-                decoding_results(ianimal).(region).(target_name).moving_r_shuff = moving_r_shuff;
+                % Backwards-compat field (one realisation of the shuffle)
+                decoding_results(ianimal).(region).(target_name).moving_r_shuff = moving_r_shuff_first;
+                % New aggregates from the n_shuffles-bumped null
+                decoding_results(ianimal).(region).(target_name).shuff_mean = shuff_mean;
+                decoding_results(ianimal).(region).(target_name).shuff_std  = shuff_std;
+                decoding_results(ianimal).(region).(target_name).empirical_p = empirical_p;
+                decoding_results(ianimal).(region).(target_name).n_shuffles  = cfg.n_shuffles;
             end
         end
     end

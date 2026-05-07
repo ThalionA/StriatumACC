@@ -49,9 +49,9 @@ end
 n_animals = numel(preprocessed_data);
 fprintf('Exporting %d animals to %s\n', n_animals, cfg.output_dir);
 
-% Find learning points up-front so we can attach a per-mouse LP scalar.
-zscored_errors = {preprocessed_data(:).zscored_lick_errors};
-learning_points = cellfun(@(x) findOneLP(x), zscored_errors, 'UniformOutput', false);
+% Find learning points up-front using the shared helper.
+[lps, ~] = find_learning_points(preprocessed_data, struct( ...
+    'lp_z_threshold', -2, 'lp_window', 10, 'lp_min_consecutive', 7));
 
 for ianimal = 1:n_animals
     pd = preprocessed_data(ianimal);
@@ -103,12 +103,7 @@ for ianimal = 1:n_animals
     end
 
     % --- Per-mouse LP ---
-    lp = learning_points{ianimal};
-    if isempty(lp)
-        learning_point = NaN;
-    else
-        learning_point = lp;
-    end
+    learning_point = lps(ianimal);  % NaN for non-learners
     if isfield(pd, 'change_point_mean') && ~isempty(pd.change_point_mean)
         change_point = pd.change_point_mean;
     else
@@ -135,16 +130,4 @@ end
 fprintf('\nExport complete. Run cebra_analysis.py from this directory next.\n');
 
 
-% --- helper ---
-function lp = findOneLP(zerr)
-    if isempty(zerr)
-        lp = [];
-        return;
-    end
-    lp_idx = find(movsum(zerr <= -2, [0, 9]) >= 7, 1);
-    if isempty(lp_idx)
-        lp = [];
-    else
-        lp = lp_idx;
-    end
-end
+% Local LP helper removed 2026-05-07; uses shared find_learning_points.m

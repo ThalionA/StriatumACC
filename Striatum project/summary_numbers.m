@@ -1,11 +1,13 @@
-num_units = cellfun(@(x) size(x, 2), {task_data_raw(:).is_dms});
+% BUGFIX (2026-05-07): was size(x, 2) which returns 1 for column-vector
+% logicals — gave a vector of 1s rather than the per-mouse unit count.
+num_units = cellfun(@(x) numel(x), {task_data_raw(:).is_dms});
 
 mean_n_units = mean(num_units);
 sem_n_units = sem(num_units);
 
 n_total_units = sum(num_units);
 
-%% 
+%%
 
 num_units_dms = cellfun(@(x) sum(x), {task_data_raw(:).is_dms});
 mean_n_units_dms = mean(num_units_dms);
@@ -23,6 +25,13 @@ mean_n_units_acc = mean(num_units_acc);
 sem_n_units_acc = sem(num_units_acc);
 n_total_units_acc = sum(num_units_acc);
 
+% V1 — present only for animals with a V1 probe; missing animals contribute 0
+num_units_v1 = arrayfun(@(s) ...
+    sum(is_v1_safe(s)), task_data_raw);
+mean_n_units_v1 = mean(num_units_v1);
+sem_n_units_v1  = sem(num_units_v1);
+n_total_units_v1 = sum(num_units_v1);
+
 % ================= Extract Summary Metrics (task_data_raw) =================
 if ~isempty(task_data_raw)
     n_animals_raw = numel(task_data_raw);
@@ -32,22 +41,25 @@ if ~isempty(task_data_raw)
     units_dms     = zeros(n_animals_raw, 1);
     units_dls     = zeros(n_animals_raw, 1);
     units_acc     = zeros(n_animals_raw, 1);
-    
+    units_v1      = zeros(n_animals_raw, 1);
+
     units_msn     = zeros(n_animals_raw, 1);
     units_fsn     = zeros(n_animals_raw, 1);
     units_tan     = zeros(n_animals_raw, 1);
     units_unclass = zeros(n_animals_raw, 1);
-    
+
     for i = 1:n_animals_raw
         % Area counts
         is_dms = task_data_raw(i).is_dms;
         is_dls = task_data_raw(i).is_dls;
         is_acc = task_data_raw(i).is_acc;
-        
+        is_v1  = is_v1_safe(task_data_raw(i));
+
         total_units(i) = length(is_dms); % Assumes logical arrays are same length
         units_dms(i)   = sum(is_dms);
         units_dls(i)   = sum(is_dls);
         units_acc(i)   = sum(is_acc);
+        units_v1(i)    = sum(is_v1);
         
         % Neuron type counts (1=MSN, 2=FSN, 3=TAN)
         if isfield(task_data_raw(i), 'final_neurontypes') && ~isempty(task_data_raw(i).final_neurontypes)
@@ -84,8 +96,12 @@ if ~isempty(task_data_raw)
     fprintf('DMS Units   : %s  [Sum: %d]\n', fmt_stats(units_dms), sum(units_dms));
     fprintf('DLS Units   : %s  [Sum: %d]\n', fmt_stats(units_dls), sum(units_dls));
     fprintf('ACC Units   : %s  [Sum: %d]\n', fmt_stats(units_acc), sum(units_acc));
-    
+    n_v1_animals = sum(units_v1 > 0);
+    fprintf('V1  Units   : %s  [Sum: %d]   (%d/%d animals have V1 probe)\n', ...
+        fmt_stats(units_v1), sum(units_v1), n_v1_animals, n_animals_raw);
+
     fprintf('\n--- Neuron Types per Animal (Mean +/- SEM) [Total] ---\n');
+    fprintf('(MSN/FSN/TAN classification applies to striatum only — V1 not classified)\n');
     fprintf('MSN (Type 1): %s  [Sum: %d]\n', fmt_stats(units_msn), sum(units_msn));
     fprintf('FSN (Type 2): %s  [Sum: %d]\n', fmt_stats(units_fsn), sum(units_fsn));
     fprintf('TAN (Type 3): %s  [Sum: %d]\n', fmt_stats(units_tan), sum(units_tan));
@@ -99,7 +115,7 @@ if ~isempty(task_data_raw)
     total_trials = zeros(n_animals_raw, 1);
     
     fr_msn = []; fr_fsn = []; fr_tan = [];
-    fr_dms = []; fr_dls = []; fr_acc = [];
+    fr_dms = []; fr_dls = []; fr_acc = []; fr_v1 = [];
     
     for i = 1:n_animals_raw
         % 1. Trial counts (assuming spatial_binned_data.licks is [bins x trials])
@@ -117,7 +133,9 @@ if ~isempty(task_data_raw)
             if isfield(task_data_raw(i), 'is_dms'), fr_dms = [fr_dms; mean_fr_per_neuron(task_data_raw(i).is_dms)]; end
             if isfield(task_data_raw(i), 'is_dls'), fr_dls = [fr_dls; mean_fr_per_neuron(task_data_raw(i).is_dls)]; end
             if isfield(task_data_raw(i), 'is_acc'), fr_acc = [fr_acc; mean_fr_per_neuron(task_data_raw(i).is_acc)]; end
-            
+            is_v1_i = is_v1_safe(task_data_raw(i));
+            if any(is_v1_i), fr_v1 = [fr_v1; mean_fr_per_neuron(is_v1_i)]; end
+
             % Cell Type Firing Rates
             if isfield(task_data_raw(i), 'final_neurontypes')
                 ntypes_raw = task_data_raw(i).final_neurontypes;
@@ -143,8 +161,14 @@ if ~isempty(task_data_raw)
     fprintf('--- Global Firing Rates by Area (Hz, Mean +/- SEM across neurons) ---\n');
     fprintf('DMS Units : %6.2f +/- %5.2f\n', mean(fr_dms), std(fr_dms)/sqrt(max(1,length(fr_dms))));
     fprintf('DLS Units : %6.2f +/- %5.2f\n', mean(fr_dls), std(fr_dls)/sqrt(max(1,length(fr_dls))));
-    fprintf('ACC Units : %6.2f +/- %5.2f\n\n', mean(fr_acc), std(fr_acc)/sqrt(max(1,length(fr_acc))));
-    
+    fprintf('ACC Units : %6.2f +/- %5.2f\n', mean(fr_acc), std(fr_acc)/sqrt(max(1,length(fr_acc))));
+    if ~isempty(fr_v1)
+        fprintf('V1  Units : %6.2f +/- %5.2f  (n=%d units)\n', mean(fr_v1), std(fr_v1)/sqrt(max(1,length(fr_v1))), numel(fr_v1));
+    else
+        fprintf('V1  Units : (no V1 units in cohort)\n');
+    end
+    fprintf('\n');
+
     fprintf('--- Global Firing Rates by Putative Cell Type (Hz, Mean +/- SEM) ---\n');
     fprintf('MSN (Type 1): %6.2f +/- %5.2f\n', mean(fr_msn), std(fr_msn)/sqrt(max(1,length(fr_msn))));
     fprintf('FSN (Type 2): %6.2f +/- %5.2f\n', mean(fr_fsn), std(fr_fsn)/sqrt(max(1,length(fr_fsn))));
@@ -403,3 +427,7 @@ if ~isempty(control2_data_raw)
     fprintf('TAN (Type 3): %s\n', fmt_fr(ctrl2_fr_tan));
     fprintf('==============================================================================\n\n');
 end
+
+
+% getOrFalse was a local helper specifically for is_v1; replaced with the
+% standalone is_v1_safe.m on 2026-05-07.

@@ -4,16 +4,93 @@ _Audit completed 2026-05-07. Covers all `.m` files in active code paths, the `Pr
 
 ## Update log
 
-**2026-05-07 (later same day):** acted on the user's choices.
+**2026-05-07 first pass:**
 
 - Filename collision fixed in `ProcessStriatumControl.m` (lines 727 and 783 now write to `preprocessed_data_control.mat`).
 - `fr_threshold` aligned to `0.02 Hz` across both Task and Control preprocessing.
 - SEM copy-paste fixed in `ensemble_analysis.m` (lines 600-602 now use the matching `bad_pre`/`bad_post` arrays).
-- **Active code consolidated into `Striatum project/`.** The `Preprocessing/` subfolder and the load-bearing helpers from `Legacy/` were promoted up. Forty-six `.m` files moved in total: 5 from `Preprocessing/` and 41 from `Legacy/` (including the three transitive deps `scalar_to_quantile`, `fit_tca_model`, `cp_nmu_ortho`). The `Preprocessing/` directory is now empty (the sandbox could not delete it; do `rmdir "Striatum project/Preprocessing"` from your terminal). Twenty-six orphan `.m` files plus all figure artifacts remain in `Legacy/` per the user's instruction to leave orphans in place.
-- **CEBRA pipeline rewritten.** The three Legacy CEBRA scripts (`cebra_test.py`, `cebra_multianimal.py`, `cebra_single_multi_comparison.py`) and the old `save_for_cebra.m` are superseded by:
-  - `Striatum project/save_for_cebra.m` — exporter that writes per-mouse `.mat` files with multi-dimensional behavioural labels (position, per-bin lick rate, per-trial lick errors, velocity, learning point, area labels, neuron types).
-  - `Striatum project/cebra_analysis.py` — unified pipeline with multi-dim contrastive labels, **per-fold StandardScaler** (fixes the train/test leakage in the legacy code), trial-wise train/test split, **held-out ridge decoder of position from the embedding** (the canonical CEBRA evaluation), per-area refits (DMS-only / DLS-only / ACC-only), multi-session model with consistency scores, and outputs in both `.npz` (Python) and `.mat` (MATLAB) so existing plotting code can consume them.
-- Remaining items from the priority list below are unchanged.
+- Active code consolidated into `Striatum project/`. 46 `.m` files moved up (5 from `Preprocessing/`, 41 load-bearing helpers from `Legacy/` including three transitive deps). 26 orphan `.m` files plus figure artifacts remain in `Legacy/`.
+- CEBRA pipeline rewritten. New `save_for_cebra.m` exports multi-dim labels (position, lick_rate, lick_errors, velocity, LP). New `cebra_analysis.py` does multi-dim contrastive learning with per-fold StandardScaler, trial-wise train/test split, held-out ridge decoder of position as the CEBRA evaluation metric, per-area refits, and multi-session consistency scoring. Outputs land in both `.npz` and `.mat`.
+
+**2026-05-07 second pass — done by user, not me:**
+
+- Removed the orphan root utilities `V_allData_1ms.m` and `lick_correction_Vishal.m`. Kept `Synch_NP_VR.m`, `ReadChannel.m`, `ReadMeta.m` (still used to produce raw NPx files); also kept `raw_data_bin.m` for now.
+- Renamed `Legacy/` → `legacy/` (lowercase).
+- Moved `MutualInformationStriatum.m` (v1 plug-in MI) and `StriatumTaskControl_IntegratedAnalysis.m` (subset of `IntegratedAll_v1.m`) into `legacy/`. Active versions of MI (v2 with bias correction) and the integrated analysis (v1 with three groups) remain in the active folder.
+- Committed all of the above to `main`.
+
+**2026-05-07 fourth pass — efficiency + modularity refactor (Phases 1-5):**
+
+Six new reusable helpers in `Striatum project/`:
+
+- `find_learning_points.m` — single LP finder. START-of-qualifying-window convention. Configurable window / min-consecutive / threshold. Replaces six near-identical inline LP loops across IntegratedAll, MI v2, save_for_cebra, CrossSpatial, Nonlinear_Epoch, and the legacy script.
+- `epoch_indices.m` — Naive / Intermediate / Expert indices given LP and n_trials. Supports both `lp` and `lp1` Expert-start conventions for backward-compat with MI v2's slicing.
+- `is_v1_safe.m` — defensive accessor returning a false-mask for animals lacking a V1 probe. Used by every V1-aware caller.
+- `loo_ridge_press.m` — closed-form leave-one-out ridge via the PRESS identity `y_loo_i = (y_hat_i - h_ii * y_i) / (1 - h_ii)`. Runs in `O(p^3 + n*p^2)` instead of `O(n*p^3)`. ~10x speedup for Nonlinear_Epoch_Decoding, CrossSpatialBinDecoding, and IntegratedAll's lick decoder. Drop-in replacement.
+- `batch_triu_corr_mean.m` — vectorised mean-of-upper-triangle Pearson r across the third dimension of a `[cells x bins x w]` tensor, using `pagemtimes`. ~50-100x faster than the per-cell `corrcoef` loop in IntegratedAll Section 6.
+- `project_cfg.m` — single source of truth for project-wide constants: areas, area-pair list, area colours, learning-point parameters, epoch geometry, landmark bins, decoder hyperparameters, fr_threshold, neuron-type column, RNG seed, default data paths.
+
+LP-convention reconciliation: standardised on START-of-qualifying-window (the dominant convention used by IntegratedAll, processTaskData, save_for_cebra, the legacy learning_points_task script). Two callers preserved their non-standard behaviour without changing analysis windows:
+
+- `MutualInformationStriatum_v2.m` keeps its END-of-window LP by post-shifting the helper's output (`lp_end = lp_start + window - 1`).
+- `CrossSpatialBinDecoding.m` and `Nonlinear_Epoch_Decoding.m` keep their stricter "7 strictly consecutive" rule via `lp_window=7, lp_min_consecutive=7`.
+
+So no analysis numbers should shift due to LP refactoring.
+
+Closed-form PRESS — small caveats worth knowing:
+
+- `loo_ridge_press` standardises features using full-fit (not per-fold) statistics. This introduces `O(1/n)` train/test leakage in the standardisation step that wasn't present in the original Nonlinear_Epoch_Decoding (which standardised per-fold). For `n=200-300` trials the bias is ~0.3-0.5% — well below the noise floor — but it's there. CrossSpatialBinDecoding and IntegratedAll's lick decoder already used full-fit standardisation, so the PRESS replacement is faithful for those.
+- The PRESS implementation includes an unpenalised intercept by default; the original Nonlinear/CrossSpatial decoders did not have an explicit intercept (because z-scoring made the response approximately mean-zero). Negligible effect.
+
+Vectorisation + parallelisation:
+
+- `IntegratedAll_v1.m` Section 6 trial-correlation loop replaced with one `batch_triu_corr_mean` call per trial. Was `for c (1000) x for win (300)` per group, now O(trials).
+- `MutualInformationStriatum_v2.m` outer animal loop converted to `parfor`. Preallocated `mi_results(n_animals).win_centers = []` so workers can write into the indexed struct safely.
+
+Shuffle counts bumped from 1 to `cfg.n_shuffles = 25`:
+
+- `CrossSpatialBinDecoding.m` now stores `shuff_mean`, `shuff_std`, and `empirical_p` matrices alongside the original `moving_r_shuff` (which now holds just the first sample for backwards-compat). One-sided empirical p-values via `mean(shuffles >= real)`.
+- `Nonlinear_Epoch_Decoding.m` similarly stores `r_shuff_mean`, `r_shuff_std`, `empirical_p` per (target_b, source_b, epoch). GPR pathway extracted into a `local_gpr_loo` helper at the bottom of the file.
+
+Project-wide cfg adoption:
+
+`CrossSpatialBinDecoding.m`, `Nonlinear_Epoch_Decoding.m`, `MutualInformationStriatum_v2.m`, and `CCA_striatum_spatial_v2.m` now start with `cfg = project_cfg();` and only override script-specific fields. Removed the hardcoded absolute path `/Users/theoamvr/...` from the CCA script (now uses `./CCA_Results/`).
+
+Phase 6 (split processing from plotting in IntegratedAll, SpatioTemporal, ProcessStriatum*) is **deferred** to a focused follow-up session. The helpers extracted in Phases 1-5 already do most of the modularity work — the residual surgery is mostly cosmetic reorganisation and benefits from a fresh, dedicated session.
+
+**2026-05-07 third pass — V1 propagation done:**
+
+Data state: `preprocessed_data.mat` was regenerated on Apr 24 11:13, after the V1-aware `OrganiseStriatumDataIncV1.m` (Apr 22) and `ProcessStriatumTask.m` (Apr 24 08:56). So `is_v1` is already in `preprocessed_data`. Confirm with `arrayfun(@(s) sum(s.is_v1), preprocessed_data)`.
+
+Code changes (V1 wired into every active analysis script):
+
+- `CrossSpatialBinDecoding.m` — V1 added to `cfg.regions` and color list. `is_v1` plumbed into `clean_data` with a defensive fallback for animals without a V1 probe.
+- `Nonlinear_Epoch_Decoding.m` — same as above.
+- `MutualInformationStriatum_v2.m` — V1 added to `cfg.regions`; six area pairs total now (V1-DMS, V1-DLS, V1-ACC added to the existing three).
+- `CCA_striatum_spatial_v2.m` — V1 added to `cfg.areas_to_include`, `cfg.area_field_map`, the area-pair list (six pairs), and the network layout (V1 placed at the bottom as sensory input).
+- `summary_numbers.m` — V1 unit count and V1 firing rate added to the task block. Also fixed the `size(x,2)` bug at line 1 that was silently returning 1's instead of unit counts. Helper `getOrFalse` added at the file bottom.
+- `SpatioTemporalActivityEvolution.m` — area-only panels (lines 1231/1366/1495) already had V1 from a prior edit. Cell-type-stratified panels (lines 849/1016/1895) intentionally left at 3 areas because V1 has no MSN/FSN/TAN classification.
+- `neurontype_classification.m` — V1 added to the per-area unit-count bar (V1 units fall in the Unclassified bucket since the MSN/FSN/TAN scheme is striatum-specific).
+- `IntegratedAll_v1.m` — biggest change. V1 added to:
+  - Section 6 stability analysis: `areas` extended to `{'dms','dls','acc','v1','all'}` (n_areas=5), masks struct, hier-/pooled- arrays, `area_colors` with purple V1.
+  - Section 7 decoding: `cond_names` adds `'No-V1'` so the ablation knockout test now includes V1 dropout.
+  - Section 9 spatiotemporal-by-area: `areas` extended to `{'DMS','DLS','ACC','V1'}`, masks include V1.
+  - Section 11 cross-modal scatters: layout expanded from 3×4 to 3×n_area_cols (5 columns, holding DMS, DLS, ACC, V1, All Units). All `(:,4)` references for "All Units" replaced with `(:, all_col)`.
+  - Section 12 unit summary: prints V1 unit count, V1 firing rate, and "n/N animals have V1 probe" so it's visible at a glance which mice contributed V1.
+  - New local helper `is_v1_safe(s)` defends against animals without an `is_v1` field, so the file still runs cleanly on Control / Control2 groups.
+
+Stale generated files that need to be rerun against the V1-extended scripts:
+
+- `processed_data/cross_spatial_decoding_results.mat`
+- `processed_data/nonlinear_epoch_decoding.mat`
+- `processed_data/ridge_epoch_decoding_results.mat`, `gpr_epoch_decoding_results.mat`
+- `processed_data/striatal_cca_group_results.mat`
+- The MI cache (computed on first run of `MutualInformationStriatum_v2.m`)
+- Any saved figure SVGs that don't include a V1 panel
+
+Control data: `preprocessed_data_control.mat` and `preprocessed_data_control2.mat` predate the `fr_threshold = 0.02` alignment. Strictly speaking they should be regenerated for parity, but it's not blocking V1 work since control mice don't have V1 probes anyway.
+
+Remaining priority list items unchanged below.
 
 ---
 

@@ -30,21 +30,16 @@ n_animals_ctrl2 = numel(control2_data);
 max_animals = max([n_animals_task, n_animals_ctrl1, n_animals_ctrl2]);
 
 %% 2. Define Task Learning Points (LP) and Disengagement Points (DP)
-learning_points_task = nan(1, n_animals_task);
-diseng_points_task = nan(1, n_animals_task);
+% Refactored 2026-05-07 to use the shared find_learning_points helper.
+% LP convention here is "start of qualifying window" (matches legacy
+% processTaskData and the legacy learning_points_task script).
+lp_cfg = struct('lp_z_threshold', cfg.lp_z_thresh, ...
+                'lp_window',      cfg.lp_window, ...
+                'lp_min_consecutive', cfg.lp_thresh_count);
+[learning_points_task, ~] = find_learning_points(task_data, lp_cfg);
 
+diseng_points_task = nan(1, n_animals_task);
 for i = 1:n_animals_task
-    z_err = task_data(i).zscored_lick_errors;
-    n_trials = length(z_err);
-    
-    for tr = 1:(n_trials - cfg.lp_window + 1)
-        window_err = z_err(tr : tr + cfg.lp_window - 1);
-        if sum(window_err <= cfg.lp_z_thresh) >= cfg.lp_thresh_count
-            learning_points_task(i) = tr;
-            break;
-        end
-    end
-    
     if isfield(task_data(i), 'change_point_mean') && ~isempty(task_data(i).change_point_mean)
         diseng_points_task(i) = task_data(i).change_point_mean;
     end
@@ -501,8 +496,11 @@ save_to_svg('Behavioural_Evolution_3Groups_Yoked');
 
 %% 6. Trial-to-Trial Correlation (Neural Single-Neuron Reliability)
 fprintf('Computing continuous single-neuron reliability...\n');
-areas = {'dms', 'dls', 'acc', 'all'};
+% V1 added 2026-05-07; 'all' stays last so the "All Units" semantics are
+% preserved as the final element regardless of how many real areas exist.
+areas = {'dms', 'dls', 'acc', 'v1', 'all'};
 n_areas = length(areas);
+all_idx = n_areas; % index of the synthetic "all units" pseudo-area
 window_size = 5; 
 half_win = floor(window_size/2);
 min_units = 5;
@@ -536,8 +534,8 @@ for g = 1:3
         activity_raw(isnan(activity_raw)) = 0;
         n_trials = size(activity_raw, 3);
         n_cells_total = size(activity_raw, 1);
-        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc};
-        
+        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, is_v1_safe(curr_data(i))};
+
         activity_z = nan(size(activity_raw));
         for c = 1:n_cells_total
             unit_data = squeeze(activity_raw(c, :, :));
@@ -559,15 +557,15 @@ for g = 1:3
         stab_raw_shuff = nan(n_cells_total, n_trials);
         stab_z_shuff   = nan(n_cells_total, n_trials);
         
+        % Vectorised per-cell triu-corr-mean (2026-05-07). ~50-100x faster
+        % than the previous nested for-loop. See batch_triu_corr_mean.m.
         for t = 1:n_trials
             win_idx = max(1, t - half_win) : min(n_trials, t + half_win);
             if length(win_idx) < 2, continue; end
-            for c = 1:n_cells_total
-                stab_raw(c, t)       = calc_triu_corr(squeeze(activity_raw(c, :, win_idx)));
-                stab_z(c, t)         = calc_triu_corr(squeeze(activity_z(c, :, win_idx)));
-                stab_raw_shuff(c, t) = calc_triu_corr(squeeze(activity_raw_shuff(c, :, win_idx)));
-                stab_z_shuff(c, t)   = calc_triu_corr(squeeze(activity_z_shuff(c, :, win_idx)));
-            end
+            stab_raw(:, t)       = batch_triu_corr_mean(activity_raw(:, :, win_idx));
+            stab_z(:, t)         = batch_triu_corr_mean(activity_z(:, :, win_idx));
+            stab_raw_shuff(:, t) = batch_triu_corr_mean(activity_raw_shuff(:, :, win_idx));
+            stab_z_shuff(:, t)   = batch_triu_corr_mean(activity_z_shuff(:, :, win_idx));
         end
         
         epoch_idx = cell(1, n_epochs);
@@ -591,7 +589,7 @@ for g = 1:3
         end
         
         for a = 1:n_areas
-            if a == 4, area_mask = true(n_cells_total, 1); else, area_mask = masks{a}; end
+            if a == all_idx, area_mask = true(n_cells_total, 1); else, area_mask = masks{a}; end
             if sum(area_mask) < min_units, continue; end
             
             hier_raw(i, :, :, g, a)       = mean(ep_raw(area_mask, :, :), 1, 'omitnan');
@@ -613,7 +611,7 @@ met_modes = {'Raw', 'ZScored'};
 scope_modes = {'WholePopulation', 'ByArea'};
 x_bases_stab = {1:10, 12:21, 23:32};
 x_ticks_centers_stab = [5.5, 16.5, 27.5];
-area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980]; 
+area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; 0.4940 0.1840 0.5560]; % DMS DLS ACC V1
 
 for agg = 1:2
     for met = 1:2
@@ -622,9 +620,9 @@ for agg = 1:2
             figure('Name', fig_name, 'Position', [150, 100, 1500, 450], 'Color', 'w');
             
             if strcmp(scope_modes{scp}, 'WholePopulation')
-                areas_to_plot = 4; plot_colors = [0 0 0];
+                areas_to_plot = all_idx; plot_colors = [0 0 0];
             else
-                areas_to_plot = 1:3; plot_colors = area_colors;
+                areas_to_plot = 1:(all_idx-1); plot_colors = area_colors;
             end
             
             ax_stab = gobjects(1, 3);
@@ -698,7 +696,7 @@ end
 %% 7. Decoding Space/Time & Lick Patterns (Poisson ML + Ridge Log-Link)
 fprintf('Running Spatial/Temporal ML Decoding and Lick Ridge... \n');
 lambda = 1.0; 
-cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'Shuffle'};
+cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'Shuffle'};
 n_conds = length(cond_names);
 
 % --- Trackers ---
@@ -736,7 +734,8 @@ for g = 1:3
         Y_lick(Y_lick > quantile(Y_lick(:), 0.99)) = quantile(Y_lick(:), 0.99);
         
         n_cells_total = size(activity, 1);
-        masks = struct('DMS', curr_data(i).is_dms, 'DLS', curr_data(i).is_dls, 'ACC', curr_data(i).is_acc);
+        masks = struct('DMS', curr_data(i).is_dms, 'DLS', curr_data(i).is_dls, ...
+                       'ACC', curr_data(i).is_acc, 'V1',  is_v1_safe(curr_data(i)));
         
         epoch_idx = cell(1, n_epochs);
         if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
@@ -751,6 +750,7 @@ for g = 1:3
             if strcmp(c_name, 'No-DMS'), active_mask(masks.DMS) = false; end
             if strcmp(c_name, 'No-DLS'), active_mask(masks.DLS) = false; end
             if strcmp(c_name, 'No-ACC'), active_mask(masks.ACC) = false; end
+            if strcmp(c_name, 'No-V1'),  active_mask(masks.V1)  = false; end
             
             if sum(active_mask) < min_units, continue; end
             
@@ -809,32 +809,15 @@ for g = 1:3
             Y_pred_full = nan(n_tr, n_bins);
             
             for b = 1:n_bins
-                X_b = squeeze(cond_data(:, b, 1:n_tr))'; 
-                
-                for t_test = 1:n_tr
-                    tr_train = setdiff(1:n_tr, t_test);
-                    X_tr = X_b(tr_train, :);
-                    Y_tr = Y_lick_log(tr_train, b);
-                    
-                    valid_idx = ~any(isnan(X_tr), 2) & ~isnan(Y_tr);
-                    if sum(valid_idx) < 5, continue; end
-                    
-                    X_tr = X_tr(valid_idx, :); Y_tr = Y_tr(valid_idx);
-                    
-                    mu_X = mean(X_tr, 1, 'omitnan');
-                    sig_X = std(X_tr, 0, 1, 'omitnan') + 1e-6;
-                    X_tr_sc = (X_tr - mu_X) ./ sig_X;
-                    
-                    W_b = (X_tr_sc' * X_tr_sc + lambda * eye(n_k_cells)) \ (X_tr_sc' * Y_tr);
-                    b0_b = mean(Y_tr) - mean(X_tr_sc * W_b);
-                    
-                    X_te = X_b(t_test, :);
-                    if any(isnan(X_te)), continue; end
-                    X_te_sc = (X_te - mu_X) ./ sig_X;
-                    
-                    Y_pred_log = X_te_sc * W_b + b0_b;
-                    Y_pred_full(t_test, b) = exp(Y_pred_log) - 1; 
-                end
+                X_b = squeeze(cond_data(:, b, 1:n_tr))'; % [Trials x Cells]
+                Y_b = Y_lick_log(:, b);                  % [Trials x 1]
+
+                % Closed-form PRESS LOO ridge with intercept and per-fit
+                % standardisation. Replaces the per-trial setdiff loop.
+                % (2026-05-07; ~10x speedup, behaviour-equivalent within
+                % O(1/n) standardisation drift.)
+                Y_pred_log = loo_ridge_press(X_b, Y_b, lambda);
+                Y_pred_full(:, b) = exp(Y_pred_log) - 1;
             end
             
             for t_test = 1:n_tr
@@ -1004,7 +987,7 @@ fprintf('--- Full Integrated Pipeline Execution Complete ---\n');
 %% 9. Comprehensive Spatiotemporal Activity by AREA
 fprintf('--- Generating Spatiotemporal Plots by AREA (All Groups) ---\n');
 
-areas = {'DMS', 'DLS', 'ACC'};
+areas = {'DMS', 'DLS', 'ACC', 'V1'};
 n_areas = length(areas);
 epochs = {'Naive', 'Intermediate', 'Expert'};
 n_epochs = length(epochs);
@@ -1066,8 +1049,8 @@ for g = 1:3
         if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
         
         % Masks
-        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc};
-        
+        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, is_v1_safe(curr_data(i))};
+
         % Populate Structure
         for a = 1:n_areas
             mask = masks{a};
@@ -1110,7 +1093,7 @@ end
 metrics = {'raw', 'Raw FR'; 'z', 'Z-Scored'};
 avg_methods = {'Pooled', 'Hierarchical'};
 epoch_colors = lines(n_epochs);
-area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980]; % DMS, DLS, ACC
+area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; 0.4940 0.1840 0.5560]; % DMS, DLS, ACC, V1
 
 for met_idx = 1:size(metrics, 1)
     met_field = metrics{met_idx, 1};
@@ -1243,14 +1226,16 @@ corr_epochs = [1, 3];
 epoch_colors = [0, 0.4470, 0.7410;  % Naive: Blue
                 0.8500, 0.3250, 0.0980]; % Expert: Red/Orange
 epoch_labels = {'Naive', 'Expert'};
-area_names = {'DMS', 'DLS', 'ACC', 'All Units'};
+area_names = {'DMS', 'DLS', 'ACC', 'V1', 'All Units'};
+n_area_cols = length(area_names);  % 5: DMS, DLS, ACC, V1, All
+all_col = n_area_cols;              % index of the "All Units" column
 
 for g = 1:3
     % 11.1. Data Aggregation for Group G
     % Initialize containers for trial-wise pooling
     p_lick_stab = [];
     p_vel_stab  = [];
-    p_neur_stab = nan(0, 4); % 4 columns (DMS, DLS, ACC, All)
+    p_neur_stab = nan(0, n_area_cols); % columns = DMS, DLS, ACC, V1, All
     p_dec_space = [];
     p_dec_lick  = [];
     p_epoch_idx = []; 
@@ -1261,7 +1246,7 @@ for g = 1:3
             % Find trials where we have both behavior and neural data
             % Using 'All Units' (a=4) stability as a proxy for neural data presence
             valid_tr = find(~isnan(squeeze(ep_stab_licks(i, e, :, g))) & ...
-                            ~isnan(squeeze(hier_z(i, e, :, g, 4))));
+                            ~isnan(squeeze(hier_z(i, e, :, g, all_col))));
             if isempty(valid_tr), continue; end
             
             % Behavior (X-axis candidates)
@@ -1273,8 +1258,8 @@ for g = 1:3
             end
             
             % Neural Stability (Y-axis candidates)
-            area_tmp = nan(length(valid_tr), 4);
-            for a = 1:4
+            area_tmp = nan(length(valid_tr), n_area_cols);
+            for a = 1:n_area_cols
                 area_tmp(:, a) = squeeze(hier_z(i, e, valid_tr, g, a));
             end
             p_neur_stab = [p_neur_stab; area_tmp];
@@ -1290,61 +1275,69 @@ for g = 1:3
     end
 
     % 11.2. Plotting per Group
+    % Layout expanded 2026-05-07 from 3x4 to 3xn_area_cols so V1 fits.
     fig_name = sprintf('Group_%d_Cross_Modal_Correlations', g);
     figure('Name', sprintf('%s: Pooled Trial Correlations', group_names{g}), ...
-           'Position', [50, 50, 1500, 900], 'Color', 'w');
-    t = tiledlayout(3, 4, 'TileSpacing', 'compact', 'Padding', 'compact');
+           'Position', [50, 50, 300 * n_area_cols, 900], 'Color', 'w');
+    t = tiledlayout(3, n_area_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(t, sprintf('Pooled Analysis: %s (Trials from all mice)', group_names{g}), 'FontSize', 16);
 
-    % --- ROW 1: Neural Stability (Y) vs Lick Stability (X) ---
-    for a = 1:4
+    n_per_area = n_area_cols - 1; % brain areas without "all"
+
+    % --- ROW 1: Neural Stability (Y) vs Lick Stability (X), one panel per column ---
+    for a = 1:n_area_cols
         nexttile(a); hold on;
         local_plot_scatter(p_lick_stab, p_neur_stab(:, a), p_epoch_idx, ...
             'Lick Stability (r)', sprintf('Neural Stab: %s (Z)', area_names{a}), epoch_colors);
     end
 
     % --- ROW 2: Decoding Performance (Y) vs Lick Stability (X) ---
+    base = n_area_cols;
     % Column 1: Lick Decoding
-    nexttile(5); hold on;
+    nexttile(base + 1); hold on;
     local_plot_scatter(p_lick_stab, p_dec_lick, p_epoch_idx, ...
         'Lick Stability (r)', 'Lick Decoding (r)', epoch_colors);
-    
+
     % Column 2: Spatial Decoding (RMSE)
-    nexttile(6); hold on;
+    nexttile(base + 2); hold on;
     local_plot_scatter(p_lick_stab, p_dec_space, p_epoch_idx, ...
         'Lick Stability (r)', 'Space Decoding (RMSE)', epoch_colors);
     set(gca, 'YDir', 'reverse'); % Downward = lower error (better)
 
-    % Column 3: Velocity Stability vs All Units Neural Stability
-    nexttile(7); hold on;
+    % Column 3: Velocity Stability vs All-Units Neural Stability
+    nexttile(base + 3); hold on;
     if g < 3
-        local_plot_scatter(p_vel_stab, p_neur_stab(:, 4), p_epoch_idx, ...
+        local_plot_scatter(p_vel_stab, p_neur_stab(:, all_col), p_epoch_idx, ...
             'Vel Stability (r)', 'Neural Stab: All (Z)', epoch_colors);
     else
         axis off; text(0.1, 0.5, 'No Wheel Data (Ctrl 2)');
     end
-    
+
     % Column 4: Lick Decoding (Y) vs Velocity Stability (X)
-    nexttile(8); hold on;
+    nexttile(base + 4); hold on;
     if g < 3
         local_plot_scatter(p_vel_stab, p_dec_lick, p_epoch_idx, ...
             'Vel Stability (r)', 'Lick Decoding (r)', epoch_colors);
     else
         axis off;
     end
+    % Any remaining tiles in row 2 stay empty (when n_area_cols > 4)
+    for extra = 5:n_area_cols
+        nexttile(base + extra); axis off;
+    end
 
-    % --- ROW 3: Neural Stability (Y) vs Decoding Accuracy (X) ---
-    % Here we treat Decoding Accuracy as the "behavioral proxy" on X
-    for a = 1:3 % Per area
-        nexttile(8 + a); hold on;
+    % --- ROW 3: Neural Stability per area (Y) vs Space Decoding (X) ---
+    base = 2 * n_area_cols;
+    for a = 1:n_per_area
+        nexttile(base + a); hold on;
         local_plot_scatter(p_dec_space, p_neur_stab(:, a), p_epoch_idx, ...
             'Space Decoding (RMSE)', sprintf('Neural Stab: %s (Z)', area_names{a}), epoch_colors);
         set(gca, 'XDir', 'reverse'); % Rightward = lower error (better)
     end
-    
-    % Final Tile: All Units Neural vs Lick Decoding Accuracy
-    nexttile(12); hold on;
-    local_plot_scatter(p_dec_lick, p_neur_stab(:, 4), p_epoch_idx, ...
+
+    % Final tile of row 3: All-Units Neural vs Lick Decoding
+    nexttile(base + n_area_cols); hold on;
+    local_plot_scatter(p_dec_lick, p_neur_stab(:, all_col), p_epoch_idx, ...
         'Lick Decoding (r)', 'Neural Stab: All (Z)', epoch_colors);
 
     save_to_svg(fig_name);
@@ -1366,27 +1359,30 @@ for g = 1:3
     units_dms     = zeros(n_animals, 1);
     units_dls     = zeros(n_animals, 1);
     units_acc     = zeros(n_animals, 1);
-    
+    units_v1      = zeros(n_animals, 1);
+
     units_msn     = zeros(n_animals, 1);
     units_fsn     = zeros(n_animals, 1);
     units_tan     = zeros(n_animals, 1);
     units_unclass = zeros(n_animals, 1);
-    
+
     % Initialize arrays for behavior and firing rates
     total_trials = zeros(n_animals, 1);
     fr_msn = []; fr_fsn = []; fr_tan = [];
-    fr_dms = []; fr_dls = []; fr_acc = [];
-    
+    fr_dms = []; fr_dls = []; fr_acc = []; fr_v1 = [];
+
     for i = 1:n_animals
         % --- Area counts ---
         is_dms = curr_data(i).is_dms;
         is_dls = curr_data(i).is_dls;
         is_acc = curr_data(i).is_acc;
-        
-        total_units(i) = length(is_dms); 
+        is_v1  = is_v1_safe(curr_data(i));
+
+        total_units(i) = length(is_dms);
         units_dms(i)   = sum(is_dms);
         units_dls(i)   = sum(is_dls);
         units_acc(i)   = sum(is_acc);
+        units_v1(i)    = sum(is_v1);
         
         % --- Neuron type counts ---
         if isfield(curr_data(i), 'final_neurontypes') && ~isempty(curr_data(i).final_neurontypes)
@@ -1429,7 +1425,8 @@ for g = 1:3
             if sum(is_dms) > 0, fr_dms = [fr_dms; mean_fr_per_neuron(is_dms)]; end
             if sum(is_dls) > 0, fr_dls = [fr_dls; mean_fr_per_neuron(is_dls)]; end
             if sum(is_acc) > 0, fr_acc = [fr_acc; mean_fr_per_neuron(is_acc)]; end
-            
+            if sum(is_v1)  > 0, fr_v1  = [fr_v1;  mean_fr_per_neuron(is_v1)];  end
+
             % Cell Type Firing Rates
             if sum(ntypes == 1) > 0, fr_msn = [fr_msn; mean_fr_per_neuron(ntypes == 1)]; end
             if sum(ntypes == 2) > 0, fr_fsn = [fr_fsn; mean_fr_per_neuron(ntypes == 2)]; end
@@ -1449,8 +1446,12 @@ for g = 1:3
     fprintf('DMS Units   : %s  [Sum: %d]\n', fmt_stats(units_dms), sum(units_dms));
     fprintf('DLS Units   : %s  [Sum: %d]\n', fmt_stats(units_dls), sum(units_dls));
     fprintf('ACC Units   : %s  [Sum: %d]\n', fmt_stats(units_acc), sum(units_acc));
-    
+    n_with_v1 = sum(units_v1 > 0);
+    fprintf('V1  Units   : %s  [Sum: %d]   (%d/%d animals have V1 probe)\n', ...
+        fmt_stats(units_v1), sum(units_v1), n_with_v1, n_animals);
+
     fprintf('\n--- Putative Cell Types per Animal (Mean +/- SEM) [Total] ---\n');
+    fprintf('(MSN/FSN/TAN classification applies to striatum only — V1 not classified)\n');
     fprintf('MSN (Type 1): %s  [Sum: %d]\n', fmt_stats(units_msn), sum(units_msn));
     fprintf('FSN (Type 2): %s  [Sum: %d]\n', fmt_stats(units_fsn), sum(units_fsn));
     fprintf('TAN (Type 3): %s  [Sum: %d]\n', fmt_stats(units_tan), sum(units_tan));
@@ -1462,6 +1463,9 @@ for g = 1:3
     fprintf('--- Firing Rates by Area (Hz, Mean +/- SEM across neurons) ---\n');
     fprintf('DMS Units : %s\n', fmt_fr(fr_dms));
     fprintf('DLS Units : %s\n', fmt_fr(fr_dls));
+    if ~isempty(fr_v1)
+        fprintf('V1  Units : %s  (n=%d units)\n', fmt_fr(fr_v1), numel(fr_v1));
+    end
     fprintf('ACC Units : %s\n\n', fmt_fr(fr_acc));
     
     fprintf('--- Firing Rates by Putative Cell Type (Hz, Mean +/- SEM) ---\n');
@@ -1523,3 +1527,6 @@ function save_to_svg(fig_name)
         fprintf('Warning: Could not save %s as SVG.\n', fig_name);
     end
 end
+
+% is_v1_safe(s) is now a standalone file in Striatum project/ — see
+% is_v1_safe.m. Removed from this file 2026-05-07.

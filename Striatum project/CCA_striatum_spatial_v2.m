@@ -13,45 +13,39 @@
 %% 1. CONFIGURATION & PARAMETERS
 clear; clc; close all;
 
-% --- Data Files & Analysis Selection ---
-cfg.task_data_file = "preprocessed_data.mat";
-cfg.control_data_file = "preprocessed_data_control.mat";
+% --- Project-wide constants ---
+cfg = project_cfg();
 
 % --- Analysis Selection ---
-cfg.analysis_mode = 'task_only'; 
-cfg.areas_to_include = {'DMS', 'DLS', 'ACC'}; 
+cfg.analysis_mode = 'task_only';
+cfg.areas_to_include = cfg.areas;
+% area_field_map already in project_cfg
 
-% Define mapping from area names to field names in the data struct
-cfg.area_field_map = containers.Map(...
-    {'DMS', 'DLS', 'ACC'}, ...
-    {'is_dms', 'is_dls', 'is_acc'} ...
-    );
-
-% --- Processing Parameters ---
-cfg.control_epoch_method = 'fixed_trial'; 
+% --- Processing Parameters (script-specific) ---
+cfg.control_epoch_method = 'fixed_trial';
 cfg.control_fixed_ref_trial = 40;
-cfg.control_epoch_windows = {1:10, [-10, -1], [1, 10]}; 
-cfg.task_lp_zscore_threshold = -2;
-cfg.task_lp_window_length = 10; 
-cfg.task_lp_min_consecutive = 7;
+cfg.control_epoch_windows = {1:10, [-10, -1], [1, 10]};
+cfg.task_lp_zscore_threshold = cfg.lp_z_threshold;     % alias
+cfg.task_lp_window_length    = cfg.lp_window;          % alias
+cfg.task_lp_min_consecutive  = cfg.lp_min_consecutive; % alias
 
 % --- CCA / PCA Parameters ---
-pca_selection_method = 'variance'; 
-pca_variance_threshold = 70;       
-n_components_reduced = 3;          
-num_ccs_analyze = 3;               
-n_trials_window = -3:3;            
-n_bins_window = -3:3;              
-n_shuffles = 250;                   
-max_shift_bins = 2;                
-min_units_per_region = 5;
+pca_selection_method = 'variance';
+pca_variance_threshold = 70;
+n_components_reduced = 3;
+num_ccs_analyze = 3;
+n_trials_window = -3:3;
+n_bins_window = -3:3;
+n_shuffles = 250;
+max_shift_bins = 2;
+min_units_per_region = cfg.min_units;
 TRUNCATE_AT_DISENGAGEMENT = true;
 
 % --- Plotting / Spatial Parameters ---
-landmarks = [20, 25];              
+landmarks = [cfg.visual_bin, cfg.reward_bin];
 
-% --- Save Path ---
-save_dir = '/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/CCA_Results/';
+% --- Save Path (relative to repo, not user-specific) ---
+save_dir = './CCA_Results/';
 if ~exist(save_dir, 'dir'), mkdir(save_dir); end
 current_date = datestr(now, 'yyyy_mm_dd');
 save_path = fullfile(save_dir, sprintf('Striatum_CCA_Results_%s.mat', current_date));
@@ -82,7 +76,8 @@ if isempty(task_data)
 end
 
 n_animals = size(task_data, 2);
-area_pairs_to_analyze = {'DMS', 'DLS'; 'DMS', 'ACC'; 'DLS', 'ACC'};
+area_pairs_to_analyze = {'DMS', 'DLS'; 'DMS', 'ACC'; 'DLS', 'ACC'; ...
+                         'V1',  'DMS'; 'V1',  'DLS'; 'V1',  'ACC'};
 n_pairs = size(area_pairs_to_analyze, 1);
 
 % Format Learning Points to vector
@@ -419,10 +414,10 @@ save_to_svg(fullfile(save_dir, 'Epoch_Precession_Bars_Split'));
 %% 5B. COMBINED CONTINUOUS CURVES, ERROR BARS & NETWORKS (REAL VS SHUFFLED)
 fprintf('\n--- Generating Combined Curves, Error Bars & Networks (%d CCs) ---\n', num_ccs_analyze);
 
-% Define layout for Striatum (DMS, DLS, ACC)
-layout_def.names = {'DMS', 'DLS', 'ACC'};
-layout_def.x     = [3.0, 7.0, 5.0];
-layout_def.y     = [3.0, 3.0, 7.0];
+% Define layout (V1 at bottom — sensory input; striatum middle; ACC top)
+layout_def.names = {'DMS', 'DLS', 'ACC', 'V1'};
+layout_def.x     = [3.0, 7.0, 5.0, 5.0];
+layout_def.y     = [4.0, 4.0, 7.0, 1.0];
 
 for g_idx = 1:2
     if g_idx == 1

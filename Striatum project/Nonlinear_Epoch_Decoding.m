@@ -1,22 +1,19 @@
 %% 1. Configuration & Setup
 clear; clc; close all;
 
-cfg.data_file = 'preprocessed_data.mat';
-cfg.regions = {'DMS', 'DLS', 'ACC'};
-cfg.colors = {[0 0.4470 0.7410], [0.4660 0.6740 0.1880], [0.8500 0.3250 0.0980]};
+% Project-wide constants
+cfg = project_cfg();
+
+% Script-specific
+cfg.data_file = cfg.task_data_file;
+cfg.regions   = cfg.areas;
+cfg.colors    = mat2cell(cfg.area_colors, ones(size(cfg.area_colors,1),1), 3)';
 
 % --- Decoding Toggle ---
 cfg.decoder_type = 'Ridge'; % Options: 'Ridge' (Linear, Fast) or 'GPR' (Non-linear, Slow)
 
-% Decoding parameters
-cfg.ridge_lambda = 1.0; % L2 penalty (only used if decoder_type is 'Ridge')
-cfg.max_bin = 30;       % Clip decoding to Reward Zone Start (25) + 5 bins
-cfg.target_rz_bin = 25; % Reward zone start bin for the "Look-ahead" plot
-cfg.min_units = 5;      
-cfg.behav_targets = {'lick_rate', 'velocity'};
-
 % Dynamic save file based on decoder choice
-cfg.save_file = sprintf('%s_epoch_decoding_results.mat', lower(cfg.decoder_type));
+cfg.save_file = sprintf('processed_data/%s_epoch_decoding_results.mat', lower(cfg.decoder_type));
 
 %% 2. Data Loading, Preprocessing & Epoch Extraction
 fprintf('--- Loading Data ---\n');
@@ -39,9 +36,12 @@ for ianimal = 1:n_animals
     lick_rate = licks ./ durations;
     velocity = (4 * 1.25) ./ durations; 
     
-    z_err = preprocessed_data(ianimal).zscored_lick_errors(1:n_trials);
-    lp = find(conv(double(z_err <= -2), ones(1,7), 'valid') == 7, 1, 'first');
-    if isempty(lp); lp = NaN; end
+    % LP via shared helper. Original convention here was "7 strictly
+    % consecutive trials with z_err <= -2".
+    pd_view = preprocessed_data(ianimal);
+    pd_view.zscored_lick_errors = pd_view.zscored_lick_errors(1:n_trials);
+    lp = find_learning_points(pd_view, struct( ...
+        'lp_z_threshold', -2, 'lp_window', 7, 'lp_min_consecutive', 7));
     
     % Clip space to max_bin
     n_bins_actual = min(size(preprocessed_data(ianimal).spatial_binned_fr_all, 2), cfg.max_bin);
@@ -55,6 +55,7 @@ for ianimal = 1:n_animals
     clean_data(ianimal).is_dms = preprocessed_data(ianimal).is_dms;
     clean_data(ianimal).is_dls = preprocessed_data(ianimal).is_dls;
     clean_data(ianimal).is_acc = preprocessed_data(ianimal).is_acc;
+    clean_data(ianimal).is_v1  = is_v1_safe(preprocessed_data(ianimal));
 end
 
 %% 3. Cross-Spatial Decoding (Ridge or GPR)
@@ -100,82 +101,61 @@ else
                         continue;
                     end
                     
-                    r_mat = nan(n_bins, n_bins);
-                    r_shuff_mat = nan(n_bins, n_bins);
+                    r_mat            = nan(n_bins, n_bins);
+                    r_shuff_mat      = nan(n_bins, n_bins);          % first-shuffle (compat)
+                    r_shuff_mean_mat = nan(n_bins, n_bins);          % mean over n_shuffles
+                    r_shuff_std_mat  = nan(n_bins, n_bins);
+                    emp_p_mat        = nan(n_bins, n_bins);
                     n_ep_trials = length(tr_idx);
-                    
+
                     for target_b = 1:n_bins
                         Y_ep = Y_all(target_b, tr_idx)';
-                        Y_shuff = Y_ep(randperm(n_ep_trials));
-                        
-                        if std(Y_ep) == 0; continue; end % Skip flat behavior
-                        
+                        if std(Y_ep) == 0, continue; end % Skip flat behavior
+
                         for source_b = 1:target_b
-                            X_raw = squeeze(reg_neural(:, source_b, tr_idx)); 
-                            if size(X_raw, 2) == 1; X_raw = X_raw'; end
+                            X_raw = squeeze(reg_neural(:, source_b, tr_idx));
+                            if size(X_raw, 2) == 1, X_raw = X_raw'; end
                             X_ep = X_raw'; % [Trials x Units]
-                            
-                            % Add tiny noise to prevent GPR covariance matrix singularity
+
                             if strcmp(cfg.decoder_type, 'GPR')
-                                X_ep = X_ep + randn(size(X_ep)) * 1e-6; 
+                                X_ep = X_ep + randn(size(X_ep)) * 1e-6;
                             end
-                            
-                            Y_pred = nan(n_ep_trials, 1);
-                            Y_pred_shuff = nan(n_ep_trials, 1);
-                            
-                            % Leave-One-Trial-Out Decoding
-                            for test_t = 1:n_ep_trials
-                                train_mask = true(n_ep_trials, 1);
-                                train_mask(test_t) = false;
-                                
-                                X_train = X_ep(train_mask, :);
-                                X_test  = X_ep(test_t, :);
-                                
-                                Y_train = Y_ep(train_mask);
-                                Y_train_shuff = Y_shuff(train_mask);
-                                
+
+                            % --- Real prediction ---
+                            if strcmp(cfg.decoder_type, 'Ridge')
+                                Y_pred = loo_ridge_press(X_ep, Y_ep, cfg.ridge_lambda);
+                            else
+                                Y_pred = local_gpr_loo(X_ep, Y_ep);
+                            end
+                            r = corrcoef(Y_pred, Y_ep);
+                            r_mat(target_b, source_b) = r(1, 2);
+
+                            % --- Shuffle distribution (n_shuffles permutations) ---
+                            r_s_vec = nan(cfg.n_shuffles, 1);
+                            for s_iter = 1:cfg.n_shuffles
+                                Y_shuff_s = Y_ep(randperm(n_ep_trials));
                                 if strcmp(cfg.decoder_type, 'Ridge')
-                                    % Manual Standardization for Ridge
-                                    mu_X = mean(X_train, 1);
-                                    sig_X = std(X_train, 0, 1); sig_X(sig_X == 0) = 1;
-                                    X_train_z = (X_train - mu_X) ./ sig_X;
-                                    X_test_z  = (X_test - mu_X) ./ sig_X;
-                                    
-                                    I = eye(size(X_train_z, 2));
-                                    
-                                    % Real
-                                    W = (X_train_z' * X_train_z + cfg.ridge_lambda * I) \ (X_train_z' * Y_train);
-                                    Y_pred(test_t) = X_test_z * W;
-                                    
-                                    % Shuffled
-                                    W_s = (X_train_z' * X_train_z + cfg.ridge_lambda * I) \ (X_train_z' * Y_train_shuff);
-                                    Y_pred_shuff(test_t) = X_test_z * W_s;
-                                    
-                                elseif strcmp(cfg.decoder_type, 'GPR')
-                                    % Gaussian Process Regression
-                                    try
-                                        mdl = fitrgp(X_train, Y_train, 'KernelFunction', 'squaredexponential', 'Standardize', true, 'PredictMethod', 'exact');
-                                        Y_pred(test_t) = predict(mdl, X_test);
-                                        
-                                        mdl_s = fitrgp(X_train, Y_train_shuff, 'KernelFunction', 'squaredexponential', 'Standardize', true, 'PredictMethod', 'exact');
-                                        Y_pred_shuff(test_t) = predict(mdl_s, X_test);
-                                    catch
-                                        Y_pred(test_t) = mean(Y_train);
-                                        Y_pred_shuff(test_t) = mean(Y_train_shuff);
-                                    end
+                                    Y_pred_s = loo_ridge_press(X_ep, Y_shuff_s, cfg.ridge_lambda);
+                                else
+                                    Y_pred_s = local_gpr_loo(X_ep, Y_shuff_s);
+                                end
+                                r_s = corrcoef(Y_pred_s, Y_ep);
+                                r_s_vec(s_iter) = r_s(1, 2);
+                                if s_iter == 1
+                                    r_shuff_mat(target_b, source_b) = r_s(1, 2);
                                 end
                             end
-                            
-                            % Calculate correlation
-                            r = corrcoef(Y_pred, Y_ep); 
-                            r_mat(target_b, source_b) = r(1,2);
-                            
-                            r_s = corrcoef(Y_pred_shuff, Y_ep); 
-                            r_shuff_mat(target_b, source_b) = r_s(1,2);
+                            r_shuff_mean_mat(target_b, source_b) = mean(r_s_vec, 'omitnan');
+                            r_shuff_std_mat(target_b, source_b)  = std(r_s_vec,  0, 'omitnan');
+                            emp_p_mat(target_b, source_b)        = mean(r_s_vec >= r_mat(target_b, source_b), 'omitnan');
                         end
                     end
-                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).r_mat = r_mat;
-                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).r_shuff = r_shuff_mat;
+                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).r_mat       = r_mat;
+                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).r_shuff     = r_shuff_mat;     % first sample (compat)
+                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).r_shuff_mean = r_shuff_mean_mat;
+                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).r_shuff_std  = r_shuff_std_mat;
+                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).empirical_p  = emp_p_mat;
+                    decoding_results(ianimal).(region).(target_name).epoch(i_ep).n_shuffles   = cfg.n_shuffles;
                 end
             end
         end
@@ -491,4 +471,25 @@ for i_targ = 1:numel(cfg.behav_targets)
     
     title(t_bar, sprintf('Evolution of Decoding Modes across Learning (%s)', strrep(target, '_', ' ')), 'FontSize', 16);
     linkaxes
+end
+
+
+% --- Local helpers ---
+
+function Y_pred = local_gpr_loo(X, Y)
+% Per-trial fitrgp leave-one-out. Shared between real and shuffle paths.
+    n = size(X, 1);
+    Y_pred = nan(n, 1);
+    for test_t = 1:n
+        train_mask = true(n, 1);
+        train_mask(test_t) = false;
+        try
+            mdl = fitrgp(X(train_mask, :), Y(train_mask), ...
+                'KernelFunction', 'squaredexponential', ...
+                'Standardize', true, 'PredictMethod', 'exact');
+            Y_pred(test_t) = predict(mdl, X(test_t, :));
+        catch
+            Y_pred(test_t) = mean(Y(train_mask), 'omitnan');
+        end
+    end
 end
