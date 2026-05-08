@@ -28,18 +28,30 @@ function cfg = project_cfg()
     cfg.target_rz_bin = 25;         % alias for callers that want it
 
     % --- Areas ---
-    cfg.areas         = {'DMS', 'DLS', 'ACC', 'V1'};
+    % CA1 and DG added 2026-05-08. To add a new area in future:
+    %   1) Add a column to RawData/Neuropixels_V1_Depth_Data.csv
+    %   2) Append the name to cfg.areas below
+    %   3) Append the matching `is_<lower>` field to area_field_map
+    %   4) Append a colour to cfg.area_colors
+    %   5) (optional) Add cross-area pairs to cfg.area_pairs
+    % All downstream code reads from these fields.
+    cfg.areas         = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};
     cfg.area_field_map = containers.Map( ...
         cfg.areas, ...
-        {'is_dms', 'is_dls', 'is_acc', 'is_v1'});
+        {'is_dms', 'is_dls', 'is_acc', 'is_v1', 'is_ca1', 'is_dg'});
     cfg.area_colors = [0      0.4470 0.7410;   % DMS (blue)
                        0.4660 0.6740 0.1880;   % DLS (green)
                        0.8500 0.3250 0.0980;   % ACC (orange)
-                       0.4940 0.1840 0.5560];  % V1  (purple)
+                       0.4940 0.1840 0.5560;   % V1  (purple)
+                       0.8000 0.1000 0.2000;   % CA1 (crimson)
+                       0.2000 0.7000 0.7000];  % DG  (teal)
 
-    % All pairs incl V1 (six pairs total) — for CCA / MI / lag analyses
-    cfg.area_pairs = {'DMS', 'DLS'; 'DMS', 'ACC'; 'DLS', 'ACC'; ...
-                      'V1',  'DMS'; 'V1',  'DLS'; 'V1',  'ACC'};
+    % All pairs across the 6 areas (n*(n-1)/2 = 15) — for CCA / MI / lag.
+    cfg.area_pairs = {...
+        'DMS', 'DLS'; 'DMS', 'ACC'; 'DLS', 'ACC'; ...
+        'V1',  'DMS'; 'V1',  'DLS'; 'V1',  'ACC'; ...
+        'CA1', 'DMS'; 'CA1', 'DLS'; 'CA1', 'ACC'; 'CA1', 'V1'; ...
+        'DG',  'DMS'; 'DG',  'DLS'; 'DG',  'ACC'; 'DG',  'V1'; 'DG', 'CA1'};
 
     % --- Learning point definition (START-of-window convention) ---
     cfg.lp_z_threshold      = -2;

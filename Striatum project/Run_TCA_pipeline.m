@@ -1,20 +1,20 @@
 %% ================= Configuration =======================================================
 clear; clc; close all;
 % rng(0)
-% --- Data Files ---
-cfg.task_data_file = "preprocessed_data.mat";
-cfg.control_data_file = "preprocessed_data_control.mat";
-cfg.control2_data_file = "preprocessed_data_control2.mat";
+% --- Data Files (paths from project_cfg; updated 2026-05-07) ---
+proj = project_cfg();
+cfg.task_data_file     = proj.task_data_file;
+cfg.control_data_file  = proj.control_data_file;
+cfg.control2_data_file = proj.control2_data_file;
+clear proj
 
 % --- Analysis Selection ---
+% Areas + field map are now driven from project_cfg() so adding a new area
+% in future means editing project_cfg.m (and the depth CSV) only.
 cfg.analysis_mode = 'task_only'; % Options: 'task_only', 'control_only', 'task_and_control'
-cfg.areas_to_include = {'DMS', 'DLS', 'ACC', 'V1'}; % List areas to keep (e.g., {'DMS', 'DLS', 'ACC'})
-
-% Define mapping from area names to field names in the data struct
-cfg.area_field_map = containers.Map(...
-    {'DMS', 'DLS', 'ACC', 'V1'}, ...
-    {'is_dms', 'is_dls', 'is_acc', 'is_v1'} ...
-    );
+proj = project_cfg();
+cfg.areas_to_include = proj.areas;
+cfg.area_field_map   = proj.area_field_map;
 
 % --- Processing Parameters ---
 cfg.control_epoch_method = 'avg_task_lp'; % How to align control trials
@@ -39,15 +39,19 @@ cfg.plot.zone_params.reward_zone_au   = [100 135];
 cfg.plot.zone_params.corridor_end_au = 200;
 cfg.plot.zone_params.bin_size = 4;
 
-cfg.plot.colors.dms = [0, 0.4470, 0.7410];
-cfg.plot.colors.dls = [0.4660, 0.6740, 0.1880];
-cfg.plot.colors.acc = [0.8500, 0.3250, 0.0980];
-cfg.plot.colors.v1  = [0.4940, 0.1840, 0.5560]; % NEW: Purple for V1
+% Per-area colours — pulled from project_cfg() so the same palette
+% appears in every figure across the project.
+cfg.plot.colors.dms = proj.area_colors(strcmp(proj.areas, 'DMS'), :);
+cfg.plot.colors.dls = proj.area_colors(strcmp(proj.areas, 'DLS'), :);
+cfg.plot.colors.acc = proj.area_colors(strcmp(proj.areas, 'ACC'), :);
+cfg.plot.colors.v1  = proj.area_colors(strcmp(proj.areas, 'V1'),  :);
+cfg.plot.colors.ca1 = proj.area_colors(strcmp(proj.areas, 'CA1'), :);
+cfg.plot.colors.dg  = proj.area_colors(strcmp(proj.areas, 'DG'),  :);
 
-cfg.plot.colors.area_map = containers.Map(...
-    {'DMS', 'DLS', 'ACC', 'V1'}, ...
-    {cfg.plot.colors.dms, cfg.plot.colors.dls, cfg.plot.colors.acc, cfg.plot.colors.v1}...
-    );
+% area_map (containers.Map) keyed by name → colour, driven by proj
+area_color_cells = mat2cell(proj.area_colors, ones(size(proj.area_colors,1),1), 3);
+cfg.plot.colors.area_map = containers.Map(proj.areas, area_color_cells');
+clear proj area_color_cells
 cfg.plot.colors.epoch_early = [0.298, 0.447, 0.690];
 cfg.plot.colors.epoch_middle = [0.867, 0.518, 0.322];
 cfg.plot.colors.epoch_expert = [0.333, 0.776, 0.333];
@@ -1149,6 +1153,24 @@ if cfg.run_tca && ~isempty(best_mdl)
 else
     fprintf('Skipping plots dependent on TCA results.\n');
 end
+
+% --- Save key outputs so downstream scripts can load them without
+%     requiring a fresh run of the whole pipeline. (2026-05-07) ---
+tca_outputs_file = 'processed_data/tca_outputs.mat';
+save_vars = {'supermouse_tensor_raw', 'combined_labels', 'tensor_info', ...
+             'cfg', 'task_data', 'learning_points_task', 'avg_learning_point'};
+if exist('best_mdl', 'var') && ~isempty(best_mdl)
+    save_vars{end+1} = 'best_mdl';
+    save_vars{end+1} = 'best_n_factors';
+end
+if exist('labels_valid', 'var')
+    save_vars{end+1} = 'labels_valid';
+end
+if exist('supermouse_combined_valid', 'var')
+    save_vars{end+1} = 'supermouse_combined_valid';
+end
+fprintf('Saving TCA outputs to %s ...\n', tca_outputs_file);
+save(tca_outputs_file, save_vars{:}, '-v7.3');
 
 fprintf('--- Analysis Pipeline Finished ---\n');
 

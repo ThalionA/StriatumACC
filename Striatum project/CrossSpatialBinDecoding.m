@@ -182,7 +182,7 @@ end
 %% 4. Plotting: Cross-Spatial Heatmap (Averaged across trials)
 fprintf('--- Plotting Cross-Spatial Profile ---\n');
 figure('Position', [100 100 1400 600], 'Color', 'w', 'Name', 'Cross-Spatial Decoding Heatmaps');
-tiledlayout(2, 3, 'Padding', 'compact');
+tiledlayout(2, 4, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 for i_targ = 1:numel(cfg.behav_targets)
     target = cfg.behav_targets{i_targ};
@@ -269,10 +269,18 @@ for i_targ = 1:numel(cfg.behav_targets)
         valid_mice = sum(~isnan(r_predictive_all), 1);
         mu = mean(r_predictive_all, 1, 'omitnan');
         se = std(r_predictive_all, 0, 1, 'omitnan') ./ sqrt(valid_mice);
-        
+
         plot_idx = valid_mice >= 3;
-        shadedErrorBar(align_win(plot_idx), mu(plot_idx), se(plot_idx), ...
-            'lineprops', {'Color', cfg.colors{i_reg}, 'LineWidth', 2});
+        if any(plot_idx)
+            shadedErrorBar(align_win(plot_idx), mu(plot_idx), se(plot_idx), ...
+                'lineprops', {'Color', cfg.colors{i_reg}, 'LineWidth', 2});
+        else
+            % Region had no align-window position with >=3 mice (typical for
+            % V1 in this dataset where only ~5 mice have a V1 probe and LPs
+            % vary). Skip silently rather than crashing shadedErrorBar.
+            fprintf('Skipping %s plot for %s: no align-position has >=3 mice.\n', ...
+                cfg.regions{i_reg}, target);
+        end
     end
     
     xline(0, 'k--', 'Learning Point', 'LineWidth', 1.5);

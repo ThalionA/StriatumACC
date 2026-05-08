@@ -36,7 +36,7 @@ n_components_reduced = 3;
 num_ccs_analyze = 3;
 n_trials_window = -3:3;
 n_bins_window = -3:3;
-n_shuffles = 250;
+n_shuffles = 25;
 max_shift_bins = 2;
 min_units_per_region = cfg.min_units;
 TRUNCATE_AT_DISENGAGEMENT = true;
@@ -144,7 +144,7 @@ existing_files = dir(fullfile(save_dir, 'Striatum_CCA_Results_*.mat'));
 if ~isempty(existing_files)
     [~, latest_idx] = max([existing_files.datenum]);
     load_target = fullfile(save_dir, existing_files(latest_idx).name);
-    
+
     vars_in_file = whos('-file', load_target);
     if ismember('saved_config', {vars_in_file.name})
         load(load_target, 'group_results', 'is_learner', 'analysis_lp', 'saved_config');
@@ -152,6 +152,15 @@ if ~isempty(existing_files)
     else
         load(load_target, 'group_results', 'is_learner', 'analysis_lp');
         fprintf('Found existing results (Legacy). Loading: %s\n', existing_files(latest_idx).name);
+    end
+
+    % Loaded `group_results` may have been saved before V1 was added — its
+    % size may be < n_pairs and any V1 entries may have empty pair_name.
+    % Re-establish the pair_name for every entry from area_pairs_to_analyze
+    % so titles render correctly downstream. (2026-05-07)
+    for ipair = 1:n_pairs
+        group_results(ipair).pair_name = sprintf('%s-%s', ...
+            area_pairs_to_analyze{ipair, 1}, area_pairs_to_analyze{ipair, 2});
     end
 else
     fprintf('\n--- Starting CCA Analysis ---\n');
@@ -222,14 +231,18 @@ else
                 nc1 = AreaActivity.(a1).n_comps; nc2 = AreaActivity.(a2).n_comps;
                 
                 cca_tr = nan(num_ccs_analyze, num_trials);
-                cca_tr_shuff = nan(num_ccs_analyze, num_trials); 
+                cca_tr_shuff = nan(num_ccs_analyze, num_trials);
+                cca_tr_held = nan(num_ccs_analyze, num_trials);                  % held-out CCs (2026-05-07)
+                cca_tr_held_shuff = nan(num_ccs_analyze, num_trials);            % held-out shuffle null
                 prec_tr_idx = nan(num_ccs_analyze, num_trials);
-                prec_tr_idx_shuff = nan(num_ccs_analyze, num_trials); 
+                prec_tr_idx_shuff = nan(num_ccs_analyze, num_trials);
                 prec_tr_curve = nan(num_ccs_analyze, n_shifts, num_trials);
                 prec_tr_curve_shuff = nan(num_ccs_analyze, n_shifts, num_trials);
-                
+
                 cca_bin = nan(num_ccs_analyze, n_bins);
-                cca_bin_shuff = nan(num_ccs_analyze, n_bins); 
+                cca_bin_shuff = nan(num_ccs_analyze, n_bins);
+                cca_bin_held = nan(num_ccs_analyze, n_bins);
+                cca_bin_held_shuff = nan(num_ccs_analyze, n_bins);
                 prec_bin_idx = nan(num_ccs_analyze, n_bins);
                 prec_bin_idx_shuff = nan(num_ccs_analyze, n_bins);
                 prec_bin_curve = nan(num_ccs_analyze, n_shifts, n_bins);
@@ -254,29 +267,42 @@ else
                     
                     x = reshape(D1_local, nc1, []); y = reshape(D2_local, nc2, []);
                     
+                    % In-sample CCA (kept for direct comparison with prior runs)
                     [~,~,r] = canoncorr(x', y');
                     cca_tr(1:min(length(r), num_ccs_analyze), t) = r(1:min(length(r), num_ccs_analyze));
+                    % Held-out CCA (added 2026-05-07): 50/50 train/test split,
+                    % fit projections on train half, score on held-out half.
+                    r_held = held_out_canoncorr(x', y', num_ccs_analyze, t);
+                    cca_tr_held(:, t) = r_held(:);
+
                     [c_curve, c_idx] = calc_precession(D1_local, D2_local, max_shift_bins, num_ccs_analyze, nc1, nc2);
                     prec_tr_curve(:, :, t) = c_curve;
                     prec_tr_idx(:, t) = c_idx;
-                    
-                    r_sh_iter = nan(num_ccs_analyze, n_shuffles);
-                    p_sh_idx_iter = nan(num_ccs_analyze, n_shuffles);
+
+                    r_sh_iter       = nan(num_ccs_analyze, n_shuffles);
+                    r_sh_held_iter  = nan(num_ccs_analyze, n_shuffles);
+                    p_sh_idx_iter   = nan(num_ccs_analyze, n_shuffles);
                     p_sh_curve_iter = nan(num_ccs_analyze, n_shifts, n_shuffles);
                     n_bins_local = size(D1_local, 2);
-                    
+                    seed_t = t;
+
                     parfor ish = 1:n_shuffles
                          perm_idx = randperm(n_bins_local);
                          D1_s = D1_local(:, perm_idx, :); x_s = reshape(D1_s, nc1, []);
                          [~,~,rs] = canoncorr(x_s', y');
                          r_sh_iter(:, ish) = rs(1:min(length(rs), num_ccs_analyze));
+                         % Held-out shuffle: same train/test split as the
+                         % real held-out call so they are directly comparable.
+                         rs_h = held_out_canoncorr(x_s', y', num_ccs_analyze, seed_t);
+                         r_sh_held_iter(:, ish) = rs_h(:);
                          [c_curve_sh, c_idx_sh] = calc_precession(D1_s, D2_local, max_shift_bins, num_ccs_analyze, nc1, nc2);
                          p_sh_curve_iter(:, :, ish) = c_curve_sh;
                          p_sh_idx_iter(:, ish) = c_idx_sh;
                     end
-                    cca_tr_shuff(:, t) = mean(r_sh_iter, 2, 'omitnan');
+                    cca_tr_shuff(:, t)        = mean(r_sh_iter, 2, 'omitnan');
+                    cca_tr_held_shuff(:, t)   = mean(r_sh_held_iter, 2, 'omitnan');
                     prec_tr_curve_shuff(:, :, t) = mean(p_sh_curve_iter, 3, 'omitnan');
-                    prec_tr_idx_shuff(:, t) = mean(p_sh_idx_iter, 2, 'omitnan');
+                    prec_tr_idx_shuff(:, t)   = mean(p_sh_idx_iter, 2, 'omitnan');
                 end
                 
                 % =========================================================
@@ -298,38 +324,51 @@ else
                     
                     x = reshape(D1_local, nc1, []); y = reshape(D2_local, nc2, []);
                     
+                    % In-sample CCA
                     [~,~,r] = canoncorr(x', y');
                     cca_bin(1:min(length(r), num_ccs_analyze), b) = r(1:min(length(r), num_ccs_analyze));
+                    % Held-out CCA
+                    r_held = held_out_canoncorr(x', y', num_ccs_analyze, n_bins + b);
+                    cca_bin_held(:, b) = r_held(:);
+
                     [c_curve, c_idx] = calc_precession(D1_local, D2_local, max_shift_bins, num_ccs_analyze, nc1, nc2);
                     prec_bin_curve(:, :, b) = c_curve;
                     prec_bin_idx(:, b) = c_idx;
-                    
-                    r_sh_iter = nan(num_ccs_analyze, n_shuffles);
-                    p_sh_idx_iter = nan(num_ccs_analyze, n_shuffles);
+
+                    r_sh_iter       = nan(num_ccs_analyze, n_shuffles);
+                    r_sh_held_iter  = nan(num_ccs_analyze, n_shuffles);
+                    p_sh_idx_iter   = nan(num_ccs_analyze, n_shuffles);
                     p_sh_curve_iter = nan(num_ccs_analyze, n_shifts, n_shuffles);
                     n_tr_local = size(D1_local, 3);
-                    
+                    seed_b = n_bins + b;
+
                     parfor ish = 1:n_shuffles
                          perm_idx = randperm(n_tr_local);
                          D1_s = D1_local(:, :, perm_idx); x_s = reshape(D1_s, nc1, []);
                          [~,~,rs] = canoncorr(x_s', y');
                          r_sh_iter(:, ish) = rs(1:min(length(rs), num_ccs_analyze));
+                         rs_h = held_out_canoncorr(x_s', y', num_ccs_analyze, seed_b);
+                         r_sh_held_iter(:, ish) = rs_h(:);
                          [c_curve_sh, c_idx_sh] = calc_precession(D1_s, D2_local, max_shift_bins, num_ccs_analyze, nc1, nc2);
                          p_sh_curve_iter(:, :, ish) = c_curve_sh;
                          p_sh_idx_iter(:, ish) = c_idx_sh;
                     end
-                    cca_bin_shuff(:, b) = mean(r_sh_iter, 2, 'omitnan');
+                    cca_bin_shuff(:, b)        = mean(r_sh_iter, 2, 'omitnan');
+                    cca_bin_held_shuff(:, b)   = mean(r_sh_held_iter, 2, 'omitnan');
                     prec_bin_curve_shuff(:, :, b) = mean(p_sh_curve_iter, 3, 'omitnan');
-                    prec_bin_idx_shuff(:, b) = mean(p_sh_idx_iter, 2, 'omitnan');
+                    prec_bin_idx_shuff(:, b)   = mean(p_sh_idx_iter, 2, 'omitnan');
                 end
                 
                 % --- D. Store Results ---
                 group_results(ipair).all_bins_corr{ianimal} = cca_bin;
                 group_results(ipair).all_bins_corr_shuff{ianimal} = cca_bin_shuff;
+                % Held-out CCA versions (added 2026-05-07)
+                group_results(ipair).all_bins_corr_held{ianimal}       = cca_bin_held;
+                group_results(ipair).all_bins_corr_held_shuff{ianimal} = cca_bin_held_shuff;
                 group_results(ipair).all_bins_precession_idx{ianimal} = prec_bin_idx;
-                group_results(ipair).all_bins_precession_idx_shuff{ianimal} = prec_bin_idx_shuff; 
+                group_results(ipair).all_bins_precession_idx_shuff{ianimal} = prec_bin_idx_shuff;
                 group_results(ipair).all_bins_precession_curve{ianimal} = prec_bin_curve;
-                group_results(ipair).all_bins_precession_curve_shuff{ianimal} = prec_bin_curve_shuff; 
+                group_results(ipair).all_bins_precession_curve_shuff{ianimal} = prec_bin_curve_shuff;
                 
                 lp = analysis_lp(ianimal);
                 if ~isnan(lp) && lp > 10 && (lp + 9) <= num_trials
@@ -343,6 +382,14 @@ else
                     group_results(ipair).trial_corr_early_shuff{ianimal} = get_cols_2d(cca_tr_shuff, idx_early);
                     group_results(ipair).trial_corr_pre_shuff{ianimal}   = get_cols_2d(cca_tr_shuff, idx_pre);
                     group_results(ipair).trial_corr_post_shuff{ianimal}  = get_cols_2d(cca_tr_shuff, idx_post);
+
+                    % Held-out CCA epoch slices (added 2026-05-07)
+                    group_results(ipair).trial_corr_early_held{ianimal} = get_cols_2d(cca_tr_held, idx_early);
+                    group_results(ipair).trial_corr_pre_held{ianimal}   = get_cols_2d(cca_tr_held, idx_pre);
+                    group_results(ipair).trial_corr_post_held{ianimal}  = get_cols_2d(cca_tr_held, idx_post);
+                    group_results(ipair).trial_corr_early_held_shuff{ianimal} = get_cols_2d(cca_tr_held_shuff, idx_early);
+                    group_results(ipair).trial_corr_pre_held_shuff{ianimal}   = get_cols_2d(cca_tr_held_shuff, idx_pre);
+                    group_results(ipair).trial_corr_post_held_shuff{ianimal}  = get_cols_2d(cca_tr_held_shuff, idx_post);
                     
                     group_results(ipair).trial_precession_early_idx{ianimal} = get_cols_2d(prec_tr_idx, idx_early);
                     group_results(ipair).trial_precession_pre_idx{ianimal}   = get_cols_2d(prec_tr_idx, idx_pre);
@@ -389,8 +436,16 @@ for ipair = 1:n_pairs
     e_vals = extract_animal_means(group_results(ipair).trial_corr_early, 1);
     p_vals = extract_animal_means(group_results(ipair).trial_corr_pre, 1);
     x_vals = extract_animal_means(group_results(ipair).trial_corr_post, 1);
-    if all(isnan(e_vals)), continue; end
     nexttile;
+    if all(isnan(e_vals)) && all(isnan(p_vals)) && all(isnan(x_vals))
+        % Always render the panel so V1 pairs (often sparse) keep their slot
+        % and title in the tiled layout. (2026-05-07)
+        text(0.5, 0.5, 'No data', 'HorizontalAlignment', 'center', ...
+            'Units', 'normalized', 'FontSize', 11, 'Color', [0.5 0.5 0.5]);
+        axis off;
+        title(group_results(ipair).pair_name);
+        continue;
+    end
     fprintf('\nPair: %s\n', group_results(ipair).pair_name);
     plot_grouped_bars_with_rmanova(e_vals, p_vals, x_vals, is_learner, group_results(ipair).pair_name, 'Correlation (CC1)', false);
 end
@@ -404,8 +459,14 @@ for ipair = 1:n_pairs
     e_vals = extract_animal_means(group_results(ipair).trial_precession_early_idx, 1);
     p_vals = extract_animal_means(group_results(ipair).trial_precession_pre_idx, 1);
     x_vals = extract_animal_means(group_results(ipair).trial_precession_post_idx, 1);
-    if all(isnan(e_vals)), continue; end
     nexttile;
+    if all(isnan(e_vals)) && all(isnan(p_vals)) && all(isnan(x_vals))
+        text(0.5, 0.5, 'No data', 'HorizontalAlignment', 'center', ...
+            'Units', 'normalized', 'FontSize', 11, 'Color', [0.5 0.5 0.5]);
+        axis off;
+        title(group_results(ipair).pair_name);
+        continue;
+    end
     fprintf('\nPair: %s\n', group_results(ipair).pair_name);
     plot_grouped_bars_with_rmanova(e_vals, p_vals, x_vals, is_learner, group_results(ipair).pair_name, 'Precession Index', true);
 end
@@ -414,10 +475,11 @@ save_to_svg(fullfile(save_dir, 'Epoch_Precession_Bars_Split'));
 %% 5B. COMBINED CONTINUOUS CURVES, ERROR BARS & NETWORKS (REAL VS SHUFFLED)
 fprintf('\n--- Generating Combined Curves, Error Bars & Networks (%d CCs) ---\n', num_ccs_analyze);
 
-% Define layout (V1 at bottom — sensory input; striatum middle; ACC top)
-layout_def.names = {'DMS', 'DLS', 'ACC', 'V1'};
-layout_def.x     = [3.0, 7.0, 5.0, 5.0];
-layout_def.y     = [4.0, 4.0, 7.0, 1.0];
+% Network layout (CA1/DG added 2026-05-08 to the right of the existing
+% striatum/V1/ACC triangle; layout is a hint for the graph plot only).
+layout_def.names = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};
+layout_def.x     = [3.0,  7.0,  5.0,  5.0, 9.0,  9.0];
+layout_def.y     = [4.0,  4.0,  7.0,  1.0, 5.5,  2.5];
 
 for g_idx = 1:2
     if g_idx == 1

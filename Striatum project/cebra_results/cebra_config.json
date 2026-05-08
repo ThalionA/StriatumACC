@@ -1,0 +1,34 @@
+{
+  "data_dir": "cebra_data",
+  "out_dir": "cebra_results",
+  "n_animals": 16,
+  "seed": 42,
+  "label_keys": [
+    "position",
+    "lick_rate",
+    "lick_errors"
+  ],
+  "area_subsets": [
+    "all",
+    "DMS",
+    "DLS",
+    "ACC",
+    "V1"
+  ],
+  "output_dimension": 3,
+  "max_iterations_single": 15000,
+  "max_iterations_multi": 15000,
+  "batch_size": 512,
+  "learning_rate": 0.0003,
+  "temperature_mode": "auto",
+  "time_offsets": 10,
+  "distance": "cosine",
+  "conditional": "time_delta",
+  "architecture": "offset10-model",
+  "hybrid": false,
+  "device": "cuda_if_available",
+  "verbose": true,
+  "decode_target": "position",
+  "decoder_test_frac": 0.25,
+  "ridge_alpha": 1.0
+}

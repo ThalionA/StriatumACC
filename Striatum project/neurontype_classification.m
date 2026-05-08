@@ -1,5 +1,20 @@
 %% Visualise neuron type clustering
 
+% Self-sufficient loading (2026-05-07).
+if ~exist('cfg', 'var') || isempty(cfg)
+    cfg = project_cfg();
+end
+if ~exist('control_data_raw', 'var') || isempty(control_data_raw)
+    if isfile(cfg.control_data_file)
+        fprintf('Loading control data from %s ...\n', cfg.control_data_file);
+        S = load(cfg.control_data_file, 'preprocessed_data');
+        control_data_raw = S.preprocessed_data;
+    else
+        error('neurontype_classification:NoControlData', ...
+              'control_data_raw not in workspace and %s not found.', cfg.control_data_file);
+    end
+end
+
 all_neurontype_info = {control_data_raw(:).final_neurontypes};
 all_neurontype_info = cat(1, all_neurontype_info{:});
 
@@ -28,28 +43,38 @@ all_isdls = cat(2, all_isdls{:})';
 all_isacc = {control_data_raw(:).is_acc};
 all_isacc = cat(2, all_isacc{:})';
 
-% V1 — only present for animals with a V1 probe; pad missing animals with false.
-all_isv1 = arrayfun(@(s) ...
-    (isfield(s,'is_v1') && ~isempty(s.is_v1)) * logical(s.is_v1) ...
-    + ~(isfield(s,'is_v1') && ~isempty(s.is_v1)) * false(size(s.is_dms)), ...
-    control_data_raw, 'UniformOutput', false);
-% Concatenate, tolerate row/col inconsistency
-all_isv1 = cat(2, all_isv1{:});
-if size(all_isv1, 1) == 1, all_isv1 = all_isv1'; end
+% Optional probe-2 areas (V1, CA1, DG, ...) — pad missing animals with false.
+% Generalised 2026-05-08 from a V1-only block.
+all_isv1  = concat_optional_field(control_data_raw, 'is_v1');
+all_isca1 = concat_optional_field(control_data_raw, 'is_ca1');
+all_isdg  = concat_optional_field(control_data_raw, 'is_dg');
 
 dms_neurontypes = [sum(all_neurontype_info(:, 5) == 1 & all_isdms), sum(all_neurontype_info(:, 5) == 2 & all_isdms), sum(all_neurontype_info(:, 5) == 3 & all_isdms), sum(all_neurontype_info(:, 5) == 4 & all_isdms)];
 dls_neurontypes = [sum(all_neurontype_info(:, 5) == 1 & all_isdls), sum(all_neurontype_info(:, 5) == 2 & all_isdls), sum(all_neurontype_info(:, 5) == 3 & all_isdls), sum(all_neurontype_info(:, 5) == 4 & all_isdls)];
 acc_neurontypes = [sum(all_neurontype_info(:, 5) == 1 & all_isacc), sum(all_neurontype_info(:, 5) == 2 & all_isacc), sum(all_neurontype_info(:, 5) == 3 & all_isacc), sum(all_neurontype_info(:, 5) == 4 & all_isacc)];
-% V1 has no MSN/FSN/TAN classification — count all V1 units in the
-% Unclassified bucket so the totals reconcile.
+% Probe-2 areas (V1, CA1, DG) have no MSN/FSN/TAN classification — all
+% units fall under "Unclassified" so the totals still reconcile.
 v1_neurontypes  = [0, 0, 0, sum(all_isv1)];
+ca1_neurontypes = [0, 0, 0, sum(all_isca1)];
+dg_neurontypes  = [0, 0, 0, sum(all_isdg)];
 
 figure
-bar([dms_neurontypes', dls_neurontypes', acc_neurontypes', v1_neurontypes']', 'stacked')
+bar([dms_neurontypes', dls_neurontypes', acc_neurontypes', ...
+     v1_neurontypes', ca1_neurontypes', dg_neurontypes']', 'stacked')
 
-xticklabels({'DMS', 'DLS', 'ACC', 'V1'})
+xticklabels({'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'})
 legend({'MSN', 'FS', 'TAN', 'UIN'})
 ylabel('unit count')
+
+% --- Local helper for optional area-flag concatenation ---
+function y = concat_optional_field(data_struct, fname)
+    y = arrayfun(@(s) ...
+        (isfield(s, fname) && ~isempty(s.(fname))) * logical(s.(fname)) ...
+        + ~(isfield(s, fname) && ~isempty(s.(fname))) * false(size(s.is_dms)), ...
+        data_struct, 'UniformOutput', false);
+    y = cat(2, y{:});
+    if size(y, 1) == 1, y = y'; end
+end
 
 %% Firing rate distribution
 all_neurontypes = {'MSN', 'FS', 'TAN', 'UIN'};

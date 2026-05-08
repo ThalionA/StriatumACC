@@ -1,5 +1,22 @@
 %% Ensemble assignment and purity
 
+% Self-sufficient loading (2026-05-07).
+% Depends on Run_TCA_pipeline outputs.
+if ~exist('best_mdl', 'var') || ~exist('labels_valid', 'var')
+    if ~exist('cfg', 'var') || isempty(cfg)
+        cfg = project_cfg();
+    end
+    tca_outputs_file = 'processed_data/tca_outputs.mat';
+    if isfile(tca_outputs_file)
+        fprintf('Loading TCA outputs from %s ...\n', tca_outputs_file);
+        load(tca_outputs_file);
+    else
+        error('ensemble_analysis:NoTCAOutputs', ...
+              ['best_mdl / labels_valid not in workspace and %s not found. ', ...
+               'Run Run_TCA_pipeline first.'], tca_outputs_file);
+    end
+end
+
 neuron_factors_all = best_mdl.u{1};
 areas_all = labels_valid.area_labels;
 

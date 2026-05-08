@@ -1,6 +1,24 @@
 %% ================= Comprehensive Spatiotemporal Visualization (Pre-Subsampling) =================
 fprintf('--- Generating Comprehensive Spatiotemporal Plots (Pooled vs Hierarchical) ---\n');
 
+% --- Self-sufficient loading (2026-05-07) ---
+% This script depends on Run_TCA_pipeline outputs. If the workspace doesn't
+% have them, load from the saved outputs file.
+if ~exist('supermouse_tensor_raw', 'var') || ~exist('combined_labels', 'var')
+    if ~exist('cfg', 'var') || isempty(cfg)
+        cfg = project_cfg();
+    end
+    tca_outputs_file = 'processed_data/tca_outputs.mat';
+    if isfile(tca_outputs_file)
+        fprintf('Loading TCA outputs from %s ...\n', tca_outputs_file);
+        load(tca_outputs_file);
+    else
+        error('SpatioTemporal:NoTCAOutputs', ...
+              ['supermouse_tensor_raw / combined_labels not in workspace and ', ...
+               '%s not found. Run Run_TCA_pipeline first.'], tca_outputs_file);
+    end
+end
+
 % --- 1. Prepare Full Clean Data (Pre-subsampling) ---
 neuron_has_nan = squeeze(any(isnan(supermouse_tensor_raw), [2, 3]));
 valid_idx = ~neuron_has_nan;
@@ -421,9 +439,35 @@ end
 fprintf('Classifying neurons into Increasers, Decreasers, and Maintainers...\n');
 epoch_trials = {1:3, 4:10, 11:20, 21:30}; % Ensure these match your actual trial indices
 
-act_naive  = mean(tensor_full_z(:, :, epoch_trials{1}), [2, 3], 'omitnan');
-act_expert = mean(tensor_full_z(:, :, epoch_trials{4}), [2, 3], 'omitnan');
-delta_act  = act_expert - act_naive;
+% De-circularised label definition (2026-05-07): labels are defined on a
+% FIRST-HALF subset of the naive and expert trials. Downstream descriptive
+% plots and statistical tests then use the full epochs (or, ideally, the
+% disjoint second half — see below). Without this split, label and test
+% used the same trials by construction, and because z-scoring forces the
+% per-neuron session mean to zero, an Increaser MUST be a Decreaser
+% elsewhere by accounting identity.
+naive_full     = epoch_trials{1};                  % 1:3
+expert_full    = epoch_trials{4};                  % 21:30
+naive_label    = naive_full(1:floor(end/2));       % 1
+expert_label   = expert_full(1:floor(end/2));      % 21:25
+% naive_test/expert_test reserved as the held-out half for any future
+% strictly-non-circular statistical test (currently unused, but exposed
+% for downstream callers).
+naive_test     = setdiff(naive_full,  naive_label);   % 2:3
+expert_test    = setdiff(expert_full, expert_label);  % 26:30
+
+if isempty(naive_label) || isempty(expert_label)
+    warning('SpatioTemporal:LabelSplit', ...
+        'Naive or Expert label-half is empty (epochs too short to split). Falling back to full epochs.');
+    naive_label = naive_full;
+    expert_label = expert_full;
+    naive_test = naive_full;
+    expert_test = expert_full;
+end
+
+act_naive_lbl  = mean(tensor_full_z(:, :, naive_label),  [2, 3], 'omitnan');
+act_expert_lbl = mean(tensor_full_z(:, :, expert_label), [2, 3], 'omitnan');
+delta_act      = act_expert_lbl - act_naive_lbl;     % computed on label half ONLY
 
 modulation_class = zeros(size(delta_act)); % 1=Inc, 2=Dec, 3=Main
 z_thresh = 0.25; % Threshold in Z-score units to define a "meaningful" change
@@ -1228,7 +1272,7 @@ v_zone = cfg.plot.zone_params.visual_zones_au / bin_size;
 r_zone = cfg.plot.zone_params.reward_zone_au / bin_size;
 n_bins = size(tensor_full_z, 2);
 
-target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};   % CA1/DG added 2026-05-08
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1363,7 +1407,7 @@ end
 epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.epoch_names{3}};
 n_trials_total = size(tensor_full_z, 3);
 
-target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};   % CA1/DG added 2026-05-08
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1492,7 +1536,7 @@ epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.e
 n_bins         = size(tensor_full_z, 2);
 n_trials_total = size(tensor_full_z, 3);
 
-target_areas = {'DMS', 'DLS', 'ACC', 'V1'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};   % CA1/DG added 2026-05-08
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1670,12 +1714,18 @@ for ds_idx = 1:size(datasets, 1)
         t_epochs = tiledlayout(1, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
         ax_epochs = gobjects(1, num_areas);
         
+        % FDR-correction (2026-05-07): collect KS p-values across panels first,
+        % adjust with BH-FDR, then annotate each panel.
+        ks_p_vec    = nan(1, num_areas);
+        ks_stat_vec = nan(1, num_areas);
+        ks_did      = false(1, num_areas);
+
         for i_area = 1:num_areas
             current_area = target_areas{i_area};
             ax_epochs(i_area) = nexttile; hold on;
-            
+
             idx_target = group_mask & strcmp(lbls_full.area, current_area) & (lbls_full.ntype == current_type_idx);
-            
+
             % Find valid mice (>= min_units_per_mouse)
             target_mice = unique(lbls_full.mouse(idx_target));
             valid_mice = [];
@@ -1684,68 +1734,57 @@ for ds_idx = 1:size(datasets, 1)
                     valid_mice(end+1) = target_mice(m);
                 end
             end
-            
+
             n_mice = length(valid_mice);
-            
+
             if n_mice >= 2 % Need at least 2 mice to compute SEM
                 epoch_raw_pooled = cell(1, length(epoch_trials));
                 legend_handles = [];
-                
+
                 for e = 1:length(epoch_trials)
                     trs = epoch_trials{e};
                     mouse_pdfs = nan(n_mice, length(bin_centers));
                     raw_e = [];
-                    
+
                     for m = 1:n_mice
                         idx_mouse = idx_target & (lbls_full.mouse == valid_mice(m));
                         target_tensor = tensor_full_z(idx_mouse, :, :); % [Neurons x Bins x Trials]
-                        
-                        % Mean activity per trial: [Neurons x Trials]
-                        unit_trial_rates = squeeze(mean(target_tensor, 2, 'omitnan')); 
-                        
-                        % Mean activity within epoch: [Neurons x 1]
+                        unit_trial_rates = squeeze(mean(target_tensor, 2, 'omitnan'));
                         epoch_rates = mean(unit_trial_rates(:, trs), 2, 'omitnan');
-                        
-                        % Compute PDF for this mouse
                         mouse_pdfs(m, :) = histcounts(epoch_rates, hist_edges, 'Normalization', 'pdf');
-                        raw_e = [raw_e; epoch_rates]; % Accumulate raw rates for KS test
+                        raw_e = [raw_e; epoch_rates];
                     end
-                    
+
                     epoch_raw_pooled{e} = raw_e(~isnan(raw_e));
-                    
-                    % Average PDFs across mice
+
                     mu_pdf = mean(mouse_pdfs, 1, 'omitnan');
                     se_pdf = std(mouse_pdfs, 0, 1, 'omitnan') / sqrt(n_mice);
-                    
                     h = shadedErrorBar(bin_centers, mu_pdf, se_pdf, ...
                         'lineprops', {'-', 'Color', epoch_colors{e}, 'LineWidth', 2}, 'patchSaturation', 0.15);
                     legend_handles(end+1) = h.mainLine;
                 end
-                
-                % KS Test: Naive (Epoch 1) vs Expert (Epoch 4)
+
+                % KS Test: Naive (Epoch 1) vs Expert (Epoch 4) — annotation deferred to after-loop FDR.
                 [~, p_ks, ks_stat] = kstest2(epoch_raw_pooled{1}, epoch_raw_pooled{4});
-                
-                % Significance formatting
-                sig_star = ''; 
-                if p_ks < 0.05, sig_star = '*'; end
-                if p_ks < 0.01, sig_star = '**'; end
-                if p_ks < 0.001, sig_star = '***'; end
-                
-                ks_txt = sprintf('KS(Naive, Exp):\nD=%.2f, p=%.1e %s', ks_stat, p_ks, sig_star);
-                text(0.05, 0.95, ks_txt, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
-                    'FontSize', 9, 'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7]);
-                
+                ks_p_vec(i_area)    = p_ks;
+                ks_stat_vec(i_area) = ks_stat;
+                ks_did(i_area)      = true;
+
                 grid on;
             else
                 axis off;
                 text(0.5, 0.5, 'Insufficient Mice', 'HorizontalAlignment', 'center', 'Color', [0.5 0.5 0.5]);
             end
-            
+
             title(sprintf('%s (N=%d mice)', current_area, n_mice));
             if i_area == 1; ylabel('Probability Density'); end
             xlabel('Mean Z-Scored Activity');
             if i_area == num_areas && n_mice >= 2; legend(legend_handles, epoch_names, 'Location', 'northeast'); end
         end
+
+        % FDR-correct across the panels of this figure and annotate.
+        annotate_ks_panels_fdr(ax_epochs, ks_p_vec, ks_stat_vec, ks_did, 'Naive, Exp');
+
         linkaxes(ax_epochs(isgraphics(ax_epochs)), 'y');
         xlim(ax_epochs(isgraphics(ax_epochs)), [hist_edges(1), hist_edges(end)]);
         title(t_epochs, sprintf('%s: %s Mean Activity Distributions by Epoch (Hierarchical)', ds_name, current_type_name), 'FontSize', 16);
@@ -1759,11 +1798,16 @@ for ds_idx = 1:size(datasets, 1)
                             'Position', [150, 150, 400 * num_areas, 400], 'Color', 'w');
         t_trials = tiledlayout(1, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
         ax_trials = gobjects(1, num_areas);
-        
+
+        % FDR collection (2026-05-07)
+        ks_p_vec    = nan(1, num_areas);
+        ks_stat_vec = nan(1, num_areas);
+        ks_did      = false(1, num_areas);
+
         for i_area = 1:num_areas
             current_area = target_areas{i_area};
             ax_trials(i_area) = nexttile; hold on;
-            
+
             idx_target = group_mask & strcmp(lbls_full.area, current_area) & (lbls_full.ntype == current_type_idx);
             
             % Find valid mice (>= min_units_per_mouse)
@@ -1816,18 +1860,12 @@ for ds_idx = 1:size(datasets, 1)
                     legend_handles(end+1) = h.mainLine;
                 end
                 
-                % KS Test: Trial 1 vs Trial 21
+                % KS Test: Trial 1 vs Trial 21 — annotation deferred for FDR (2026-05-07)
                 if ~isempty(trial_raw_pooled{1}) && ~isempty(trial_raw_pooled{3})
                     [~, p_ks, ks_stat] = kstest2(trial_raw_pooled{1}, trial_raw_pooled{3});
-                    
-                    sig_star = ''; 
-                    if p_ks < 0.05, sig_star = '*'; end
-                    if p_ks < 0.01, sig_star = '**'; end
-                    if p_ks < 0.001, sig_star = '***'; end
-                    
-                    ks_txt = sprintf('KS(Tr1, Tr21):\nD=%.2f, p=%.1e %s', ks_stat, p_ks, sig_star);
-                    text(0.05, 0.95, ks_txt, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
-                        'FontSize', 9, 'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7]);
+                    ks_p_vec(i_area)    = p_ks;
+                    ks_stat_vec(i_area) = ks_stat;
+                    ks_did(i_area)      = true;
                 end
                 
                 grid on;
@@ -1841,6 +1879,10 @@ for ds_idx = 1:size(datasets, 1)
             xlabel('Mean Z-Scored Activity');
             if i_area == num_areas && n_mice >= 2; legend(legend_handles, trial_names, 'Location', 'northeast'); end
         end
+
+        % FDR-correct the KS panels (2026-05-07)
+        annotate_ks_panels_fdr(ax_trials, ks_p_vec, ks_stat_vec, ks_did, 'Tr1, Tr21');
+
         linkaxes(ax_trials(isgraphics(ax_trials)), 'y');
         xlim(ax_trials(isgraphics(ax_trials)), [hist_edges(1), hist_edges(end)]);
         title(t_trials, sprintf('%s: %s Mean Activity Distributions by Specific Trial (Hierarchical)', ds_name, current_type_name), 'FontSize', 16);
@@ -1903,20 +1945,20 @@ datasets = {1, 'Task'; 2, 'Control'};
 min_units_per_mouse = 3; 
 
 % KDE Evaluation Points (Smoother and continuous compared to histogram edges)
-x_eval = linspace(-1.5, 1.5, 100); 
+x_eval = linspace(-1.5, 1.5, 100);
 
 % --- 4. Generate Distribution Plots ---
 for ds_idx = 1:size(datasets, 1)
     group_id = datasets{ds_idx, 1};
     ds_name  = datasets{ds_idx, 2};
-    
+
     group_mask = (lbls_full.group == group_id);
     if sum(group_mask) == 0, continue; end
-    
+
     for i_type = 1:num_types
         current_type_idx = target_types(i_type);
         current_type_name = type_names{i_type};
-        
+
         % =====================================================================
         % FIGURE A: Distributions by Epoch
         % =====================================================================
@@ -1924,7 +1966,12 @@ for ds_idx = 1:size(datasets, 1)
                             'Position', [100, 100, 400 * num_areas, 400], 'Color', 'w');
         t_epochs = tiledlayout(1, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
         ax_epochs = gobjects(1, num_areas);
-        
+
+        % FDR collection (2026-05-07)
+        ks_p_vec    = nan(1, num_areas);
+        ks_stat_vec = nan(1, num_areas);
+        ks_did      = false(1, num_areas);
+
         for i_area = 1:num_areas
             current_area = target_areas{i_area};
             ax_epochs(i_area) = nexttile; hold on;
@@ -1981,18 +2028,12 @@ for ds_idx = 1:size(datasets, 1)
                     legend_handles(end+1) = h.mainLine;
                 end
                 
-                % KS Test: Naive (Epoch 1) vs Expert (Epoch 4)
+                % KS Test: Naive (Epoch 1) vs Expert (Epoch 4) — annotation deferred for FDR (2026-05-07)
                 if ~isempty(epoch_raw_pooled{1}) && ~isempty(epoch_raw_pooled{4})
                     [~, p_ks, ks_stat] = kstest2(epoch_raw_pooled{1}, epoch_raw_pooled{4});
-                    
-                    sig_star = ''; 
-                    if p_ks < 0.05, sig_star = '*'; end
-                    if p_ks < 0.01, sig_star = '**'; end
-                    if p_ks < 0.001, sig_star = '***'; end
-                    
-                    ks_txt = sprintf('KS(Naive, Exp):\nD=%.2f, p=%.1e %s', ks_stat, p_ks, sig_star);
-                    text(0.05, 0.95, ks_txt, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
-                        'FontSize', 9, 'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7]);
+                    ks_p_vec(i_area)    = p_ks;
+                    ks_stat_vec(i_area) = ks_stat;
+                    ks_did(i_area)      = true;
                 end
                 grid on;
             else
@@ -2005,6 +2046,10 @@ for ds_idx = 1:size(datasets, 1)
             xlabel('Mean Z-Scored Activity');
             if i_area == num_areas && n_mice >= 2; legend(legend_handles, epoch_names, 'Location', 'northeast'); end
         end
+
+        % FDR-correct the KS panels (2026-05-07)
+        annotate_ks_panels_fdr(ax_epochs, ks_p_vec, ks_stat_vec, ks_did, 'Naive, Exp');
+
         linkaxes(ax_epochs(isgraphics(ax_epochs)), 'y');
         xlim(ax_epochs(isgraphics(ax_epochs)), [x_eval(1), x_eval(end)]);
         title(t_epochs, sprintf('%s: %s Mean Activity Distributions by Epoch (KDE)', ds_name, current_type_name), 'FontSize', 16);
@@ -2018,11 +2063,16 @@ for ds_idx = 1:size(datasets, 1)
                             'Position', [150, 150, 400 * num_areas, 400], 'Color', 'w');
         t_trials = tiledlayout(1, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
         ax_trials = gobjects(1, num_areas);
-        
+
+        % FDR collection (2026-05-07)
+        ks_p_vec    = nan(1, num_areas);
+        ks_stat_vec = nan(1, num_areas);
+        ks_did      = false(1, num_areas);
+
         for i_area = 1:num_areas
             current_area = target_areas{i_area};
             ax_trials(i_area) = nexttile; hold on;
-            
+
             idx_target = group_mask & strcmp(lbls_full.area, current_area) & (lbls_full.ntype == current_type_idx);
             
             % Find valid mice
@@ -2079,18 +2129,12 @@ for ds_idx = 1:size(datasets, 1)
                     legend_handles(end+1) = h.mainLine;
                 end
                 
-                % KS Test: Trial 1 vs Trial 21
+                % KS Test: Trial 1 vs Trial 21 — annotation deferred for FDR (2026-05-07)
                 if ~isempty(trial_raw_pooled{1}) && ~isempty(trial_raw_pooled{3})
                     [~, p_ks, ks_stat] = kstest2(trial_raw_pooled{1}, trial_raw_pooled{3});
-                    
-                    sig_star = ''; 
-                    if p_ks < 0.05, sig_star = '*'; end
-                    if p_ks < 0.01, sig_star = '**'; end
-                    if p_ks < 0.001, sig_star = '***'; end
-                    
-                    ks_txt = sprintf('KS(Tr1, Tr21):\nD=%.2f, p=%.1e %s', ks_stat, p_ks, sig_star);
-                    text(0.05, 0.95, ks_txt, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
-                        'FontSize', 9, 'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7]);
+                    ks_p_vec(i_area)    = p_ks;
+                    ks_stat_vec(i_area) = ks_stat;
+                    ks_did(i_area)      = true;
                 end
                 grid on;
             else
@@ -2103,6 +2147,10 @@ for ds_idx = 1:size(datasets, 1)
             xlabel('Mean Z-Scored Activity');
             if i_area == num_areas && n_mice >= 2; legend(legend_handles, trial_names, 'Location', 'northeast'); end
         end
+
+        % FDR-correct the KS panels (2026-05-07)
+        annotate_ks_panels_fdr(ax_trials, ks_p_vec, ks_stat_vec, ks_did, 'Tr1, Tr21');
+
         linkaxes(ax_trials(isgraphics(ax_trials)), 'y');
         xlim(ax_trials(isgraphics(ax_trials)), [x_eval(1), x_eval(end)]);
         title(t_trials, sprintf('%s: %s Mean Activity Distributions by Specific Trial (KDE)', ds_name, current_type_name), 'FontSize', 16);

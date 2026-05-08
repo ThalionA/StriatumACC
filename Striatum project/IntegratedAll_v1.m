@@ -5,24 +5,28 @@
 clearvars; clc; close all;
 
 %% 1. Configuration & Data Loading
-cfg.lp_window = 10; % Window of trials to evaluate for learning
-cfg.lp_thresh_count = 7; % Number of trials within window that must pass threshold
-cfg.lp_z_thresh = -2; % Z-score threshold for lick error
-bin_size = 4; % Spatial bin multiplier (4 au)
-n_bins = 50; % Applies to both spatial (200au / 4) and temporal (50 bins) data
-mov_avg_window = 10;
-max_trials = 300;
-trials_per_epoch = 10;
+% Project-wide constants (paths, LP parameters, areas, colours, ...)
+cfg = project_cfg();
+
+% Local aliases for legacy variable names used downstream in this script.
+cfg.lp_thresh_count = cfg.lp_min_consecutive;
+cfg.lp_z_thresh     = cfg.lp_z_threshold;
+bin_size            = cfg.bin_size_au;
+n_bins              = cfg.n_bins_full;
+mov_avg_window      = 10;
+max_trials          = 300;
+trials_per_epoch    = cfg.trials_per_epoch;
 
 fprintf('Loading task, control 1 (spatial), and control 2 (temporal) data...\n');
-load('preprocessed_data.mat', 'preprocessed_data');
-task_data = preprocessed_data;
+S = load(cfg.task_data_file, 'preprocessed_data');
+task_data = S.preprocessed_data;
 
-load('preprocessed_data_control.mat', 'preprocessed_data'); 
-control1_data = preprocessed_data;
+S = load(cfg.control_data_file, 'preprocessed_data');
+control1_data = S.preprocessed_data;
 
-load('preprocessed_data_control2.mat', 'preprocessed_data');
-control2_data = preprocessed_data;
+S = load(cfg.control2_data_file, 'preprocessed_data');
+control2_data = S.preprocessed_data;
+clear S
 
 n_animals_task  = numel(task_data);
 n_animals_ctrl1 = numel(control1_data);
@@ -496,9 +500,11 @@ save_to_svg('Behavioural_Evolution_3Groups_Yoked');
 
 %% 6. Trial-to-Trial Correlation (Neural Single-Neuron Reliability)
 fprintf('Computing continuous single-neuron reliability...\n');
-% V1 added 2026-05-07; 'all' stays last so the "All Units" semantics are
-% preserved as the final element regardless of how many real areas exist.
-areas = {'dms', 'dls', 'acc', 'v1', 'all'};
+% V1/CA1/DG added (2026-05-07/08). 'all' stays last so the "All Units"
+% semantics are preserved as the final element regardless of how many
+% real areas exist. To add another area: append to this list, append a
+% colour to area_colors, and extend the masks struct in section 7.
+areas = {'dms', 'dls', 'acc', 'v1', 'ca1', 'dg', 'all'};
 n_areas = length(areas);
 all_idx = n_areas; % index of the synthetic "all units" pseudo-area
 window_size = 5; 
@@ -534,7 +540,10 @@ for g = 1:3
         activity_raw(isnan(activity_raw)) = 0;
         n_trials = size(activity_raw, 3);
         n_cells_total = size(activity_raw, 1);
-        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, is_v1_safe(curr_data(i))};
+        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, ...
+                 is_area_safe(curr_data(i), 'V1'), ...
+                 is_area_safe(curr_data(i), 'CA1'), ...
+                 is_area_safe(curr_data(i), 'DG')};
 
         activity_z = nan(size(activity_raw));
         for c = 1:n_cells_total
@@ -611,7 +620,8 @@ met_modes = {'Raw', 'ZScored'};
 scope_modes = {'WholePopulation', 'ByArea'};
 x_bases_stab = {1:10, 12:21, 23:32};
 x_ticks_centers_stab = [5.5, 16.5, 27.5];
-area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; 0.4940 0.1840 0.5560]; % DMS DLS ACC V1
+area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; ...
+               0.4940 0.1840 0.5560; 0.8 0.1 0.2; 0.2 0.7 0.7];   % DMS DLS ACC V1 CA1 DG
 
 for agg = 1:2
     for met = 1:2
@@ -696,7 +706,7 @@ end
 %% 7. Decoding Space/Time & Lick Patterns (Poisson ML + Ridge Log-Link)
 fprintf('Running Spatial/Temporal ML Decoding and Lick Ridge... \n');
 lambda = 1.0; 
-cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'Shuffle'};
+cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'No-CA1', 'No-DG', 'Shuffle'};
 n_conds = length(cond_names);
 
 % --- Trackers ---
@@ -735,7 +745,10 @@ for g = 1:3
         
         n_cells_total = size(activity, 1);
         masks = struct('DMS', curr_data(i).is_dms, 'DLS', curr_data(i).is_dls, ...
-                       'ACC', curr_data(i).is_acc, 'V1',  is_v1_safe(curr_data(i)));
+                       'ACC', curr_data(i).is_acc, ...
+                       'V1',  is_area_safe(curr_data(i), 'V1'), ...
+                       'CA1', is_area_safe(curr_data(i), 'CA1'), ...
+                       'DG',  is_area_safe(curr_data(i), 'DG'));
         
         epoch_idx = cell(1, n_epochs);
         if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
@@ -751,6 +764,8 @@ for g = 1:3
             if strcmp(c_name, 'No-DLS'), active_mask(masks.DLS) = false; end
             if strcmp(c_name, 'No-ACC'), active_mask(masks.ACC) = false; end
             if strcmp(c_name, 'No-V1'),  active_mask(masks.V1)  = false; end
+            if strcmp(c_name, 'No-CA1'), active_mask(masks.CA1) = false; end
+            if strcmp(c_name, 'No-DG'),  active_mask(masks.DG)  = false; end
             
             if sum(active_mask) < min_units, continue; end
             
@@ -849,7 +864,15 @@ end
 
 x_bases_dec = {1:10, 12:21, 23:32};
 x_ticks_centers_dec = [5.5, 16.5, 27.5];
-cond_colors = [0 0 0; 0.8500 0.3250 0.0980; 0.9290 0.6940 0.1250; 0.4940 0.1840 0.5560; 0.5 0.5 0.5];
+% cond_colors: All, No-DMS, No-DLS, No-ACC, No-V1, No-CA1, No-DG, Shuffle
+cond_colors = [0      0      0;        % All
+               0.8500 0.3250 0.0980;   % No-DMS (orange)
+               0.9290 0.6940 0.1250;   % No-DLS (yellow)
+               0.4940 0.1840 0.5560;   % No-ACC (purple)
+               0      0.6    0.6;      % No-V1  (teal)
+               0.8    0.1    0.2;      % No-CA1 (crimson)
+               0.2    0.5    0.3;      % No-DG  (forest)
+               0.5    0.5    0.5];     % Shuffle
 
 % =========================================================================
 % FIGURE A: ML Decoding Error Evolution (3 Groups)
@@ -987,7 +1010,7 @@ fprintf('--- Full Integrated Pipeline Execution Complete ---\n');
 %% 9. Comprehensive Spatiotemporal Activity by AREA
 fprintf('--- Generating Spatiotemporal Plots by AREA (All Groups) ---\n');
 
-areas = {'DMS', 'DLS', 'ACC', 'V1'};
+areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};
 n_areas = length(areas);
 epochs = {'Naive', 'Intermediate', 'Expert'};
 n_epochs = length(epochs);
@@ -1049,7 +1072,10 @@ for g = 1:3
         if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
         
         % Masks
-        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, is_v1_safe(curr_data(i))};
+        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, ...
+                 is_area_safe(curr_data(i), 'V1'), ...
+                 is_area_safe(curr_data(i), 'CA1'), ...
+                 is_area_safe(curr_data(i), 'DG')};
 
         % Populate Structure
         for a = 1:n_areas
@@ -1093,7 +1119,7 @@ end
 metrics = {'raw', 'Raw FR'; 'z', 'Z-Scored'};
 avg_methods = {'Pooled', 'Hierarchical'};
 epoch_colors = lines(n_epochs);
-area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; 0.4940 0.1840 0.5560]; % DMS, DLS, ACC, V1
+area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; 0.4940 0.1840 0.5560]; % DMS DLS ACC V1 CA1 DG
 
 for met_idx = 1:size(metrics, 1)
     met_field = metrics{met_idx, 1};
@@ -1226,8 +1252,8 @@ corr_epochs = [1, 3];
 epoch_colors = [0, 0.4470, 0.7410;  % Naive: Blue
                 0.8500, 0.3250, 0.0980]; % Expert: Red/Orange
 epoch_labels = {'Naive', 'Expert'};
-area_names = {'DMS', 'DLS', 'ACC', 'V1', 'All Units'};
-n_area_cols = length(area_names);  % 5: DMS, DLS, ACC, V1, All
+area_names = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG', 'All Units'};
+n_area_cols = length(area_names);  % DMS, DLS, ACC, V1, CA1, DG, All
 all_col = n_area_cols;              % index of the "All Units" column
 
 for g = 1:3
@@ -1360,6 +1386,8 @@ for g = 1:3
     units_dls     = zeros(n_animals, 1);
     units_acc     = zeros(n_animals, 1);
     units_v1      = zeros(n_animals, 1);
+    units_ca1     = zeros(n_animals, 1);
+    units_dg      = zeros(n_animals, 1);
 
     units_msn     = zeros(n_animals, 1);
     units_fsn     = zeros(n_animals, 1);
@@ -1369,20 +1397,24 @@ for g = 1:3
     % Initialize arrays for behavior and firing rates
     total_trials = zeros(n_animals, 1);
     fr_msn = []; fr_fsn = []; fr_tan = [];
-    fr_dms = []; fr_dls = []; fr_acc = []; fr_v1 = [];
+    fr_dms = []; fr_dls = []; fr_acc = []; fr_v1 = []; fr_ca1 = []; fr_dg = [];
 
     for i = 1:n_animals
         % --- Area counts ---
         is_dms = curr_data(i).is_dms;
         is_dls = curr_data(i).is_dls;
         is_acc = curr_data(i).is_acc;
-        is_v1  = is_v1_safe(curr_data(i));
+        is_v1  = is_area_safe(curr_data(i), 'V1');
+        is_ca1 = is_area_safe(curr_data(i), 'CA1');
+        is_dg  = is_area_safe(curr_data(i), 'DG');
 
         total_units(i) = length(is_dms);
         units_dms(i)   = sum(is_dms);
         units_dls(i)   = sum(is_dls);
         units_acc(i)   = sum(is_acc);
         units_v1(i)    = sum(is_v1);
+        units_ca1(i)   = sum(is_ca1);
+        units_dg(i)    = sum(is_dg);
         
         % --- Neuron type counts ---
         if isfield(curr_data(i), 'final_neurontypes') && ~isempty(curr_data(i).final_neurontypes)
@@ -1426,6 +1458,8 @@ for g = 1:3
             if sum(is_dls) > 0, fr_dls = [fr_dls; mean_fr_per_neuron(is_dls)]; end
             if sum(is_acc) > 0, fr_acc = [fr_acc; mean_fr_per_neuron(is_acc)]; end
             if sum(is_v1)  > 0, fr_v1  = [fr_v1;  mean_fr_per_neuron(is_v1)];  end
+            if sum(is_ca1) > 0, fr_ca1 = [fr_ca1; mean_fr_per_neuron(is_ca1)]; end
+            if sum(is_dg)  > 0, fr_dg  = [fr_dg;  mean_fr_per_neuron(is_dg)];  end
 
             % Cell Type Firing Rates
             if sum(ntypes == 1) > 0, fr_msn = [fr_msn; mean_fr_per_neuron(ntypes == 1)]; end
@@ -1446,12 +1480,18 @@ for g = 1:3
     fprintf('DMS Units   : %s  [Sum: %d]\n', fmt_stats(units_dms), sum(units_dms));
     fprintf('DLS Units   : %s  [Sum: %d]\n', fmt_stats(units_dls), sum(units_dls));
     fprintf('ACC Units   : %s  [Sum: %d]\n', fmt_stats(units_acc), sum(units_acc));
-    n_with_v1 = sum(units_v1 > 0);
+    n_with_v1  = sum(units_v1  > 0);
+    n_with_ca1 = sum(units_ca1 > 0);
+    n_with_dg  = sum(units_dg  > 0);
     fprintf('V1  Units   : %s  [Sum: %d]   (%d/%d animals have V1 probe)\n', ...
-        fmt_stats(units_v1), sum(units_v1), n_with_v1, n_animals);
+        fmt_stats(units_v1),  sum(units_v1),  n_with_v1,  n_animals);
+    fprintf('CA1 Units   : %s  [Sum: %d]   (%d/%d animals have CA1 in probe)\n', ...
+        fmt_stats(units_ca1), sum(units_ca1), n_with_ca1, n_animals);
+    fprintf('DG  Units   : %s  [Sum: %d]   (%d/%d animals have DG in probe)\n', ...
+        fmt_stats(units_dg),  sum(units_dg),  n_with_dg,  n_animals);
 
     fprintf('\n--- Putative Cell Types per Animal (Mean +/- SEM) [Total] ---\n');
-    fprintf('(MSN/FSN/TAN classification applies to striatum only — V1 not classified)\n');
+    fprintf('(MSN/FSN/TAN classification applies to striatum only — V1/CA1/DG not classified)\n');
     fprintf('MSN (Type 1): %s  [Sum: %d]\n', fmt_stats(units_msn), sum(units_msn));
     fprintf('FSN (Type 2): %s  [Sum: %d]\n', fmt_stats(units_fsn), sum(units_fsn));
     fprintf('TAN (Type 3): %s  [Sum: %d]\n', fmt_stats(units_tan), sum(units_tan));
@@ -1463,10 +1503,17 @@ for g = 1:3
     fprintf('--- Firing Rates by Area (Hz, Mean +/- SEM across neurons) ---\n');
     fprintf('DMS Units : %s\n', fmt_fr(fr_dms));
     fprintf('DLS Units : %s\n', fmt_fr(fr_dls));
+    fprintf('ACC Units : %s\n', fmt_fr(fr_acc));
     if ~isempty(fr_v1)
-        fprintf('V1  Units : %s  (n=%d units)\n', fmt_fr(fr_v1), numel(fr_v1));
+        fprintf('V1  Units : %s  (n=%d units)\n', fmt_fr(fr_v1),  numel(fr_v1));
     end
-    fprintf('ACC Units : %s\n\n', fmt_fr(fr_acc));
+    if ~isempty(fr_ca1)
+        fprintf('CA1 Units : %s  (n=%d units)\n', fmt_fr(fr_ca1), numel(fr_ca1));
+    end
+    if ~isempty(fr_dg)
+        fprintf('DG  Units : %s  (n=%d units)\n', fmt_fr(fr_dg),  numel(fr_dg));
+    end
+    fprintf('\n');
     
     fprintf('--- Firing Rates by Putative Cell Type (Hz, Mean +/- SEM) ---\n');
     fprintf('MSN (Type 1): %s\n', fmt_fr(fr_msn));

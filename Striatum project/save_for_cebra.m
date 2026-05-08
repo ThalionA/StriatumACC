@@ -30,7 +30,10 @@ if ~isfield(cfg, 'bin_size'),       cfg.bin_size = 4;       end
 if ~isfield(cfg, 'au_to_cm'),       cfg.au_to_cm = 1.25;    end
 if ~isfield(cfg, 'output_dir'),     cfg.output_dir = './cebra_data'; end
 if ~isfield(cfg, 'group_id'),       cfg.group_id = 1;       end
-if ~isfield(cfg, 'task_data_file'), cfg.task_data_file = 'preprocessed_data.mat'; end
+if ~isfield(cfg, 'task_data_file')
+    proj = project_cfg();
+    cfg.task_data_file = proj.task_data_file;
+end
 
 if ~exist('preprocessed_data', 'var') || isempty(preprocessed_data)
     if isfile(cfg.task_data_file)

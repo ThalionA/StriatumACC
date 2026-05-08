@@ -74,7 +74,20 @@ import random
 import cebra
 from cebra import CEBRA, plot_embedding, plot_loss
 from cebra.data.helper import OrthogonalProcrustesAlignment
-import cebra.sklearn.metrics as cebra_metrics
+
+# `consistency_score` lives at different paths across cebra versions.
+# Try the known locations in order; fall back to None and skip the
+# multi-session consistency block at runtime.
+try:
+    from cebra.integrations.sklearn.metrics import consistency_score as _cebra_consistency_score
+except ImportError:
+    try:
+        from cebra.sklearn.metrics import consistency_score as _cebra_consistency_score
+    except ImportError:
+        try:
+            from cebra.metrics import consistency_score as _cebra_consistency_score
+        except ImportError:
+            _cebra_consistency_score = None
 
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
@@ -92,7 +105,7 @@ class CebraConfig:
 
     data_dir: Path = Path("./cebra_data")
     out_dir: Path = Path("./cebra_results")
-    n_animals: int = 8                           # number of mice to include
+    n_animals: int = 16                          # number of mice to scan; missing files skipped
     seed: int = 42
 
     # Which behavioural labels to stack as contrastive signal.
@@ -102,8 +115,10 @@ class CebraConfig:
     )
 
     # Per-area refits. Set to ("all",) to skip per-area decomposition.
+    # Note: only mice with a V1 probe contribute to the V1 fit; other mice
+    # are skipped via the min-units gate inside fit_single_session.
     area_subsets: Sequence[str] = field(
-        default_factory=lambda: ("all", "DMS", "DLS", "ACC")
+        default_factory=lambda: ("all", "DMS", "DLS", "ACC", "V1")
     )
 
     # CEBRA hyperparameters
@@ -160,31 +175,45 @@ def seed_everything(seed: int) -> None:
 # ------------------------------------------------------------------ #
 
 
+def _decode_matlab_string(arr: np.ndarray) -> str:
+    """Convert an int16/uint16 char-code array (MATLAB v7.3 string) to str."""
+    flat = np.asarray(arr).ravel()
+    return "".join(chr(int(c)) for c in flat if int(c) != 0)
+
+
 def _read_mat_v73(path: Path) -> dict[str, Any]:
     """Read a MATLAB v7.3 .mat file into a flat dict of numpy arrays.
 
-    All arrays come back transposed so the shape matches what was saved
-    in MATLAB (HDF5 stores them with the axes reversed).
+    Numeric arrays come back transposed to MATLAB-native axis order (h5py
+    presents axes reversed). Cell arrays of strings (saved by MATLAB as
+    HDF5 reference arrays) are resolved into a numpy object array of str.
     """
     out: dict[str, Any] = {}
     with h5py.File(path, "r") as f:
         for key in f.keys():
             ds = f[key]
-            if isinstance(ds, h5py.Dataset):
-                arr = np.array(ds)
-                # h5py reverses axes vs MATLAB
-                arr = np.transpose(arr, axes=tuple(reversed(range(arr.ndim))))
-                out[key] = arr
-            else:
-                # area_labels lives as an HDF5 group of references; resolve.
+            if not isinstance(ds, h5py.Dataset):
+                # Skip groups; everything we save is at the top level
+                continue
+
+            # Detect cell-array-of-strings (stored as references)
+            if h5py.check_dtype(ref=ds.dtype) is not None:
+                refs = np.array(ds).ravel()
                 resolved = []
-                for ref in np.array(f[key]).ravel():
+                for ref in refs:
                     try:
-                        s = bytes(np.array(f[ref])).decode("utf-8", errors="ignore").replace("\x00", "")
-                        resolved.append(s)
+                        sub = f[ref]
+                        resolved.append(_decode_matlab_string(np.array(sub)))
                     except Exception:
                         resolved.append("Unknown")
                 out[key] = np.array(resolved, dtype=object)
+                continue
+
+            arr = np.array(ds)
+            # h5py reverses axes vs MATLAB
+            if arr.ndim >= 2:
+                arr = np.transpose(arr, axes=tuple(reversed(range(arr.ndim))))
+            out[key] = arr
     return out
 
 
@@ -207,58 +236,57 @@ def load_mouse(path: Path, label_keys: Sequence[str]) -> MouseData:
     """Load one cebra_mouse{N}_data.mat and flatten to (T*B, N) layout."""
     raw = _read_mat_v73(path)
 
-    # MATLAB neural_data is (N, B, T); after the h5py transpose it should
-    # already be (T, B, N). Be defensive about ordering.
+    # _read_mat_v73 transposes axes so arrays come back in MATLAB-native
+    # shape. So neural_data here is (n_neurons, n_bins, n_trials).
     nd = raw["neural_data"]
     if nd.ndim != 3:
         raise ValueError(f"{path}: neural_data must be 3D, got {nd.shape}")
+    n_neurons, n_bins, n_trials = nd.shape
 
-    # Identify axes: the largest is usually neurons; the smallest is trials.
-    # The MATLAB convention here is (N, B, T) -> after h5 reversal (T, B, N).
-    # Trust that ordering.
-    n_trials, n_bins, n_neurons = nd.shape
+    # Reorder to (n_trials, n_bins, n_neurons) for time-major flattening.
+    nd_tbN = np.transpose(nd, (2, 1, 0))
 
-    # Flatten: each row = one (trial, bin) timepoint.
-    neural = nd.reshape(n_trials * n_bins, n_neurons)
+    # Flatten: each row = one (trial, bin) timepoint = one CEBRA training sample.
+    # Final neural shape: (n_trials * n_bins, n_neurons).
+    neural = nd_tbN.reshape(n_trials * n_bins, n_neurons)
 
-    # Build labels matrix
-    label_cols = []
+    # Build labels matrix. bin_id ranges 0..n_bins-1 within each trial.
     bin_id = np.tile(np.arange(n_bins), n_trials)
     trial_id = np.repeat(np.arange(n_trials), n_bins)
 
+    def _shape_TB(arr: np.ndarray, name: str) -> np.ndarray:
+        """Coerce a 2D label array to (n_trials, n_bins)."""
+        if arr.shape == (n_trials, n_bins):
+            return arr
+        if arr.shape == (n_bins, n_trials):
+            return arr.T
+        raise ValueError(
+            f"{name} has shape {arr.shape}; expected ({n_trials}, {n_bins}) or transpose."
+        )
+
+    label_cols = []
     for key in label_keys:
         if key == "position":
             label_cols.append(bin_id.astype(float))
         elif key == "lick_rate":
-            lr = raw["lick_rate"]                     # (T, B) post-h5
-            if lr.shape != (n_trials, n_bins):
-                lr = lr.T  # tolerate either orientation
+            lr = _shape_TB(raw["lick_rate"], "lick_rate")
             label_cols.append(lr.reshape(-1))
         elif key == "lick_errors":
-            le = np.asarray(raw["lick_errors"]).ravel()    # (T,)
+            le = np.asarray(raw["lick_errors"]).ravel()
             if le.size != n_trials:
                 le = le[:n_trials]
             label_cols.append(np.repeat(le, n_bins))
         elif key == "velocity":
-            vel = raw["velocity"]
-            if vel.shape != (n_trials, n_bins):
-                vel = vel.T
+            vel = _shape_TB(raw["velocity"], "velocity")
             label_cols.append(vel.reshape(-1))
         else:
             raise KeyError(f"Unknown label key: {key}")
 
     labels = np.column_stack(label_cols)
 
-    # Areas — handle both byte and unicode encodings
-    if "area_labels" in raw:
-        areas_raw = np.asarray(raw["area_labels"]).ravel()
-        areas = np.array([
-            (a.decode("utf-8") if isinstance(a, bytes) else str(a)).strip("\x00")
-            for a in areas_raw
-        ], dtype=object)
-        if areas.size != n_neurons:
-            # area_labels may have been saved as a single concatenated string
-            areas = np.array(["Unknown"] * n_neurons, dtype=object)
+    # Areas — _read_mat_v73 already resolved the cell-of-strings refs.
+    if "area_labels" in raw and np.asarray(raw["area_labels"]).size == n_neurons:
+        areas = np.asarray(raw["area_labels"], dtype=object).ravel()
     else:
         areas = np.array(["Unknown"] * n_neurons, dtype=object)
 
@@ -408,12 +436,20 @@ def fit_multisession(
     cons_labels = [Y[:, target_idx] for Y in Ys]
     dataset_ids = [f"Mouse{md.mouse_id}" for md in mice]
 
-    scores, pairs, subjects = cebra_metrics.consistency_score(
-        embeddings=embeddings,
-        labels=cons_labels,
-        dataset_ids=dataset_ids,
-        between="datasets",
-    )
+    if _cebra_consistency_score is not None:
+        try:
+            scores, pairs, subjects = _cebra_consistency_score(
+                embeddings=embeddings,
+                labels=cons_labels,
+                dataset_ids=dataset_ids,
+                between="datasets",
+            )
+        except Exception as e:
+            logging.warning("consistency_score failed: %s. Skipping.", e)
+            scores, pairs, subjects = np.array([]), [], dataset_ids
+    else:
+        logging.warning("cebra consistency_score not importable in this CEBRA version. Skipping.")
+        scores, pairs, subjects = np.array([]), [], dataset_ids
 
     return {
         "model": model,
@@ -583,9 +619,9 @@ if __name__ == "__main__":
     cfg = CebraConfig(
         data_dir=Path("./cebra_data"),
         out_dir=Path("./cebra_results"),
-        n_animals=8,
+        n_animals=16,                         # all task mice; missing files skipped
         seed=42,
         label_keys=("position", "lick_rate", "lick_errors"),
-        area_subsets=("all", "DMS", "DLS", "ACC"),
+        area_subsets=("all", "DMS", "DLS", "ACC", "V1"),
     )
     run(cfg)

@@ -108,10 +108,14 @@ else
         trial_lick_fractions = cellfun(calc_frac, trial_lick_positions);
         
         % 5. Neural Data Re-binning
+        % CA1/DG added 2026-05-08 alongside the existing V1 path. Other
+        % active scripts read these fields via cfg.area_field_map.
         is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
         is_dls = strcmp(all_data(ianimal).final_areas, 'DLS');
         is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
-        is_v1  = strcmp(all_data(ianimal).final_areas, 'V1'); % NEW: V1 logical
+        is_v1  = strcmp(all_data(ianimal).final_areas, 'V1');
+        is_ca1 = strcmp(all_data(ianimal).final_areas, 'CA1');
+        is_dg  = strcmp(all_data(ianimal).final_areas, 'DG');
         
         % Helper for slicing spikes
         slice_spikes = @(spikes) arrayfun(@(s,e) spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
@@ -287,7 +291,9 @@ else
         preprocessed_data(ianimal).is_dms = is_dms;
         preprocessed_data(ianimal).is_dls = is_dls;
         preprocessed_data(ianimal).is_acc = is_acc;
-        preprocessed_data(ianimal).is_v1  = is_v1; % NEW
+        preprocessed_data(ianimal).is_v1  = is_v1;
+        preprocessed_data(ianimal).is_ca1 = is_ca1;   % NEW (2026-05-08)
+        preprocessed_data(ianimal).is_dg  = is_dg;    % NEW
         
         preprocessed_data(ianimal).binned_spikes_trials = binned_spikes_trials;
         preprocessed_data(ianimal).npx_times_trials = npx_times_trials;
