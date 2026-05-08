@@ -19,6 +19,61 @@ _Audit completed 2026-05-07. Covers all `.m` files in active code paths, the `Pr
 - Moved `MutualInformationStriatum.m` (v1 plug-in MI) and `StriatumTaskControl_IntegratedAnalysis.m` (subset of `IntegratedAll_v1.m`) into `legacy/`. Active versions of MI (v2 with bias correction) and the integrated analysis (v1 with three groups) remain in the active folder.
 - Committed all of the above to `main`.
 
+**2026-05-08 seventh pass — CA1 + DG added; area handling generalised:**
+
+CA1 (3 mice: 1212, 1206, 1201) and DG (same 3 mice) added. `RawData/Neuropixels_V1_Depth_Data.csv` extended with `CA1 Start`, `CA1 End`, `DG Start`, `DG End` columns. Mice 1106 and 1105 have only RHP/SC/LP annotations in `V1_depth.txt`, no explicit CA1 or DG, so those rows are blank.
+
+Generalisation work to make future area additions cheap:
+
+- `project_cfg.m` — `cfg.areas`, `cfg.area_field_map`, `cfg.area_colors`, `cfg.area_pairs` all extended. The new addition recipe is documented inline: edit the CSV + add an entry here. 15 area pairs now (n=6).
+- `is_area_safe.m` — generalised version of `is_v1_safe.m`. Handles any area name. `is_v1_safe` retained as a thin wrapper so existing callers don't break.
+- `OrganiseStriatumDataIncV1.m` — refactored to parse arbitrary `<Area>Start` / `<Area>End` columns from the CSV via header-name inspection. The probe-2 area assignment now loops over whichever areas the CSV declares. Per-area mean FR fields (`average_<Area>_fr`) and the visualisation block also generalised.
+- `reorganize_spikes_by_area.m` — now driven by `cfg.areas` (or an optional `area_order` arg). No more hardcoded V1 strcmp.
+- `ProcessStriatumTask.m` — adds `is_ca1` and `is_dg` to `preprocessed_data`. The deeper per-area dimensionality / cross-area correlation blocks (V1-specific) are NOT extended for CA1/DG; they're nice-to-have plotting and not load-bearing for the main analyses. Easy to extend later if needed.
+- `Run_TCA_pipeline.m` — area lists, area_field_map, and per-area colour palette now pulled from `project_cfg()`. The TCA + plotting flags are unchanged.
+- `IntegratedAll_v1.m` — `areas` extended to `{dms, dls, acc, v1, ca1, dg, all}` (n=7); `cond_names` adds `'No-CA1'` and `'No-DG'` (n=8 conditions); area_colors and cond_colors extended; section-12 unit summary prints CA1/DG counts and FR.
+- `CCA_striatum_spatial_v2.m` — network layout extended with positions for CA1/DG.
+- `SpatioTemporalActivityEvolution.m` — area-only panel sections (lines ~1275/1410/1539) extended to 6 areas. Cell-type-stratified panels (lines 893/1060/1937) intentionally left at 3 areas (V1/CA1/DG have no MSN/FSN/TAN classification — expanding those panels would add empty columns).
+- `summary_numbers.m`, `neurontype_classification.m` — extended.
+
+`buildCombinedTensor.m` was already cfg-driven via `cfg.area_field_map`, so the V1 rescue logic now automatically rescues `is_ca1` and `is_dg` too.
+
+**Required reruns to use CA1 + DG everywhere:**
+
+1. `OrganiseStriatumDataIncV1` (regenerates `all_data.mat` with CA1/DG units in `final_areas` + `final_spikes`)
+2. `ProcessStriatumTask` (regenerates `preprocessed_data.mat` with `is_ca1` + `is_dg` populated)
+3. `save_for_cebra` (regenerates `cebra_data/` with CA1/DG label rows — already cfg-driven)
+4. `Run_TCA_pipeline` → `ensemble_analysis` (TCA pipeline)
+5. The downstream analyses (`CCA_striatum_spatial_v2`, `MutualInformationStriatum_v2`, `Nonlinear_Epoch_Decoding`, `CrossSpatialBinDecoding`, `IntegratedAll_v1`, `SpatioTemporalActivityEvolution`)
+
+Adding *another* area in future (e.g. CA3 or LGN if those become 3+ mice): edit `Neuropixels_V1_Depth_Data.csv` (add 2 columns) and `project_cfg.m` (one entry each in `cfg.areas`, `cfg.area_field_map`, `cfg.area_colors`, plus pairs in `cfg.area_pairs` if cross-area analyses are wanted). Everything driven by `cfg` will pick up the new area; the few scripts that still hardcode area lists (`IntegratedAll_v1` Section 6/7/9, `SpatioTemporal` target_areas) need a one-line append.
+
+**2026-05-07 sixth pass — held-out CCA:**
+
+New helper `held_out_canoncorr.m`. Splits samples 50/50 (seeded), fits `canoncorr` on the train half to learn projections `(A, B)`, projects the held-out half through those projections, and reports the correlation of the projected variates. Returns held-out canonical correlations alongside in-sample for direct comparison.
+
+Wired into `CCA_striatum_spatial_v2.m`:
+
+- Both the trial-wise loop (line ~241) and the bin-wise loop (line ~285) now compute *both* in-sample and held-out canonical correlations. New storage arrays: `cca_tr_held`, `cca_tr_held_shuff`, `cca_bin_held`, `cca_bin_held_shuff` (mirrors of the existing ones).
+- Shuffles use the same train/test split as the real call (via shared seed) so the null is comparable.
+- New `group_results` fields: `all_bins_corr_held`, `all_bins_corr_held_shuff`, `trial_corr_{early,pre,post}_held{,_shuff}`.
+
+The in-sample fields are kept so the new run is directly comparable to the old. Any new figures should plot the held-out values; the in-sample is biased upward and should be flagged as such.
+
+**2026-05-07 fifth pass — statistical rigour for SpatioTemporal:**
+
+Two new helpers in `Striatum project/`:
+
+- `fdr_correct.m` — Benjamini-Hochberg / Benjamini-Yekutieli / Holm correction with NaN-preservation and proper monotone enforcement. Returns adjusted p-values, significance mask, and the surviving raw-p threshold.
+- `annotate_ks_panels_fdr.m` — applies BH-FDR across a row of KS-test panels in a tiled figure and writes the corrected p-values into each panel's text annotation. Centralised the boilerplate that used to repeat at four sites in SpatioTemporalActivityEvolution.
+
+Two correctness improvements to `SpatioTemporalActivityEvolution.m`:
+
+1. **Modulation classifier de-circularised**. Increaser/Decreaser/Maintainer labels are now defined on a *first-half* split of the naive (`1:2`) and expert (`21:25`) epochs. The disjoint second half (`naive_test = 3`, `expert_test = 26:30`) is exposed to downstream callers as held-out trials. Previously labels and tests both used the full epochs, which combined with whole-session z-scoring forced the per-neuron mean to zero and made an Increaser a Decreaser elsewhere by accounting identity. Descriptive plots over full epochs are still drawn (the labels just no longer enter the test by construction).
+2. **FDR correction added to all four KS-test grids**. Per panel, the script now stores `(p_raw, ks_stat)` rather than drawing the significance star inline; after the per-figure area loop, `annotate_ks_panels_fdr` applies BH across the row of panels and writes both raw and FDR-corrected p-values into the panel annotation. Significance stars are now triggered by `p_FDR < 0.05` rather than `p_raw < 0.05`. With four panels per figure (DMS / DLS / ACC / V1) the correction is mild but mathematically defensible.
+
+Same patterns are still pending in `IntegratedAll_v1.m` Section 11 (36 cross-modal scatter tests with hard `p < 0.05` highlighting). Apply `fdr_correct` there next time you touch that section.
+
 **2026-05-07 fourth pass — efficiency + modularity refactor (Phases 1-5):**
 
 Six new reusable helpers in `Striatum project/`:
