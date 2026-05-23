@@ -1,0 +1,21 @@
+[project]
+name = "striatum-cca"
+version = "0.1.0"
+description = "Spatial CCA pipeline for striato-cortical communication across learning"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "h5py>=3.10",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
