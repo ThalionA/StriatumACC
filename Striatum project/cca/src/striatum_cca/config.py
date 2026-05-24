@@ -152,7 +152,7 @@ class Config:
     # "trials" -- permute the trial correspondence (H&H; tests trial-to-trial
     # communication). Committed to "circshift" in round 10: it is the
     # defensible null and flags ~2.6x more significant subspace dimensions.
-    n_shuffles: int = 200
+    n_shuffles: int = 250          # round-14 lock-in: raised 200 -> 250
     surrogate_seed: int = 0
     null_type: str = "circshift"
     circshift_min_bins: int = 15
