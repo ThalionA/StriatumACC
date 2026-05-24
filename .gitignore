@@ -12,3 +12,5 @@
 *.fig
 *.gif
 *.txt
+*.npz
+*.pyc
