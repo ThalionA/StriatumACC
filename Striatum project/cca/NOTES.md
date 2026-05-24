@@ -553,4 +553,10 @@ much the count depends on the null.
 `d_sub` stays 1 for Stage 3: the split-half stability floor sets it, and the
 surrogate (a held-out-CC test, a different measurement) does not change that.
 
+Epoch colours unified with the MATLAB pipeline — `config.EPOCH_COLOURS`
+holds the exact `cfg.plot.colors.epoch_{early,middle,expert}` RGB triplets
+from `Run_TCA_pipeline.m` (naive blue, intermediate orange, expert green);
+every Python plot script imports it so figures match across both halves of
+the project.
+
 88 tests; ruff clean.

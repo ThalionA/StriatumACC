@@ -68,6 +68,16 @@ FS_TYPE_CODE = 2
 # intermediate = the 10 trials ending at LP, expert = the 10 after LP.
 EPOCH_NAMES: tuple[str, str, str] = ("naive", "intermediate", "expert")
 
+# Epoch plotting colours, kept byte-identical to the MATLAB pipeline
+# (cfg.plot.colors.epoch_{early,middle,expert} in Run_TCA_pipeline.m) so that
+# figures are colour-consistent across the MATLAB and Python halves of the
+# project. Single source of truth -- every Python plot script imports this.
+EPOCH_COLOURS: dict[str, tuple[float, float, float]] = {
+    "naive": (0.298, 0.447, 0.690),          # epoch_early  (blue)
+    "intermediate": (0.867, 0.518, 0.322),   # epoch_middle (orange)
+    "expert": (0.333, 0.776, 0.333),         # epoch_expert (green)
+}
+
 
 @dataclass(frozen=True)
 class Config:

@@ -44,8 +44,7 @@ from striatum_cca import config  # noqa: E402
 
 EPOCHS = config.EPOCH_NAMES                       # naive, intermediate, expert
 EPOCH_LABEL = ["naive", "inter", "expert"]
-EPOCH_COLOUR = {"naive": "tab:blue", "intermediate": "tab:green",
-                "expert": "tab:red"}
+EPOCH_COLOUR = config.EPOCH_COLOURS               # consistent with MATLAB
 ALPHA = 0.05
 TAG = "committed"
 RESULTS_PKL = config.RESULTS_DIR / "stage2_committed_circshift.pkl"

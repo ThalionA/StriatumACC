@@ -40,8 +40,7 @@ from striatum_cca import config, dataio, pipeline  # noqa: E402
 
 CFG = config.DEFAULT
 EPOCHS = config.EPOCH_NAMES
-EPOCH_COLOUR = {"naive": "tab:blue", "intermediate": "tab:green",
-                "expert": "tab:red"}
+EPOCH_COLOUR = config.EPOCH_COLOURS               # consistent with MATLAB
 RESULTS_PKL = config.RESULTS_DIR / "stage3_committed.pkl"
 
 _ZCACHE: dict[tuple[int, str], np.ndarray] = {}
