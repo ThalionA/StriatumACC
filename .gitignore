@@ -12,3 +12,10 @@
 *.fig
 *.gif
 *.txt
+*.csv
+*.xlsx
+*.pkl
+*.npz
+*.done
+*.pyc
+*.npz
