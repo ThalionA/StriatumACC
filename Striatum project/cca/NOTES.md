@@ -685,3 +685,24 @@ CA1-ACC and CA1-V1 are marginal (p ~ 0.06-0.07). The per-animal RM-ANOVA
 finds nothing significant -- unsurprising at n = 1-7 animals per pair.
 
 All Stage-2 figures re-rendered at 250 surrogates. 114 tests; ruff clean.
+
+## 2026-05-24 — round 16 (epoch stats onto the CC and IFI figures)
+
+The round-15 `epoch_anova.py` drew its own per-animal trajectory figures,
+which looked unlike the per-dimension box plots in `plot_stage2.py` even
+though both used the same pkl. Fix: the epoch stats now live *on* the Stage-2
+CC and IFI figures, computed on exactly the per-dimension arrays those box
+plots show -- so the test always matches the figure.
+
+`plot_stage2.py` -- `plot_comm_strength` and every `plot_ifi_window` panel now
+carry the per-epoch vs-0 star (Wilcoxon, unchanged) and, in the title, the
+one-way ANOVA omnibus p across the three epochs plus the three Tukey HSD
+post-hoc p-values (naive-inter, inter-expert, naive-expert), all over the
+significant dimensions. The old naive->expert paired/unpaired line is dropped
+-- superseded by the Tukey naive-expert cell.
+
+`epoch_anova.py` trimmed to a CSV-only stats table; its redundant per-animal
+trajectory figures removed. `epoch_stats_<variant>.csv` remains the full
+record and the only home for the per-animal repeated-measures ANOVA.
+
+114 tests; ruff clean.

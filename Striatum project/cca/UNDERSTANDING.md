@@ -211,6 +211,15 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v16 (round 16: epoch stats onto the CC/IFI figures).** The
+  per-significant-dimension one-way ANOVA + Tukey HSD now annotate the
+  Stage-2 CC and IFI panel titles directly (`plot_stage2.py`), computed on
+  the exact box-plot data so the test always matches the figure; the
+  per-epoch vs-0 Wilcoxon star is kept. The old naive->expert paired/unpaired
+  comparison is dropped (the Tukey naive-expert cell supersedes it).
+  `epoch_anova.py` is now a CSV-only table (per-dim + per-animal RM-ANOVA);
+  its redundant trajectory figures removed. 114 tests; ruff clean. Full log
+  in NOTES.md (round 16).
 - **2026-05-24 — v15 (round 15: epoch ANOVA).** New `epoch_stats.py` --
   one-way repeated-measures ANOVA (`rm_anova`) and Holm step-down correction
   (`holm`), the pieces scipy lacks. `scripts/epoch_anova.py` tests the epoch

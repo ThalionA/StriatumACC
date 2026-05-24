@@ -61,8 +61,7 @@ def _configure(variant):
         TAG = "committed_partial"
         RESULTS_PKL = (config.RESULTS_DIR
                        / "stage2_committed_circshift_partial.pkl")
-        SUBTITLE = ("committed config, circshift null, partial -- "
-                    "all other recorded areas removed")
+        SUBTITLE = "committed config, circshift null, partial CCA"
 
 
 # --- data access -------------------------------------------------------------
@@ -90,15 +89,6 @@ def pooled(rs, epoch, kind, window=0):
     if not rs:
         return np.array([])
     return np.concatenate([dim_values(r, epoch, kind, window) for r in rs])
-
-
-def per_pair(rs, epoch, kind, window=0):
-    """Per-animal mean over significant dims; NaN where an animal has none."""
-    out = []
-    for r in rs:
-        v = dim_values(r, epoch, kind, window)
-        out.append(float(np.nanmean(v)) if v.size else np.nan)
-    return np.array(out)
 
 
 # --- statistics --------------------------------------------------------------
@@ -181,12 +171,27 @@ def _star_vs0(ax, per_epoch):
                     fontsize=14, ha="center")
 
 
-def _change_p(rs, per_epoch, kind, window=0):
-    """Naive-vs-expert paired and unpaired p-values."""
-    pp = _paired(per_pair(rs, "naive", kind, window),
-                 per_pair(rs, "expert", kind, window))
-    up = _unpaired(per_epoch[0], per_epoch[2])
-    return pp, up
+def _anova(per_epoch):
+    """One-way ANOVA across epochs + Tukey HSD post-hoc.
+
+    Runs on ``per_epoch`` -- the exact three significant-dimension arrays the
+    box plot shows -- so the test always matches the figure. Returns
+    ``(omnibus_p, (naive-inter, inter-expert, naive-expert))``.
+    """
+    groups = [v[np.isfinite(v)] for v in per_epoch]
+    if min(g.size for g in groups) < 2:
+        return np.nan, (np.nan, np.nan, np.nan)
+    omnibus = float(stats.f_oneway(*groups).pvalue)
+    th = stats.tukey_hsd(*groups).pvalue
+    return omnibus, (float(th[0, 1]), float(th[1, 2]), float(th[0, 2]))
+
+
+def _stat_title(pair, n_animals, n_dims, anova_p, tukey):
+    """Two-line panel title: cohort line, then the ANOVA + Tukey line."""
+    tk = "  ".join(f"{lab} {_fmt_p(p)}"
+                   for lab, p in zip(("n-i", "i-e", "n-e"), tukey))
+    return (f"{pair}  n={n_animals}  {n_dims}d\n"
+            f"ANOVA p={_fmt_p(anova_p)}   Tukey {tk}")
 
 
 # --- figures -----------------------------------------------------------------
@@ -199,14 +204,15 @@ def plot_comm_strength(results):
         _box_by_epoch(ax, per_epoch)
         ax.axhline(0, color="k", lw=0.6)
         _star_vs0(ax, per_epoch)
-        pp, up = _change_p(rs, per_epoch, "cc")
+        anova_p, tukey = _anova(per_epoch)
         n = sum(v.size for v in per_epoch)
-        ax.set_title(f"{ax_x}-{ax_y}  n={len(rs)} {n}d  "
-                     f"n->e pair={_fmt_p(pp)} unp={_fmt_p(up)}", fontsize=8)
+        ax.set_title(_stat_title(f"{ax_x}-{ax_y}", len(rs), n, anova_p, tukey),
+                     fontsize=7.5)
     for ax in axes[::5]:
         ax.set_ylabel("held-out CC (significant dims)")
-    fig.suptitle(f"Stage 2 -- communication strength across learning "
-                 f"({SUBTITLE}; '*' CC!=0; learners)")
+    fig.suptitle(f"Stage 2 -- communication strength ({SUBTITLE}; learners) "
+                 f"-- '*' CC!=0 per epoch (Wilcoxon); ANOVA + Tukey HSD over "
+                 f"significant dims", fontsize=10)
     _save(fig, "stage2_comm_strength")
 
 
@@ -272,14 +278,15 @@ def plot_ifi_window(results, window):
         ax.axhline(0, color="k", lw=0.6)
         ax.set_ylim(-1.05, 1.05)
         _star_vs0(ax, per_epoch)
-        pp, up = _change_p(rs, per_epoch, "ifi", window)
+        anova_p, tukey = _anova(per_epoch)
         n = sum(v.size for v in per_epoch)
-        ax.set_title(f"{ax_x}-{ax_y}  n={len(rs)} {n}d  "
-                     f"n->e pair={_fmt_p(pp)} unp={_fmt_p(up)}", fontsize=8)
+        ax.set_title(_stat_title(f"{ax_x}-{ax_y}", len(rs), n, anova_p, tukey),
+                     fontsize=7.5)
     for ax in axes[::5]:
         ax.set_ylabel("IFI  (+ve: X leads Y)")
     fig.suptitle(f"Stage 2 -- Information Flow Index, |lag| <= {window} bins "
-                 f"({SUBTITLE}; '*' IFI!=0; learners)")
+                 f"({SUBTITLE}; learners) -- '*' IFI!=0 per epoch (Wilcoxon); "
+                 f"ANOVA + Tukey HSD over significant dims", fontsize=10)
     _save(fig, f"stage2_ifi_win{window:02d}")
 
 

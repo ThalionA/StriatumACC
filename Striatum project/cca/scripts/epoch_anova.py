@@ -1,17 +1,21 @@
-"""Epoch ANOVA for communication strength (CC) and the Information Flow Index.
+"""Epoch ANOVA table for communication strength (CC) and the IFI.
 
-Tests whether held-out CC and the IFI (|lag| <= 10 bins) change across the
-three epochs (naive / intermediate / expert), per area pair, two ways:
+Writes the full epoch-effect statistics table for the committed analysis. For
+held-out CC and the IFI (|lag| <= 10 bins), per area pair, the epoch effect is
+tested two ways:
 
-  * per significant dimension -- one-way ANOVA across epochs (scipy f_oneway)
-    + Tukey HSD post-hoc + a linear trend (value vs epoch index 0/1/2);
+  * per significant dimension -- one-way ANOVA (scipy f_oneway) + Tukey HSD
+    post-hoc + a linear trend (value vs epoch index 0/1/2);
   * per learner animal -- one-way repeated-measures ANOVA
     (epoch_stats.rm_anova) + paired-t post-hoc with Holm correction
     + a per-animal linear trend (one-sample t on the per-animal slopes).
 
-Reads the committed Stage-2 pkl (partial CCA by default; --variant plain for
-the plain pipeline). Writes figures/epoch_stats_<variant>.csv (the full table)
-and figures/epoch_anova_{cc,ifi}_<variant>.png.
+The per-significant-dimension ANOVA + Tukey HSD are drawn directly on the
+Stage-2 CC and IFI figures (plot_stage2.py); this script is the full numeric
+record -- and the only home for the per-animal repeated-measures test.
+
+Reads the committed Stage-2 pkl (partial CCA by default). Writes
+figures/epoch_stats_<variant>.csv.
 
 Run:  python scripts/epoch_anova.py [--variant plain|partial]
 """
@@ -25,25 +29,17 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
-import matplotlib  # noqa: E402
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from scipy import stats  # noqa: E402
 
 from striatum_cca import config, epoch_stats  # noqa: E402
 
 EPOCHS = config.EPOCH_NAMES
-EPOCH_LABEL = ["naive", "inter", "expert"]
 EPOCH_IDX = np.arange(3, dtype=float)
-EPOCH_COLOUR = config.EPOCH_COLOURS
 ALPHA = 0.05
 IFI_WINDOW = 10
-METRICS = {"cc": "held-out CC", "ifi": f"IFI (|lag| <= {IFI_WINDOW} bins)"}
-
+METRICS = ("cc", "ifi")
 VARIANT_PKL = {"plain": "stage2_committed_circshift.pkl",
                "partial": "stage2_committed_circshift_partial.pkl"}
 
@@ -131,64 +127,6 @@ def per_animal_stats(mat):
     return out
 
 
-def _fmt(p):
-    return f"{p:.3f}" if np.isfinite(p) else "n/a"
-
-
-# --- figure ------------------------------------------------------------------
-def _bracket(ax, x0, x1, y, p):
-    """Significance bracket between two epochs when post-hoc p < ALPHA."""
-    if not (np.isfinite(p) and p < ALPHA):
-        return
-    ax.plot([x0, x0, x1, x1], [y, y + 0.02, y + 0.02, y], color="k", lw=0.8,
-            transform=ax.get_xaxis_transform(), clip_on=False)
-    ax.text((x0 + x1) / 2, y + 0.03, "*", ha="center", va="bottom", fontsize=11,
-            transform=ax.get_xaxis_transform(), clip_on=False)
-
-
-def plot_metric(results, metric, variant):
-    """2 x 5 pair grid: per-animal epoch trajectories + trend + ANOVA p."""
-    fig, axes = plt.subplots(2, 5, figsize=(16, 6.8))
-    axes = axes.ravel()
-    for ax, (area_x, area_y) in zip(axes, config.PAIRS):
-        learners = learner_pairs(results, area_x, area_y)
-        mat = per_animal_matrix(learners, metric)
-        ds = per_dim_stats(per_dim_groups(learners, metric))
-        as_ = per_animal_stats(mat)
-        for i in range(mat.shape[0]):                       # per-animal lines
-            ax.plot(EPOCH_IDX, mat[i], "-", color="0.8", lw=0.7, zorder=1)
-        if mat.shape[0]:
-            mean = mat.mean(axis=0)
-            sem = mat.std(axis=0) / np.sqrt(mat.shape[0])
-            ax.plot(EPOCH_IDX, mean, "-", color="0.45", lw=1.4, zorder=2)
-            for j, epoch in enumerate(EPOCHS):
-                ax.errorbar(j, mean[j], yerr=sem[j], fmt="o", ms=8,
-                            color=EPOCH_COLOUR[epoch], capsize=3, zorder=3)
-            mid = mean.mean()                               # per-animal trend
-            if np.isfinite(as_["slope"]):
-                ax.plot(EPOCH_IDX, mid + as_["slope"] * (EPOCH_IDX - 1),
-                        "--", color="k", lw=1.0, zorder=2)
-            for k, (a, b) in enumerate(((0, 1), (1, 2), (0, 2))):
-                _bracket(ax, a, b, 0.84 + 0.06 * k, ds["tukey"][k])
-        ax.set_xticks(EPOCH_IDX)
-        ax.set_xticklabels(EPOCH_LABEL)
-        ax.set_xlim(-0.4, 2.4)
-        ax.set_title(f"{area_x}-{area_y}  n={as_['n']}\n"
-                     f"dim p={_fmt(ds['p'])}  RM p={_fmt(as_['p'])}  "
-                     f"trend p={_fmt(as_['slope_p'])}", fontsize=7.5)
-    for ax in axes[::5]:
-        ax.set_ylabel(METRICS[metric])
-    fig.suptitle(f"Epoch ANOVA -- {METRICS[metric]} across learning "
-                 f"({variant} CCA, committed config; per-animal trajectories, "
-                 f"mean +/- SEM; '*' Tukey p<0.05 over dimensions)")
-    fig.tight_layout()
-    config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    path = config.FIGURES_DIR / f"epoch_anova_{metric}_{variant}.png"
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-    print(f"saved {path}")
-
-
 # --- csv ---------------------------------------------------------------------
 COLS = ["pair", "metric", "n_dim_naive", "n_dim_inter", "n_dim_expert",
         "n_animals", "anova_dim_F", "anova_dim_p", "tukey_ni_p", "tukey_ie_p",
@@ -199,8 +137,10 @@ COLS = ["pair", "metric", "n_dim_naive", "n_dim_inter", "n_dim_expert",
 
 def _round(v):
     if isinstance(v, float):
+        if np.isnan(v):
+            return ""
         if not np.isfinite(v):
-            return "" if np.isnan(v) else ("inf" if v > 0 else "-inf")
+            return "inf" if v > 0 else "-inf"
         return round(v, 5)
     return v
 
@@ -217,6 +157,7 @@ def write_csv(results, variant):
                 ds["F"], ds["p"], *ds["tukey"], ds["slope"], ds["slope_p"],
                 as_["F"], as_["p"], *as_["posthoc"], as_["slope"],
                 as_["slope_p"]])
+    config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     path = config.FIGURES_DIR / f"epoch_stats_{variant}.csv"
     with open(path, "w", newline="") as fh:
         wr = csv.writer(fh)
@@ -236,9 +177,7 @@ def main():
     with open(path, "rb") as fh:
         results = pickle.load(fh)["results"]
     write_csv(results, variant)
-    for metric in METRICS:
-        plot_metric(results, metric, variant)
-    print("epoch-ANOVA outputs done.")
+    print("epoch-ANOVA table done.")
 
 
 if __name__ == "__main__":
