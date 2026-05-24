@@ -18,6 +18,8 @@ max_trials          = 300;
 trials_per_epoch    = cfg.trials_per_epoch;
 
 cfg.task_data_file     = 'processed_data/preprocessed_data2p5cm.mat';
+cfg.control_data_file  = 'processed_data/preprocessed_data_control2p5cm.mat';
+
 cfg.bin_size_au        = 2;
 n_bins              = cfg.corridor_cm/(cfg.bin_size_au*1.25);
 
@@ -64,7 +66,10 @@ fprintf('Computing temporal binned licks for Control 2 (dark habituation)...\n')
 for i = 1:n_animals_ctrl2
     trialData = control2_data(i).trialData;
     n_trials = trialData.n_trials;
-    temp_licks = nan(n_trials, n_bins);
+    % Match lick binning to the neural bin count of this Control 2
+    % mouse (controls use coarser bins than the task — 2026-05-24 patch).
+    n_bins_ctrl2 = size(control2_data(i).firing_rates_per_bin, 2);
+    temp_licks = nan(n_trials, n_bins_ctrl2);
     
     for itrial = 1:n_trials
         times_in_trial = trialData.trial_times_zeroed{itrial};
@@ -72,9 +77,9 @@ for i = 1:n_animals_ctrl2
         trial_duration = max(times_in_trial);
         
         if isempty(trial_duration) || trial_duration == 0, continue; end
-        bin_edges = linspace(0, trial_duration, n_bins + 1);
+        bin_edges = linspace(0, trial_duration, n_bins_ctrl2 + 1);
         
-        for ibin = 1:n_bins
+        for ibin = 1:n_bins_ctrl2
             bin_start = bin_edges(ibin);
             bin_end = bin_edges(ibin + 1);
             bin_duration = (bin_end - bin_start) / 1000; % Convert ms to s
@@ -97,6 +102,24 @@ end
 
 groups = {task_data, control1_data, control2_data};
 group_names = {'Task (Spatial)', 'Control 1 (Spatial)', 'Control 2 (Temporal)'};
+
+% --- Per-group bin counts (task is binned finer than the controls) ---
+% The task uses 100 spatial bins, the controls 50. Every bin-indexed
+% array and plot below takes its width from group_n_bins rather than a
+% single global n_bins, so the pipeline is robust to the mismatch.
+% (2026-05-24 patch.)
+group_n_bins = nan(1, 3);
+for g = 1:3
+    for i = 1:numel(groups{g})
+        if g < 3
+            fr = groups{g}(i).spatial_binned_fr_all;
+        else
+            fr = groups{g}(i).firing_rates_per_bin;
+        end
+        group_n_bins(g) = max(group_n_bins(g), size(fr, 2));
+    end
+end
+max_n_bins = max(group_n_bins);
 
 %% 4. Plot Behavioral Evolution: Heatmaps
 fprintf('--- Generating Behavioral Lick Heatmaps ---\n');
@@ -124,8 +147,8 @@ for g = 1:3
         imagesc(ax, lick_rate);
         
         if g < 3
-            xline(cfg.visual_zone_cm/cfg.bin_size_au, 'w--', 'LineWidth', 1.5); 
-            xline(cfg.reward_zone_cm/cfg.bin_size_au, 'w-', 'LineWidth', 1.5);  
+            xline(cfg.visual_zone_cm/cfg.bin_size_au * group_n_bins(g)/n_bins, 'w--', 'LineWidth', 1.5); 
+            xline(cfg.reward_zone_cm/cfg.bin_size_au * group_n_bins(g)/n_bins, 'w-', 'LineWidth', 1.5);  
             xlabel('Spatial Bin');
         else
             xlabel('Temporal Bin');
@@ -403,8 +426,10 @@ fprintf('Extracting behavioral data across yoked epochs...\n');
 epochs = {'Naive', 'Intermediate', 'Expert'};
 n_epochs = length(epochs);
 
-avg_licks = nan(max_animals, n_bins, n_epochs, 3);
-avg_vel   = nan(max_animals, n_bins, n_epochs, 3);
+% Bin-indexed trackers sized to the largest group (see group_n_bins); each
+% group fills only its own 1:nb range (2026-05-24 bin-size patch).
+avg_licks = nan(max_animals, max_n_bins, n_epochs, 3);
+avg_vel   = nan(max_animals, max_n_bins, n_epochs, 3);
 
 for g = 1:3
     curr_data = groups{g};
@@ -424,6 +449,7 @@ for g = 1:3
         
         lick_rate = licks ./ durs;
         lick_rate(isinf(lick_rate)) = nan;
+        nb = size(lick_rate, 2);   % this group's bin count
         
         if g == 1
             lp = learning_points_task(i);
@@ -439,14 +465,15 @@ for g = 1:3
         for e = 1:n_epochs
             idx = epoch_idx{e};
             if ~isempty(idx) && max(idx) <= size(lick_rate, 1)
-                avg_licks(i, :, e, g) = mean(lick_rate(idx, :), 1, 'omitnan');
-                avg_vel(i, :, e, g)   = mean(vel(idx, :), 1, 'omitnan');
+                avg_licks(i, 1:nb, e, g) = mean(lick_rate(idx, :), 1, 'omitnan');
+                avg_vel(i, 1:nb, e, g)   = mean(vel(idx, :), 1, 'omitnan');
             end
         end
     end
 end
 
 % --- Plotting Behaviour (3 Columns with Linked Axes) ---
+% Each group is plotted on its own bin axis; landmarks scale per group.
 figure('Name', 'Behavioural Evolution across Yoked Epochs', 'Position', [100, 100, 1500, 600], 'Color', 'w');
 colors = lines(n_epochs);
 
@@ -454,23 +481,25 @@ ax_lick = gobjects(1, 3);
 ax_vel = gobjects(1, 2);
 
 for g = 1:3
+    n_bins_g = group_n_bins(g);   % this group's bin count
+
     % Lick Rate (Top Row)
     ax_lick(g) = subplot(2, 3, g); hold on; 
     title(sprintf('%s - Lick Rate', group_names{g}));
     h_lines = gobjects(1, n_epochs);
     
     for e = 1:n_epochs
-        valid_data = squeeze(avg_licks(:, :, e, g));
+        valid_data = squeeze(avg_licks(:, 1:n_bins_g, e, g));
         if all(isnan(valid_data(:))), continue; end
         mu = mean(valid_data, 1, 'omitnan');
         se = std(valid_data, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(valid_data), 1));
-        h = shadedErrorBar(1:n_bins, mu, se, 'lineProps', {'Color', colors(e,:), 'LineWidth', 2});
+        h = shadedErrorBar(1:n_bins_g, mu, se, 'lineProps', {'Color', colors(e,:), 'LineWidth', 2});
         if isfield(h, 'mainLine'), h_lines(e) = h.mainLine; end
     end
     
     if g < 3
-        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+        xline(cfg.visual_zone_cm/cfg.bin_size_au * n_bins_g/n_bins, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+        xline(cfg.reward_zone_cm/cfg.bin_size_au * n_bins_g/n_bins, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
         xlabel('Spatial Bin');
     else
         xlabel('Temporal Bin');
@@ -483,15 +512,15 @@ for g = 1:3
         ax_vel(g) = subplot(2, 3, g+3); hold on; 
         title(sprintf('%s - Velocity', group_names{g}));
         for e = 1:n_epochs
-            valid_data = squeeze(avg_vel(:, :, e, g));
+            valid_data = squeeze(avg_vel(:, 1:n_bins_g, e, g));
             if all(isnan(valid_data(:))), continue; end
             mu = mean(valid_data, 1, 'omitnan');
             se = std(valid_data, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(valid_data), 1));
-            shadedErrorBar(1:n_bins, mu, se, 'lineProps', {'Color', colors(e,:), 'LineWidth', 2});
+            shadedErrorBar(1:n_bins_g, mu, se, 'lineProps', {'Color', colors(e,:), 'LineWidth', 2});
         end
         xlabel('Spatial Bin'); ylabel('Velocity (cm/s)');
-        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+        xline(cfg.visual_zone_cm/cfg.bin_size_au * n_bins_g/n_bins, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+        xline(cfg.reward_zone_cm/cfg.bin_size_au * n_bins_g/n_bins, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
     else
         subplot(2, 3, g+3);
         axis off; title('No Velocity (Wheel Blocked)');
@@ -704,9 +733,16 @@ lambda = 1.0;
 cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'No-CA1', 'Shuffle'};
 n_conds = length(cond_names);
 
+% Bin counts differ per group (the task uses finer spatial bins than the
+% controls — 2026-05-24 patch). n_bins_i below is derived per mouse and
+% drives every bin loop/array; bin-indexed trackers are sized to the
+% largest count and each group fills only its own range. Decoder metrics
+% are normalised (RMSE by n_bins, entropy by log2(n_bins)) so the groups
+% stay comparable despite the different binning.
+
 % --- Trackers ---
-bin_pos_err     = nan(max_animals, n_bins, 3, n_conds);
-bin_pos_entropy = nan(max_animals, n_bins, 3, n_conds); 
+bin_pos_err     = nan(max_animals, max_n_bins, 3, n_conds);
+bin_pos_entropy = nan(max_animals, max_n_bins, 3, n_conds); 
 ep_pos_err      = nan(max_animals, n_epochs, trials_per_epoch, 3, n_conds);
 ep_pos_entropy  = nan(max_animals, n_epochs, trials_per_epoch, 3, n_conds); 
 ep_lick_corr    = nan(max_animals, n_epochs, trials_per_epoch, 3, n_conds);
@@ -742,6 +778,21 @@ for g = 1:3
         keep_cells = ~is_area_safe(curr_data(i), 'DG');
         activity = activity(keep_cells, :, :);
         n_cells_total = size(activity, 1);
+
+        % Bin count for THIS mouse — drives every bin loop below, so the
+        % section is robust to task (100 bins) vs controls (50 bins).
+        n_bins_i = size(activity, 2);
+
+        % The lick ridge regresses lick-in-bin-b on neural-in-bin-b, so the
+        % two must share a binning. Skip lick decoding (and warn) for any
+        % mouse where they do not, rather than silently mis-pairing bins.
+        lick_bins_ok = (size(Y_lick, 2) == n_bins_i);
+        if ~lick_bins_ok
+            warning('IntegratedAll:LickBinMismatch', ...
+                    'Group %d mouse %d: %d lick bins vs %d neural bins — skipping lick decoding.', ...
+                    g, i, size(Y_lick, 2), n_bins_i);
+        end
+
         v1_mask  = is_area_safe(curr_data(i), 'V1');
         ca1_mask = is_area_safe(curr_data(i), 'CA1');
         masks = struct('DMS', curr_data(i).is_dms(keep_cells), ...
@@ -772,10 +823,13 @@ for g = 1:3
             n_k_cells = sum(active_mask);
             
             % --- A. Spatial/Temporal Decoding (Poisson ML) ---
+            % RMSE is normalised by n_bins_i (fraction of the decoded axis)
+            % and entropy by log2(n_bins_i), so task/controls stay comparable
+            % despite their different bin counts.
             trial_pos_error     = nan(1, n_tr);
             trial_pos_entropy   = nan(1, n_tr); 
-            trial_bin_errors    = nan(n_tr, n_bins);
-            trial_bin_entropies = nan(n_tr, n_bins); 
+            trial_bin_errors    = nan(n_tr, n_bins_i);
+            trial_bin_entropies = nan(n_tr, n_bins_i); 
             
             for t_test = 1:n_tr
                 tr_train = setdiff(1:n_tr, t_test);
@@ -784,15 +838,15 @@ for g = 1:3
                 
                 if is_shuffle
                     for cell_idx = 1:n_k_cells
-                        lambda_x(cell_idx, :) = lambda_x(cell_idx, randperm(n_bins));
+                        lambda_x(cell_idx, :) = lambda_x(cell_idx, randperm(n_bins_i));
                     end
                 end
                 
                 test_trial_data = cond_data(:, :, t_test); 
-                pred_bins = nan(1, n_bins);
-                bin_entropies = nan(1, n_bins); 
+                pred_bins = nan(1, n_bins_i);
+                bin_entropies = nan(1, n_bins_i); 
                 
-                for b = 1:n_bins
+                for b = 1:n_bins_i
                     r = test_trial_data(:, b); 
                     r(isnan(r)) = 0; 
                     
@@ -804,44 +858,46 @@ for g = 1:3
                     [~, pred_bins(b)] = max(LL);
                 end
                 
-                sq_errors = (pred_bins - (1:n_bins)).^2;
-                trial_pos_error(t_test)     = sqrt(mean(sq_errors, 'omitnan')); 
-                trial_bin_errors(t_test, :) = sqrt(sq_errors); 
-                trial_pos_entropy(t_test)   = mean(bin_entropies, 'omitnan'); 
-                trial_bin_entropies(t_test, :) = bin_entropies; 
+                sq_errors = (pred_bins - (1:n_bins_i)).^2;
+                trial_pos_error(t_test)        = sqrt(mean(sq_errors, 'omitnan')) / n_bins_i; 
+                trial_bin_errors(t_test, :)    = sqrt(sq_errors) / n_bins_i; 
+                trial_pos_entropy(t_test)      = mean(bin_entropies, 'omitnan') / log2(n_bins_i); 
+                trial_bin_entropies(t_test, :) = bin_entropies / log2(n_bins_i); 
             end
             
-            bin_pos_err(i, :, g, c)     = mean(trial_bin_errors, 1, 'omitnan');
-            bin_pos_entropy(i, :, g, c) = mean(trial_bin_entropies, 1, 'omitnan'); 
+            bin_pos_err(i, 1:n_bins_i, g, c)     = mean(trial_bin_errors, 1, 'omitnan');
+            bin_pos_entropy(i, 1:n_bins_i, g, c) = mean(trial_bin_entropies, 1, 'omitnan'); 
             
             % --- B. Lick Pattern Decoding (Bin-by-Bin Log-Link Ridge) ---
             trial_lick_corr = nan(1, n_tr);
-            Y_lick_local = Y_lick;
-            if is_shuffle, Y_lick_local = Y_lick_local(randperm(n_tr), :); end
-            
-            Y_lick_log = log(Y_lick_local + 1); 
-            Y_pred_full = nan(n_tr, n_bins);
-            
-            for b = 1:n_bins
-                X_b = squeeze(cond_data(:, b, 1:n_tr))'; % [Trials x Cells]
-                Y_b = Y_lick_log(:, b);                  % [Trials x 1]
-
-                % Closed-form PRESS LOO ridge with intercept and per-fit
-                % standardisation. Replaces the per-trial setdiff loop.
-                % (2026-05-07; ~10x speedup, behaviour-equivalent within
-                % O(1/n) standardisation drift.)
-                Y_pred_log = loo_ridge_press(X_b, Y_b, lambda);
-                Y_pred_full(:, b) = exp(Y_pred_log) - 1;
-            end
-            
-            for t_test = 1:n_tr
-                actual_licks = Y_lick_local(t_test, :);
-                pred_licks = Y_pred_full(t_test, :);
-                pred_licks(pred_licks < 0) = 0;
+            if lick_bins_ok
+                Y_lick_local = Y_lick;
+                if is_shuffle, Y_lick_local = Y_lick_local(randperm(n_tr), :); end
                 
-                valid_b = ~isnan(pred_licks) & ~isnan(actual_licks);
-                if sum(valid_b) > 3 && var(pred_licks(valid_b)) > 1e-6 && var(actual_licks(valid_b)) > 1e-6
-                    trial_lick_corr(t_test) = corr(pred_licks(valid_b)', actual_licks(valid_b)');
+                Y_lick_log = log(Y_lick_local + 1); 
+                Y_pred_full = nan(n_tr, n_bins_i);
+                
+                for b = 1:n_bins_i
+                    X_b = squeeze(cond_data(:, b, 1:n_tr))'; % [Trials x Cells]
+                    Y_b = Y_lick_log(:, b);                  % [Trials x 1]
+
+                    % Closed-form PRESS LOO ridge with intercept and per-fit
+                    % standardisation. Replaces the per-trial setdiff loop.
+                    % (2026-05-07; ~10x speedup, behaviour-equivalent within
+                    % O(1/n) standardisation drift.)
+                    Y_pred_log = loo_ridge_press(X_b, Y_b, lambda);
+                    Y_pred_full(:, b) = exp(Y_pred_log) - 1;
+                end
+                
+                for t_test = 1:n_tr
+                    actual_licks = Y_lick_local(t_test, :);
+                    pred_licks = Y_pred_full(t_test, :);
+                    pred_licks(pred_licks < 0) = 0;
+                    
+                    valid_b = ~isnan(pred_licks) & ~isnan(actual_licks);
+                    if sum(valid_b) > 3 && var(pred_licks(valid_b)) > 1e-6 && var(actual_licks(valid_b)) > 1e-6
+                        trial_lick_corr(t_test) = corr(pred_licks(valid_b)', actual_licks(valid_b)');
+                    end
                 end
             end
             
@@ -893,44 +949,48 @@ for g = 1:3
     end
     xline([11, 22], 'k:'); xticks(x_ticks_centers_dec); xticklabels(epochs);
     title(sprintf('%s - ML Decoder Error', group_names{g})); 
-    ylabel('RMSE (Bins)'); set(gca, 'YDir', 'reverse');
+    ylabel('Decoding error (fraction of axis)'); set(gca, 'YDir', 'reverse');
     if g == 1 && any(isgraphics(h_lines)), legend(h_lines(isgraphics(h_lines)), cond_names, 'Location', 'best'); end
 end
 linkaxes(ax_dec_err, 'y');
 save_to_svg('Decoding_Evolution_3Groups_Yoked');
 
 % =========================================================================
-% FIGURE B: Spatial Decoding Bin Error (RMSE vs Spatial Bins)
+% FIGURE B: Spatial Decoding Bin Error (Error vs Bins, per-group axis)
 % =========================================================================
 figure('Name', 'Spatial Decoding Error Profile across Corridor', 'Position', [150, 150, 1500, 500], 'Color', 'w');
 ax_bin = gobjects(1, 3);
 for g = 1:3
     ax_bin(g) = subplot(1, 3, g); hold on;
+    n_bins_g = group_n_bins(g);   % this group's bin count (see section 7)
+    if isnan(n_bins_g)
+        title(sprintf('%s - no data', group_names{g})); continue;
+    end
     h_lines = gobjects(1, n_conds);
     
     for c = 1:n_conds
-        data_matrix = squeeze(bin_pos_err(:, :, g, c)); % [Animals x Bins]
+        data_matrix = squeeze(bin_pos_err(:, 1:n_bins_g, g, c)); % [Animals x Bins]
         mu = mean(data_matrix, 1, 'omitnan');
         se = std(data_matrix, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(data_matrix), 1));
         
         if all(isnan(mu)), continue; end
         
-        h = shadedErrorBar(1:n_bins, mu, se, 'lineProps', {'Color', cond_colors(c,:), 'LineWidth', 2});
+        h = shadedErrorBar(1:n_bins_g, mu, se, 'lineProps', {'Color', cond_colors(c,:), 'LineWidth', 2});
         if isfield(h, 'mainLine')
             h_lines(c) = h.mainLine;
         end
     end
     
     if g < 3
-        % Plot landmarks for spatial groups
-        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
-        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        % Landmarks scaled to this group's bin count.
+        xline((cfg.visual_zone_cm/cfg.bin_size_au) * n_bins_g/n_bins, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline((cfg.reward_zone_cm/cfg.bin_size_au) * n_bins_g/n_bins, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
         xlabel('Spatial Bin');
     else
         xlabel('Temporal Bin');
     end
     
-    ylabel('Average RMSE (Bins)');
+    ylabel('Decoding error (fraction of axis)');
     title(sprintf('%s - Error Profile', group_names{g}));
     set(gca, 'YDir', 'reverse');
     if g == 1 && any(isgraphics(h_lines)), legend(h_lines(isgraphics(h_lines)), cond_names, 'Location', 'best'); end
@@ -939,36 +999,40 @@ linkaxes(ax_bin, 'y');
 save_to_svg('Decoding_Spatial_Bin_Error_3Groups');
 
 % =========================================================================
-% FIGURE C: Spatial Certainty Bin Profile (Entropy vs Spatial Bins)
+% FIGURE C: Spatial Certainty Bin Profile (Normalized Entropy vs Bins)
 % =========================================================================
 figure('Name', 'Spatial Certainty Profile across Corridor', 'Position', [150, 100, 1500, 500], 'Color', 'w');
 ax_ent_bin = gobjects(1, 3);
 for g = 1:3
     ax_ent_bin(g) = subplot(1, 3, g); hold on;
+    n_bins_g = group_n_bins(g);
+    if isnan(n_bins_g)
+        title(sprintf('%s - no data', group_names{g})); continue;
+    end
     h_lines = gobjects(1, n_conds);
     
     for c = 1:n_conds
-        data_matrix = squeeze(bin_pos_entropy(:, :, g, c)); % [Animals x Bins]
+        data_matrix = squeeze(bin_pos_entropy(:, 1:n_bins_g, g, c)); % [Animals x Bins]
         mu = mean(data_matrix, 1, 'omitnan');
         se = std(data_matrix, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(data_matrix), 1));
         
         if all(isnan(mu)), continue; end
         
-        h = shadedErrorBar(1:n_bins, mu, se, 'lineProps', {'Color', cond_colors(c,:), 'LineWidth', 2});
+        h = shadedErrorBar(1:n_bins_g, mu, se, 'lineProps', {'Color', cond_colors(c,:), 'LineWidth', 2});
         if isfield(h, 'mainLine')
             h_lines(c) = h.mainLine;
         end
     end
     
     if g < 3
-        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
-        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline((cfg.visual_zone_cm/cfg.bin_size_au) * n_bins_g/n_bins, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline((cfg.reward_zone_cm/cfg.bin_size_au) * n_bins_g/n_bins, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
         xlabel('Spatial Bin');
     else
         xlabel('Temporal Bin');
     end
     
-    ylabel('Shannon Entropy (bits)');
+    ylabel('Normalized entropy (H / log_2 N)');
     title(sprintf('%s - Certainty Profile', group_names{g}));
     set(gca, 'YDir', 'reverse'); % Downward means lower entropy / higher certainty
     if g == 1 && any(isgraphics(h_lines)), legend(h_lines(isgraphics(h_lines)), cond_names, 'Location', 'best'); end
@@ -1145,6 +1209,7 @@ for met_idx = 1:size(metrics, 1)
         ax_spatial = gobjects(3, n_areas);
 
         for g = 1:3
+            n_bins_g = group_n_bins(g);
             for a = 1:n_areas
                 ax_spatial(g, a) = nexttile((g-1)*n_areas + a); hold on;
                 h_lines = gobjects(1, n_epochs);
@@ -1172,13 +1237,13 @@ for met_idx = 1:size(metrics, 1)
                     end
                     
                     if all(isnan(mu)), continue; end
-                    h = shadedErrorBar(1:n_bins, mu, se, 'lineProps', {'Color', epoch_colors(e,:), 'LineWidth', 2});
+                    h = shadedErrorBar(1:n_bins_g, mu, se, 'lineProps', {'Color', epoch_colors(e,:), 'LineWidth', 2});
                     if isfield(h, 'mainLine'), h_lines(e) = h.mainLine; end
                 end
                 
                 if g < 3
-                    xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-                    xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+                    xline(cfg.visual_zone_cm/cfg.bin_size_au * n_bins_g/n_bins, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+                    xline(cfg.reward_zone_cm/cfg.bin_size_au * n_bins_g/n_bins, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
                 end
                 
                 if strcmp(avg_mode, 'Pooled')
