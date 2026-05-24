@@ -509,27 +509,25 @@ fprintf('Computing continuous single-neuron reliability...\n');
 % preserved as the final element regardless of how many real areas exist.
 % To add another area: append to this list, append a colour to
 % area_colors, and extend the masks struct in section 7.
+% Only the z-scored reliability metric is computed/plotted (raw dropped
+% 2026-05-24).
 areas = {'dms', 'dls', 'acc', 'v1', 'ca1', 'all'};
 n_areas = length(areas);
 all_idx = n_areas; % index of the synthetic "all units" pseudo-area
-window_size = 5; 
+window_size = 5;
 half_win = floor(window_size/2);
 min_units = 5;
 
-hier_raw       = nan(max_animals, n_epochs, trials_per_epoch, 3, n_areas);
-hier_z         = nan(max_animals, n_epochs, trials_per_epoch, 3, n_areas);
-hier_raw_shuff = nan(max_animals, n_epochs, trials_per_epoch, 3, n_areas);
-hier_z_shuff   = nan(max_animals, n_epochs, trials_per_epoch, 3, n_areas);
+hier_z       = nan(max_animals, n_epochs, trials_per_epoch, 3, n_areas);
+hier_z_shuff = nan(max_animals, n_epochs, trials_per_epoch, 3, n_areas);
 
-pooled_raw       = cell(3, n_areas);
-pooled_z         = cell(3, n_areas);
-pooled_raw_shuff = cell(3, n_areas);
-pooled_z_shuff   = cell(3, n_areas);
+pooled_z       = cell(3, n_areas);
+pooled_z_shuff = cell(3, n_areas);
 
 for g = 1:3
     curr_data = groups{g};
     for i = 1:numel(curr_data)
-        
+
         if g == 1
             lp = learning_points_task(i);
             if isnan(lp), continue; end
@@ -541,7 +539,7 @@ for g = 1:3
             lp = avg_lp;
             activity_raw = curr_data(i).firing_rates_per_bin;
         end
-        
+
         activity_raw(isnan(activity_raw)) = 0;
         % Drop DG units — excluded from all figures/analyses (2026-05-24).
         keep_cells = ~is_area_safe(curr_data(i), 'DG');
@@ -567,151 +565,137 @@ for g = 1:3
                 activity_z(c, :, :) = 0;
             end
         end
-        
+
         shuff_idx = randperm(n_trials);
-        activity_raw_shuff = activity_raw(:, :, shuff_idx);
-        activity_z_shuff   = activity_z(:, :, shuff_idx);
-        
-        stab_raw       = nan(n_cells_total, n_trials);
-        stab_z         = nan(n_cells_total, n_trials);
-        stab_raw_shuff = nan(n_cells_total, n_trials);
-        stab_z_shuff   = nan(n_cells_total, n_trials);
-        
+        activity_z_shuff = activity_z(:, :, shuff_idx);
+
+        stab_z       = nan(n_cells_total, n_trials);
+        stab_z_shuff = nan(n_cells_total, n_trials);
+
         % Vectorised per-cell triu-corr-mean (2026-05-07). ~50-100x faster
         % than the previous nested for-loop. See batch_triu_corr_mean.m.
         for t = 1:n_trials
             win_idx = max(1, t - half_win) : min(n_trials, t + half_win);
             if length(win_idx) < 2, continue; end
-            stab_raw(:, t)       = batch_triu_corr_mean(activity_raw(:, :, win_idx));
-            stab_z(:, t)         = batch_triu_corr_mean(activity_z(:, :, win_idx));
-            stab_raw_shuff(:, t) = batch_triu_corr_mean(activity_raw_shuff(:, :, win_idx));
-            stab_z_shuff(:, t)   = batch_triu_corr_mean(activity_z_shuff(:, :, win_idx));
+            stab_z(:, t)       = batch_triu_corr_mean(activity_z(:, :, win_idx));
+            stab_z_shuff(:, t) = batch_triu_corr_mean(activity_z_shuff(:, :, win_idx));
         end
-        
+
         epoch_idx = cell(1, n_epochs);
         if n_trials >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
         if ~isnan(lp) && lp > trials_per_epoch && lp <= n_trials, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
         if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_trials, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
-        
-        ep_raw       = nan(n_cells_total, n_epochs, trials_per_epoch);
-        ep_z         = nan(n_cells_total, n_epochs, trials_per_epoch);
-        ep_raw_shuff = nan(n_cells_total, n_epochs, trials_per_epoch);
-        ep_z_shuff   = nan(n_cells_total, n_epochs, trials_per_epoch);
-        
+
+        ep_z       = nan(n_cells_total, n_epochs, trials_per_epoch);
+        ep_z_shuff = nan(n_cells_total, n_epochs, trials_per_epoch);
+
         for e = 1:n_epochs
             idx = epoch_idx{e};
             if isempty(idx), continue; end
             take_n = min(length(idx), trials_per_epoch);
-            ep_raw(:, e, 1:take_n)       = stab_raw(:, idx(1:take_n));
-            ep_z(:, e, 1:take_n)         = stab_z(:, idx(1:take_n));
-            ep_raw_shuff(:, e, 1:take_n) = stab_raw_shuff(:, idx(1:take_n));
-            ep_z_shuff(:, e, 1:take_n)   = stab_z_shuff(:, idx(1:take_n));
+            ep_z(:, e, 1:take_n)       = stab_z(:, idx(1:take_n));
+            ep_z_shuff(:, e, 1:take_n) = stab_z_shuff(:, idx(1:take_n));
         end
-        
+
         for a = 1:n_areas
             if a == all_idx, area_mask = true(n_cells_total, 1); else, area_mask = masks{a}; end
             if sum(area_mask) < min_units, continue; end
-            
-            hier_raw(i, :, :, g, a)       = mean(ep_raw(area_mask, :, :), 1, 'omitnan');
-            hier_z(i, :, :, g, a)         = mean(ep_z(area_mask, :, :), 1, 'omitnan');
-            hier_raw_shuff(i, :, :, g, a) = mean(ep_raw_shuff(area_mask, :, :), 1, 'omitnan');
-            hier_z_shuff(i, :, :, g, a)   = mean(ep_z_shuff(area_mask, :, :), 1, 'omitnan');
-            
-            pooled_raw{g, a}       = cat(1, pooled_raw{g, a}, ep_raw(area_mask, :, :));
-            pooled_z{g, a}         = cat(1, pooled_z{g, a}, ep_z(area_mask, :, :));
-            pooled_raw_shuff{g, a} = cat(1, pooled_raw_shuff{g, a}, ep_raw_shuff(area_mask, :, :));
-            pooled_z_shuff{g, a}   = cat(1, pooled_z_shuff{g, a}, ep_z_shuff(area_mask, :, :));
+
+            hier_z(i, :, :, g, a)       = mean(ep_z(area_mask, :, :), 1, 'omitnan');
+            hier_z_shuff(i, :, :, g, a) = mean(ep_z_shuff(area_mask, :, :), 1, 'omitnan');
+
+            pooled_z{g, a}       = cat(1, pooled_z{g, a}, ep_z(area_mask, :, :));
+            pooled_z_shuff{g, a} = cat(1, pooled_z_shuff{g, a}, ep_z_shuff(area_mask, :, :));
         end
     end
 end
 
-% --- Save Stability Engines (with Linked Axes) ---
+% --- Plot Stability Engines: one panel per area (rows) x group (columns) ---
+% Z-scored metric only (raw dropped 2026-05-24). Each area — including the
+% 'all units' pseudo-area as the bottom row — gets its own row; the three
+% task/control groups are the columns. Y-axes are linked across the whole
+% grid so areas and groups stay directly comparable.
 agg_modes = {'Hierarchical', 'Pooled'};
-met_modes = {'Raw', 'ZScored'};
-scope_modes = {'WholePopulation', 'ByArea'};
 x_bases_stab = {1:10, 12:21, 23:32};
 x_ticks_centers_stab = [5.5, 16.5, 27.5];
+stab_ylim_top = 0.5;   % cap reliability y-axis — the full auto-range (~1) squishes the data
 area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; ...
                0.4940 0.1840 0.5560; 0.8 0.1 0.2];   % DMS DLS ACC V1 CA1
+all_color = [0 0 0];                                 % 'all units' pseudo-area
 
 for agg = 1:2
-    for met = 1:2
-        for scp = 1:2
-            fig_name = sprintf('Stability_AllGroups_%s_%s_%s', agg_modes{agg}, met_modes{met}, scope_modes{scp});
-            figure('Name', fig_name, 'Position', [150, 100, 1500, 450], 'Color', 'w');
-            
-            if strcmp(scope_modes{scp}, 'WholePopulation')
-                areas_to_plot = all_idx; plot_colors = [0 0 0];
+    fig_name = sprintf('Stability_AllGroups_%s_ZScored', agg_modes{agg});
+    figure('Name', fig_name, 'Position', [120, 60, 1250, 200*n_areas], 'Color', 'w');
+    t_stab = tiledlayout(n_areas, 3, 'TileSpacing', 'compact', 'Padding', 'compact');
+    title(t_stab, sprintf('Single-Neuron Reliability — Z-Scored (%s)', agg_modes{agg}), ...
+          'FontWeight', 'bold', 'FontSize', 14);
+    xlabel(t_stab, 'Epoch');
+
+    ax_stab = gobjects(n_areas, 3);
+    legend_done = false;
+
+    for a = 1:n_areas
+        if a == all_idx, c_color = all_color; else, c_color = area_colors(a, :); end
+
+        for g = 1:3
+            ax_stab(a, g) = nexttile; hold on;
+
+            if strcmp(agg_modes{agg}, 'Hierarchical')
+                data     = squeeze(hier_z(:, :, :, g, a));
+                data_shf = squeeze(hier_z_shuff(:, :, :, g, a));
+                valid_N  = sum(~isnan(data(:, 1, 1)));
             else
-                areas_to_plot = 1:(all_idx-1); plot_colors = area_colors;
+                data     = pooled_z{g, a};
+                data_shf = pooled_z_shuff{g, a};
+                valid_N  = size(data, 1);
             end
-            
-            ax_stab = gobjects(1, 3);
-            for g = 1:3
-                ax_stab(g) = subplot(1, 3, g); hold on;
-                h_lines = gobjects(1, length(areas_to_plot));
-                N_counts = nan(1, length(areas_to_plot));
-                
-                for a_idx = 1:length(areas_to_plot)
-                    a = areas_to_plot(a_idx);
-                    c_color = plot_colors(a_idx, :);
-                    
-                    if strcmp(agg_modes{agg}, 'Hierarchical')
-                        if met == 1
-                            data = squeeze(hier_raw(:, :, :, g, a)); data_shf = squeeze(hier_raw_shuff(:, :, :, g, a));
-                        else
-                            data = squeeze(hier_z(:, :, :, g, a)); data_shf = squeeze(hier_z_shuff(:, :, :, g, a));
-                        end
-                        valid_N = sum(~isnan(data(:, 1, 1)));
-                    else
-                        if met == 1
-                            data = pooled_raw{g, a}; data_shf = pooled_raw_shuff{g, a};
-                        else
-                            data = pooled_z{g, a}; data_shf = pooled_z_shuff{g, a};
-                        end
-                        valid_N = size(data, 1);
+
+            if ~isempty(data) && valid_N > 0
+                h_obs = gobjects(1);
+                h_shf = gobjects(1);
+                for e = 1:n_epochs
+                    ep_data = squeeze(data(:, e, :));
+                    mu = mean(ep_data, 1, 'omitnan');
+                    se = std(ep_data, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(ep_data), 1));
+                    if ~all(isnan(mu))
+                        h = shadedErrorBar(x_bases_stab{e}, mu, se, 'lineProps', {'Color', c_color, 'LineWidth', 2});
+                        if isfield(h, 'mainLine'), h_obs = h.mainLine; end
                     end
-                    
-                    if isempty(data) || valid_N == 0, continue; end
-                    N_counts(a_idx) = valid_N;
-                    first_plotted = false;
-                    
-                    for e = 1:n_epochs
-                        ep_data = squeeze(data(:, e, :));
-                        mu = mean(ep_data, 1, 'omitnan');
-                        se = std(ep_data, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(ep_data), 1));
-                        if ~all(isnan(mu))
-                            h = shadedErrorBar(x_bases_stab{e}, mu, se, 'lineProps', {'Color', c_color, 'LineWidth', 2});
-                            if ~first_plotted && isfield(h, 'mainLine'), h_lines(a_idx) = h.mainLine; first_plotted = true; end
-                        end
-                        
-                        ep_shf = squeeze(data_shf(:, e, :));
-                        mu_shf = mean(ep_shf, 1, 'omitnan');
-                        se_shf = std(ep_shf, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(ep_shf), 1));
-                        if ~all(isnan(mu_shf))
-                            shf_color = c_color; if strcmp(scope_modes{scp}, 'WholePopulation'), shf_color = [0.6 0.6 0.6]; end
-                            shadedErrorBar(x_bases_stab{e}, mu_shf, se_shf, 'lineProps', {'Color', shf_color, 'LineStyle', '--', 'LineWidth', 1.5});
-                        end
+
+                    ep_shf = squeeze(data_shf(:, e, :));
+                    mu_shf = mean(ep_shf, 1, 'omitnan');
+                    se_shf = std(ep_shf, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(ep_shf), 1));
+                    if ~all(isnan(mu_shf))
+                        h = shadedErrorBar(x_bases_stab{e}, mu_shf, se_shf, 'lineProps', {'Color', [0.6 0.6 0.6], 'LineStyle', '--', 'LineWidth', 1.5});
+                        if isfield(h, 'mainLine'), h_shf = h.mainLine; end
                     end
                 end
-                
+                text(0.03, 0.92, sprintf('N=%d', valid_N), 'Units', 'normalized', ...
+                     'FontSize', 8, 'Color', [0.3 0.3 0.3]);
+
                 xline([11, 22], 'k:'); xticks(x_ticks_centers_stab); xticklabels(epochs);
-                title(sprintf('%s - N=%d', group_names{g}, max(N_counts)));
-                ylabel(sprintf('Pearson r (%s)', agg_modes{agg}));
-                
-                if g == 1 && any(isgraphics(h_lines))
-                    if strcmp(scope_modes{scp}, 'WholePopulation')
-                        legend(h_lines(isgraphics(h_lines)), 'All Units', 'Location', 'best');
-                    else
-                        leg_labels = arrayfun(@(x) upper(areas{x}), areas_to_plot, 'UniformOutput', false);
-                        legend(h_lines(isgraphics(h_lines)), leg_labels(isgraphics(h_lines)), 'Location', 'best');
-                    end
+                box on;
+
+                if ~legend_done && isgraphics(h_obs) && isgraphics(h_shf)
+                    legend([h_obs, h_shf], {'Observed', 'Shuffle'}, 'Location', 'best');
+                    legend_done = true;
                 end
+            else
+                text(0.5, 0.5, 'No data', 'Units', 'normalized', ...
+                     'HorizontalAlignment', 'center', 'Color', [0.6 0.6 0.6]);
             end
-            linkaxes(ax_stab, 'y'); % Link Y-axes across groups
-            save_to_svg(fig_name);
+
+            
+
+            if a == 1, title(group_names{g}); end
+            if g == 1, ylabel(sprintf('%s\nPearson r', upper(areas{a})), 'FontWeight', 'bold'); end
         end
     end
+
+    linkaxes(ax_stab, 'y');   % Link Y-axes across the whole grid
+    yl = ylim(ax_stab(1));    % shared auto-range after linking
+    ylim(ax_stab(1), [yl(1), stab_ylim_top]);   % cap the top; propagates via linkaxes
+    save_to_svg(fig_name);
 end
 
 %% 7. Decoding Space/Time & Lick Patterns (Poisson ML + Ridge Log-Link)
@@ -1157,12 +1141,12 @@ for met_idx = 1:size(metrics, 1)
         % FIGURE A: SPATIAL/TEMPORAL TUNING BY AREA AND EPOCH
         % -----------------------------------------------------------------
         figure('Name', sprintf('%s: Spatial', fig_prefix), 'Position', [50, 50, 1500, 900], 'Color', 'w');
-        t_spatial = tiledlayout(3, 3, 'TileSpacing', 'compact', 'Padding', 'compact');
-        ax_spatial = gobjects(3, 3);
-        
+        t_spatial = tiledlayout(3, n_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
+        ax_spatial = gobjects(3, n_areas);
+
         for g = 1:3
             for a = 1:n_areas
-                ax_spatial(g, a) = nexttile((g-1)*3 + a); hold on;
+                ax_spatial(g, a) = nexttile((g-1)*n_areas + a); hold on;
                 h_lines = gobjects(1, n_epochs);
                 mouse_ids = pop_data(g).area(a).mouse_id;
                 unique_mice = unique(mouse_ids);
