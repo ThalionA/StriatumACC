@@ -211,6 +211,15 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v15 (round 15: epoch ANOVA).** New `epoch_stats.py` --
+  one-way repeated-measures ANOVA (`rm_anova`) and Holm step-down correction
+  (`holm`), the pieces scipy lacks. `scripts/epoch_anova.py` tests the epoch
+  effect on held-out CC and IFI(window 10), per pair, two ways: per
+  significant dimension (one-way ANOVA + Tukey HSD) and per learner animal
+  (RM-ANOVA + paired-t/Holm), each with a linear trend. Writes
+  `epoch_stats_<variant>.csv` + `epoch_anova_{cc,ifi}_<variant>.png`. No
+  epoch effect on CC anywhere; a weak DMS-DLS IFI effect (per-dimension
+  p = 0.032). 114 tests; ruff clean. Full log in NOTES.md (round 15).
 - **2026-05-24 — v14 (round 14: lock-in).** Committed configuration frozen.
   `config.DEFAULT.n_shuffles` 200 → 250. Partial CCA made the committed
   default: `run_committed.py` runs partial unless `--plain`, and the four

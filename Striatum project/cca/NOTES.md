@@ -659,3 +659,29 @@ CCA** with:
 250; `--partial` replaced by `--plain` (partial is now the no-flag default).
 All five Stage-2 pkls (plain/partial × FS-excl/incl, plus the trial-null
 comparison run) re-run at 250 surrogates. 107 tests; ruff clean.
+
+## 2026-05-24 — round 15 (epoch ANOVA for CC and IFI)
+
+New `epoch_stats.py` (+ `test_epoch_stats.py`, 7 tests): a one-way
+repeated-measures ANOVA (`rm_anova`) and the Holm step-down correction
+(`holm`) -- the two pieces scipy lacks. `scripts/epoch_anova.py` tests
+whether held-out CC and the IFI (|lag| <= 10 bins) change across the three
+epochs, per area pair, two ways:
+
+- per significant dimension -- one-way ANOVA (scipy `f_oneway`) + Tukey HSD
+  post-hoc + a linear trend (value vs epoch index);
+- per learner animal -- repeated-measures ANOVA + paired-t post-hoc with
+  Holm correction + a per-animal linear trend (one-sample t on the slopes).
+
+Writes `figures/epoch_stats_<variant>.csv` (the full table) and
+`epoch_anova_{cc,ifi}_<variant>.png`; runs for the committed partial pipeline
+and for plain.
+
+Finding (committed = partial CCA): **no epoch effect on CC** -- every
+per-dimension ANOVA p > 0.1; CC is flat across learning, as the rest of the
+project shows. **IFI** shows a weak epoch effect in DMS-DLS only
+(per-dimension ANOVA p = 0.032, Tukey intermediate-vs-expert p = 0.026);
+CA1-ACC and CA1-V1 are marginal (p ~ 0.06-0.07). The per-animal RM-ANOVA
+finds nothing significant -- unsurprising at n = 1-7 animals per pair.
+
+All Stage-2 figures re-rendered at 250 surrogates. 114 tests; ruff clean.
