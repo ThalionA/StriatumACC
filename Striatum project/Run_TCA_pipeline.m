@@ -9,11 +9,12 @@ cfg.control2_data_file = proj.control2_data_file;
 clear proj
 
 % --- Analysis Selection ---
-% Areas + field map are now driven from project_cfg() so adding a new area
-% in future means editing project_cfg.m (and the depth CSV) only.
+% Areas + field map are driven from project_cfg(); DG is then dropped here
+% (excluded from all figures/analyses, 2026-05-24) without touching the
+% shared config, so other pipelines that read project_cfg keep DG.
 cfg.analysis_mode = 'task_only'; % Options: 'task_only', 'control_only', 'task_and_control'
 proj = project_cfg();
-cfg.areas_to_include = proj.areas;
+cfg.areas_to_include = proj.areas(~strcmp(proj.areas, 'DG'));
 cfg.area_field_map   = proj.area_field_map;
 
 % --- Processing Parameters ---
@@ -46,7 +47,6 @@ cfg.plot.colors.dls = proj.area_colors(strcmp(proj.areas, 'DLS'), :);
 cfg.plot.colors.acc = proj.area_colors(strcmp(proj.areas, 'ACC'), :);
 cfg.plot.colors.v1  = proj.area_colors(strcmp(proj.areas, 'V1'),  :);
 cfg.plot.colors.ca1 = proj.area_colors(strcmp(proj.areas, 'CA1'), :);
-cfg.plot.colors.dg  = proj.area_colors(strcmp(proj.areas, 'DG'),  :);
 
 % area_map (containers.Map) keyed by name → colour, driven by proj
 area_color_cells = mat2cell(proj.area_colors, ones(size(proj.area_colors,1),1), 3);

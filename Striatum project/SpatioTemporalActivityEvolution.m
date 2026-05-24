@@ -19,6 +19,28 @@ if ~exist('supermouse_tensor_raw', 'var') || ~exist('combined_labels', 'var')
     end
 end
 
+% --- Drop DG units (excluded from all figures/analyses, 2026-05-24) ---
+% Defensive: applies whether the tensor came from the live workspace or a
+% possibly-stale tca_outputs.mat. Idempotent — a no-op if already DG-free.
+% Subsets every per-neuron field of combined_labels so all labels stay
+% aligned with the tensor's neuron dimension.
+if isfield(combined_labels, 'area_labels_all')
+    dg_mask = strcmp(combined_labels.area_labels_all, 'DG');
+    if any(dg_mask)
+        n_neurons = numel(combined_labels.area_labels_all);
+        keep = ~dg_mask;
+        supermouse_tensor_raw = supermouse_tensor_raw(keep, :, :);
+        label_fields = fieldnames(combined_labels);
+        for k = 1:numel(label_fields)
+            v = combined_labels.(label_fields{k});
+            if isvector(v) && numel(v) == n_neurons
+                combined_labels.(label_fields{k}) = v(keep);
+            end
+        end
+        fprintf('Dropped %d DG units (DG excluded from all analyses).\n', sum(dg_mask));
+    end
+end
+
 % --- 1. Prepare Full Clean Data (Pre-subsampling) ---
 neuron_has_nan = squeeze(any(isnan(supermouse_tensor_raw), [2, 3]));
 valid_idx = ~neuron_has_nan;
@@ -1272,7 +1294,7 @@ v_zone = cfg.plot.zone_params.visual_zones_au / bin_size;
 r_zone = cfg.plot.zone_params.reward_zone_au / bin_size;
 n_bins = size(tensor_full_z, 2);
 
-target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};   % CA1/DG added 2026-05-08
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};   % CA1 added 2026-05-08; DG dropped 2026-05-24
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1407,7 +1429,7 @@ end
 epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.epoch_names{3}};
 n_trials_total = size(tensor_full_z, 3);
 
-target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};   % CA1/DG added 2026-05-08
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};   % CA1 added 2026-05-08; DG dropped 2026-05-24
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 
@@ -1536,7 +1558,7 @@ epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.e
 n_bins         = size(tensor_full_z, 2);
 n_trials_total = size(tensor_full_z, 3);
 
-target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};   % CA1/DG added 2026-05-08
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};   % CA1 added 2026-05-08; DG dropped 2026-05-24
 num_areas = length(target_areas);
 datasets = {1, 'Task'; 2, 'Control'};
 

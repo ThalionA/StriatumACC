@@ -504,11 +504,12 @@ save_to_svg('Behavioural_Evolution_3Groups_Yoked');
 
 %% 6. Trial-to-Trial Correlation (Neural Single-Neuron Reliability)
 fprintf('Computing continuous single-neuron reliability...\n');
-% V1/CA1/DG added (2026-05-07/08). 'all' stays last so the "All Units"
-% semantics are preserved as the final element regardless of how many
-% real areas exist. To add another area: append to this list, append a
-% colour to area_colors, and extend the masks struct in section 7.
-areas = {'dms', 'dls', 'acc', 'v1', 'ca1', 'dg', 'all'};
+% V1/CA1 added (2026-05-07/08); DG dropped 2026-05-24 (excluded from all
+% figures/analyses). 'all' stays last so the "All Units" semantics are
+% preserved as the final element regardless of how many real areas exist.
+% To add another area: append to this list, append a colour to
+% area_colors, and extend the masks struct in section 7.
+areas = {'dms', 'dls', 'acc', 'v1', 'ca1', 'all'};
 n_areas = length(areas);
 all_idx = n_areas; % index of the synthetic "all units" pseudo-area
 window_size = 5; 
@@ -542,12 +543,18 @@ for g = 1:3
         end
         
         activity_raw(isnan(activity_raw)) = 0;
+        % Drop DG units — excluded from all figures/analyses (2026-05-24).
+        keep_cells = ~is_area_safe(curr_data(i), 'DG');
+        activity_raw = activity_raw(keep_cells, :, :);
         n_trials = size(activity_raw, 3);
         n_cells_total = size(activity_raw, 1);
-        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, ...
-                 is_area_safe(curr_data(i), 'V1'), ...
-                 is_area_safe(curr_data(i), 'CA1'), ...
-                 is_area_safe(curr_data(i), 'DG')};
+        v1_mask  = is_area_safe(curr_data(i), 'V1');
+        ca1_mask = is_area_safe(curr_data(i), 'CA1');
+        masks = {curr_data(i).is_dms(keep_cells), ...
+                 curr_data(i).is_dls(keep_cells), ...
+                 curr_data(i).is_acc(keep_cells), ...
+                 v1_mask(keep_cells), ...
+                 ca1_mask(keep_cells)};
 
         activity_z = nan(size(activity_raw));
         for c = 1:n_cells_total
@@ -625,7 +632,7 @@ scope_modes = {'WholePopulation', 'ByArea'};
 x_bases_stab = {1:10, 12:21, 23:32};
 x_ticks_centers_stab = [5.5, 16.5, 27.5];
 area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; ...
-               0.4940 0.1840 0.5560; 0.8 0.1 0.2; 0.2 0.7 0.7];   % DMS DLS ACC V1 CA1 DG
+               0.4940 0.1840 0.5560; 0.8 0.1 0.2];   % DMS DLS ACC V1 CA1
 
 for agg = 1:2
     for met = 1:2
@@ -710,7 +717,7 @@ end
 %% 7. Decoding Space/Time & Lick Patterns (Poisson ML + Ridge Log-Link)
 fprintf('Running Spatial/Temporal ML Decoding and Lick Ridge... \n');
 lambda = 1.0; 
-cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'No-CA1', 'No-DG', 'Shuffle'};
+cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'No-CA1', 'Shuffle'};
 n_conds = length(cond_names);
 
 % --- Trackers ---
@@ -746,13 +753,18 @@ for g = 1:3
         activity(isnan(activity)) = 0;
         Y_lick(isinf(Y_lick)) = nan;
         Y_lick(Y_lick > quantile(Y_lick(:), 0.99)) = quantile(Y_lick(:), 0.99);
-        
+
+        % Drop DG units — excluded from all figures/analyses (2026-05-24).
+        keep_cells = ~is_area_safe(curr_data(i), 'DG');
+        activity = activity(keep_cells, :, :);
         n_cells_total = size(activity, 1);
-        masks = struct('DMS', curr_data(i).is_dms, 'DLS', curr_data(i).is_dls, ...
-                       'ACC', curr_data(i).is_acc, ...
-                       'V1',  is_area_safe(curr_data(i), 'V1'), ...
-                       'CA1', is_area_safe(curr_data(i), 'CA1'), ...
-                       'DG',  is_area_safe(curr_data(i), 'DG'));
+        v1_mask  = is_area_safe(curr_data(i), 'V1');
+        ca1_mask = is_area_safe(curr_data(i), 'CA1');
+        masks = struct('DMS', curr_data(i).is_dms(keep_cells), ...
+                       'DLS', curr_data(i).is_dls(keep_cells), ...
+                       'ACC', curr_data(i).is_acc(keep_cells), ...
+                       'V1',  v1_mask(keep_cells), ...
+                       'CA1', ca1_mask(keep_cells));
         
         epoch_idx = cell(1, n_epochs);
         if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
@@ -769,8 +781,7 @@ for g = 1:3
             if strcmp(c_name, 'No-ACC'), active_mask(masks.ACC) = false; end
             if strcmp(c_name, 'No-V1'),  active_mask(masks.V1)  = false; end
             if strcmp(c_name, 'No-CA1'), active_mask(masks.CA1) = false; end
-            if strcmp(c_name, 'No-DG'),  active_mask(masks.DG)  = false; end
-            
+
             if sum(active_mask) < min_units, continue; end
             
             cond_data = activity(active_mask, :, :); 
@@ -868,14 +879,13 @@ end
 
 x_bases_dec = {1:10, 12:21, 23:32};
 x_ticks_centers_dec = [5.5, 16.5, 27.5];
-% cond_colors: All, No-DMS, No-DLS, No-ACC, No-V1, No-CA1, No-DG, Shuffle
+% cond_colors: All, No-DMS, No-DLS, No-ACC, No-V1, No-CA1, Shuffle
 cond_colors = [0      0      0;        % All
                0.8500 0.3250 0.0980;   % No-DMS (orange)
                0.9290 0.6940 0.1250;   % No-DLS (yellow)
                0.4940 0.1840 0.5560;   % No-ACC (purple)
                0      0.6    0.6;      % No-V1  (teal)
                0.8    0.1    0.2;      % No-CA1 (crimson)
-               0.2    0.5    0.3;      % No-DG  (forest)
                0.5    0.5    0.5];     % Shuffle
 
 % =========================================================================
@@ -1014,7 +1024,7 @@ fprintf('--- Full Integrated Pipeline Execution Complete ---\n');
 %% 9. Comprehensive Spatiotemporal Activity by AREA
 fprintf('--- Generating Spatiotemporal Plots by AREA (All Groups) ---\n');
 
-areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG'};
+areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};
 n_areas = length(areas);
 epochs = {'Naive', 'Intermediate', 'Expert'};
 n_epochs = length(epochs);
@@ -1054,6 +1064,9 @@ for g = 1:3
             act = curr_data(i).firing_rates_per_bin;
         end
         act(isnan(act)) = 0;
+        % Drop DG units — excluded from all figures/analyses (2026-05-24).
+        keep_cells = ~is_area_safe(curr_data(i), 'DG');
+        act = act(keep_cells, :, :);
         n_cells = size(act, 1);
         n_tr = size(act, 3);
         
@@ -1076,10 +1089,13 @@ for g = 1:3
         if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
         
         % Masks
-        masks = {curr_data(i).is_dms, curr_data(i).is_dls, curr_data(i).is_acc, ...
-                 is_area_safe(curr_data(i), 'V1'), ...
-                 is_area_safe(curr_data(i), 'CA1'), ...
-                 is_area_safe(curr_data(i), 'DG')};
+        v1_mask  = is_area_safe(curr_data(i), 'V1');
+        ca1_mask = is_area_safe(curr_data(i), 'CA1');
+        masks = {curr_data(i).is_dms(keep_cells), ...
+                 curr_data(i).is_dls(keep_cells), ...
+                 curr_data(i).is_acc(keep_cells), ...
+                 v1_mask(keep_cells), ...
+                 ca1_mask(keep_cells)};
 
         % Populate Structure
         for a = 1:n_areas
@@ -1123,7 +1139,11 @@ end
 metrics = {'raw', 'Raw FR'; 'z', 'Z-Scored'};
 avg_methods = {'Pooled', 'Hierarchical'};
 epoch_colors = lines(n_epochs);
-area_colors = [0 0.4470 0.7410; 0.4660 0.6740 0.1880; 0.8500 0.3250 0.0980; 0.4940 0.1840 0.5560]; % DMS DLS ACC V1 CA1 DG
+area_colors = [0      0.4470 0.7410;   % DMS
+               0.4660 0.6740 0.1880;   % DLS
+               0.8500 0.3250 0.0980;   % ACC
+               0.4940 0.1840 0.5560;   % V1
+               0.8000 0.1000 0.2000];  % CA1
 
 for met_idx = 1:size(metrics, 1)
     met_field = metrics{met_idx, 1};
@@ -1256,8 +1276,8 @@ corr_epochs = [1, 3];
 epoch_colors = [0, 0.4470, 0.7410;  % Naive: Blue
                 0.8500, 0.3250, 0.0980]; % Expert: Red/Orange
 epoch_labels = {'Naive', 'Expert'};
-area_names = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'DG', 'All Units'};
-n_area_cols = length(area_names);  % DMS, DLS, ACC, V1, CA1, DG, All
+area_names = {'DMS', 'DLS', 'ACC', 'V1', 'CA1', 'All Units'};
+n_area_cols = length(area_names);  % DMS, DLS, ACC, V1, CA1, All
 all_col = n_area_cols;              % index of the "All Units" column
 
 for g = 1:3
@@ -1265,7 +1285,7 @@ for g = 1:3
     % Initialize containers for trial-wise pooling
     p_lick_stab = [];
     p_vel_stab  = [];
-    p_neur_stab = nan(0, n_area_cols); % columns = DMS, DLS, ACC, V1, All
+    p_neur_stab = nan(0, n_area_cols); % columns = DMS, DLS, ACC, V1, CA1, All
     p_dec_space = [];
     p_dec_lick  = [];
     p_epoch_idx = []; 
@@ -1391,7 +1411,6 @@ for g = 1:3
     units_acc     = zeros(n_animals, 1);
     units_v1      = zeros(n_animals, 1);
     units_ca1     = zeros(n_animals, 1);
-    units_dg      = zeros(n_animals, 1);
 
     units_msn     = zeros(n_animals, 1);
     units_fsn     = zeros(n_animals, 1);
@@ -1401,16 +1420,19 @@ for g = 1:3
     % Initialize arrays for behavior and firing rates
     total_trials = zeros(n_animals, 1);
     fr_msn = []; fr_fsn = []; fr_tan = [];
-    fr_dms = []; fr_dls = []; fr_acc = []; fr_v1 = []; fr_ca1 = []; fr_dg = [];
+    fr_dms = []; fr_dls = []; fr_acc = []; fr_v1 = []; fr_ca1 = [];
 
     for i = 1:n_animals
         % --- Area counts ---
-        is_dms = curr_data(i).is_dms;
-        is_dls = curr_data(i).is_dls;
-        is_acc = curr_data(i).is_acc;
-        is_v1  = is_area_safe(curr_data(i), 'V1');
-        is_ca1 = is_area_safe(curr_data(i), 'CA1');
-        is_dg  = is_area_safe(curr_data(i), 'DG');
+        % Drop DG units — excluded from all figures/analyses (2026-05-24).
+        keep_cells = ~is_area_safe(curr_data(i), 'DG');
+        is_dms = curr_data(i).is_dms(keep_cells);
+        is_dls = curr_data(i).is_dls(keep_cells);
+        is_acc = curr_data(i).is_acc(keep_cells);
+        v1_mask  = is_area_safe(curr_data(i), 'V1');
+        ca1_mask = is_area_safe(curr_data(i), 'CA1');
+        is_v1  = v1_mask(keep_cells);
+        is_ca1 = ca1_mask(keep_cells);
 
         total_units(i) = length(is_dms);
         units_dms(i)   = sum(is_dms);
@@ -1418,7 +1440,6 @@ for g = 1:3
         units_acc(i)   = sum(is_acc);
         units_v1(i)    = sum(is_v1);
         units_ca1(i)   = sum(is_ca1);
-        units_dg(i)    = sum(is_dg);
         
         % --- Neuron type counts ---
         if isfield(curr_data(i), 'final_neurontypes') && ~isempty(curr_data(i).final_neurontypes)
@@ -1432,7 +1453,8 @@ for g = 1:3
             else
                 ntypes = nan(size(ntypes_raw, 1), 1);
             end
-            
+            ntypes = ntypes(keep_cells);  % DG excluded
+
             units_msn(i) = sum(ntypes == 1);
             units_fsn(i) = sum(ntypes == 2);
             units_tan(i) = sum(ntypes == 3);
@@ -1456,14 +1478,14 @@ for g = 1:3
             
             % Average FR across bins and trials for each neuron
             mean_fr_per_neuron = mean(fr_tensor, [2, 3], 'omitnan');
-            
+            mean_fr_per_neuron = mean_fr_per_neuron(keep_cells);  % DG excluded
+
             % Area Firing Rates
             if sum(is_dms) > 0, fr_dms = [fr_dms; mean_fr_per_neuron(is_dms)]; end
             if sum(is_dls) > 0, fr_dls = [fr_dls; mean_fr_per_neuron(is_dls)]; end
             if sum(is_acc) > 0, fr_acc = [fr_acc; mean_fr_per_neuron(is_acc)]; end
             if sum(is_v1)  > 0, fr_v1  = [fr_v1;  mean_fr_per_neuron(is_v1)];  end
             if sum(is_ca1) > 0, fr_ca1 = [fr_ca1; mean_fr_per_neuron(is_ca1)]; end
-            if sum(is_dg)  > 0, fr_dg  = [fr_dg;  mean_fr_per_neuron(is_dg)];  end
 
             % Cell Type Firing Rates
             if sum(ntypes == 1) > 0, fr_msn = [fr_msn; mean_fr_per_neuron(ntypes == 1)]; end
@@ -1486,16 +1508,13 @@ for g = 1:3
     fprintf('ACC Units   : %s  [Sum: %d]\n', fmt_stats(units_acc), sum(units_acc));
     n_with_v1  = sum(units_v1  > 0);
     n_with_ca1 = sum(units_ca1 > 0);
-    n_with_dg  = sum(units_dg  > 0);
     fprintf('V1  Units   : %s  [Sum: %d]   (%d/%d animals have V1 probe)\n', ...
         fmt_stats(units_v1),  sum(units_v1),  n_with_v1,  n_animals);
     fprintf('CA1 Units   : %s  [Sum: %d]   (%d/%d animals have CA1 in probe)\n', ...
         fmt_stats(units_ca1), sum(units_ca1), n_with_ca1, n_animals);
-    fprintf('DG  Units   : %s  [Sum: %d]   (%d/%d animals have DG in probe)\n', ...
-        fmt_stats(units_dg),  sum(units_dg),  n_with_dg,  n_animals);
 
     fprintf('\n--- Putative Cell Types per Animal (Mean +/- SEM) [Total] ---\n');
-    fprintf('(MSN/FSN/TAN classification applies to striatum only — V1/CA1/DG not classified)\n');
+    fprintf('(MSN/FSN/TAN classification applies to striatum only — V1/CA1 not classified)\n');
     fprintf('MSN (Type 1): %s  [Sum: %d]\n', fmt_stats(units_msn), sum(units_msn));
     fprintf('FSN (Type 2): %s  [Sum: %d]\n', fmt_stats(units_fsn), sum(units_fsn));
     fprintf('TAN (Type 3): %s  [Sum: %d]\n', fmt_stats(units_tan), sum(units_tan));
@@ -1513,9 +1532,6 @@ for g = 1:3
     end
     if ~isempty(fr_ca1)
         fprintf('CA1 Units : %s  (n=%d units)\n', fmt_fr(fr_ca1), numel(fr_ca1));
-    end
-    if ~isempty(fr_dg)
-        fprintf('DG  Units : %s  (n=%d units)\n', fmt_fr(fr_dg),  numel(fr_dg));
     end
     fprintf('\n');
     
