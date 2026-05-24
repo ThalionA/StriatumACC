@@ -8,7 +8,7 @@ visual_zone_start_au = 80;
 reward_zone_start_au = 100;
 reward_zone_end_au = 135;
 corridor_end_au = 200;
-bin_size = 4; 
+bin_size = 2; 
 
 bin_edges = 0:bin_size:corridor_end_au;
 bin_edges(end) = corridor_end_au + bin_size;
@@ -289,7 +289,7 @@ else
     end
 
     % Save the preprocessed control data struct
-    save('preprocessed_data_control.mat', 'preprocessed_data', '-v7.3');
+    save('preprocessed_data_control2p5cm.mat', 'preprocessed_data', '-v7.3');
 end
 
 %% Plot area dimensionality
