@@ -868,7 +868,7 @@ end % End loop groups (Task/Control)
 fprintf('--- Comprehensive Neuron Type Plots Complete ---\n\n');
 
 %% ================= Comprehensive Spatiotemporal Activity by Area AND Neuron Type =================
-fprintf('--- Generating 3x4 Spatiotemporal Grids (Area x Cell Type) [Z-scored, Pooled] ---\n');
+fprintf('--- Generating Area x Cell-Type Spatiotemporal Grids [Z-scored, Pooled] ---\n');
 
 % --- 1. Prepare Full Clean Data (Pre-subsampling) ---
 neuron_has_nan = squeeze(any(isnan(supermouse_tensor_raw), [2, 3]));
@@ -881,11 +881,8 @@ lbls_full.mouse = combined_labels.mouse_labels_all(valid_idx);
 lbls_full.group = combined_labels.group_labels_all(valid_idx); % 1=Task, 2=Control
 lbls_full.area  = combined_labels.area_labels_all(valid_idx);
 
-% Handle Neuron Types (1=MSN, 2=FSN, 3=TAN, 4=Unclassified)
-raw_ntypes = combined_labels.neurontype_labels_all(valid_idx);
-processed_ntypes = raw_ntypes;
-processed_ntypes(isnan(raw_ntypes) | (raw_ntypes < 1) | (raw_ntypes > 3)) = 4;
-lbls_full.ntype = processed_ntypes;
+% Neuron types: 1=MSN, 2=FS, 3=TAN (striatal); 5=RS (non-striatal).
+lbls_full.ntype = combined_labels.neurontype_labels_all(valid_idx);
 
 % --- 2. Calculate Z-Scored Tensor ---
 fprintf('Calculating Z-scored firing rates for all units...\n');
@@ -911,10 +908,14 @@ bin_size = cfg.plot.zone_params.bin_size;
 v_zone = cfg.plot.zone_params.visual_zones_au / bin_size;
 r_zone = cfg.plot.zone_params.reward_zone_au / bin_size;
 
-% Grid Definitions
-target_areas = {'DMS', 'DLS', 'ACC'};
-target_types = [1, 2, 3, 4];
-type_names   = {'MSN', 'FSN', 'TAN', 'Unclassified'};
+% Grid Definitions — 5 areas x 4 cell types. Each area shows only the
+% types that apply to it: MSN/FS/TAN for striatum, FS/RS for the rest.
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};
+striatal_areas = {'DMS', 'DLS'};
+target_types = [1, 2, 3, 5];
+type_names   = {'MSN', 'FS', 'TAN', 'RS'};
+striatal_type_keys    = [1, 2, 3];   % MSN, FS, TAN
+nonstriatal_type_keys = [2, 5];      % FS, RS
 
 num_areas = length(target_areas);
 num_types = length(target_types);
@@ -936,7 +937,7 @@ for ds_idx = 1:size(datasets, 1)
     fprintf('Generating 3x4 grids for: %s\n', ds_name);
     
     % =========================================================================
-    % FIGURE A: SPATIAL TUNING (3x4 Grid)
+    % FIGURE A: SPATIAL TUNING (Area x Cell-Type Grid)
     % Rows: Area | Cols: Neuron Type
     % =========================================================================
     fig_spatial = figure('Name', sprintf('[%s] Spatial Tuning (Area x Type)', ds_name), ...
@@ -944,7 +945,8 @@ for ds_idx = 1:size(datasets, 1)
     t_spatial = tiledlayout(num_areas, num_types, 'TileSpacing', 'compact', 'Padding', 'compact');
     ax_spatial = gobjects(num_areas * num_types, 1);
     tile_counter = 1;
-    
+    legend_placed = false;
+
     for i_area = 1:num_areas
         current_area = target_areas{i_area};
         
@@ -954,7 +956,20 @@ for ds_idx = 1:size(datasets, 1)
             
             ax_spatial(tile_counter) = nexttile; hold on;
             legend_handles_spatial = [];
-            
+
+            % Skip cell types that don't apply to this area
+            % (MSN/FS/TAN for striatum; FS/RS for non-striatal areas).
+            if any(strcmp(current_area, striatal_areas))
+                type_valid = ismember(current_type_idx, striatal_type_keys);
+            else
+                type_valid = ismember(current_type_idx, nonstriatal_type_keys);
+            end
+            if ~type_valid
+                axis off;
+                tile_counter = tile_counter + 1;
+                continue;
+            end
+
             % Intersect Group, Area, and Neuron Type
             idx_target = group_mask & strcmp(lbls_full.area, current_area) & (lbls_full.ntype == current_type_idx);
             n_units = sum(idx_target);
@@ -994,9 +1009,10 @@ for ds_idx = 1:size(datasets, 1)
             title(sprintf('%s - %s (n=%d)', current_area, current_type_name, n_units));
             box on;
             
-            % Add legend only to the top-right valid tile
-            if i_area == 1 && i_type == num_types && n_units >= min_units
+            % Legend once, on the first populated tile.
+            if ~legend_placed && n_units >= min_units
                 legend(legend_handles_spatial, epoch_names, 'Location', 'northeast');
+                legend_placed = true;
             end
             
             tile_counter = tile_counter + 1;
@@ -1011,7 +1027,7 @@ for ds_idx = 1:size(datasets, 1)
     save_to_svg(clean_name_spatial);
     
     % =========================================================================
-    % FIGURE B: TEMPORAL EVOLUTION (3x4 Grid)
+    % FIGURE B: TEMPORAL EVOLUTION (Area x Cell-Type Grid)
     % Rows: Area | Cols: Neuron Type
     % =========================================================================
     fig_temporal = figure('Name', sprintf('[%s] Temporal Evolution (Area x Type)', ds_name), ...
@@ -1029,7 +1045,19 @@ for ds_idx = 1:size(datasets, 1)
             current_type_name = type_names{i_type};
             
             ax_temp(tile_counter) = nexttile; hold on;
-            
+
+            % Skip cell types that don't apply to this area.
+            if any(strcmp(current_area, striatal_areas))
+                type_valid = ismember(current_type_idx, striatal_type_keys);
+            else
+                type_valid = ismember(current_type_idx, nonstriatal_type_keys);
+            end
+            if ~type_valid
+                axis off;
+                tile_counter = tile_counter + 1;
+                continue;
+            end
+
             idx_target = group_mask & strcmp(lbls_full.area, current_area) & (lbls_full.ntype == current_type_idx);
             n_units = sum(idx_target);
             
@@ -1073,15 +1101,15 @@ for ds_idx = 1:size(datasets, 1)
     save_to_svg(clean_name_temporal);
     
 end
-fprintf('--- 3x4 Spatiotemporal Grids Complete ---\n\n');
+fprintf('--- Area x Cell-Type Spatiotemporal Grids Complete ---\n\n');
 
 %% ================= Scatter & KDE Density Plots: Activity Transitions =================
 fprintf('--- Generating Scatter and KDE Density Plots [Area x Cell Type] ---\n');
 
 % --- 1. Configuration for Grids ---
-target_areas = {'DMS', 'DLS', 'ACC'};
-target_types = [1, 2, 3]; % Explicitly excluding 4 (Unclassified)
-type_names   = {'MSN', 'FSN', 'TAN'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};
+target_types = [1, 2, 3, 5]; % Explicitly excluding 4 (Unclassified)
+type_names   = {'MSN', 'FSN', 'TAN', 'RS'};
 
 num_areas = length(target_areas);
 num_types = length(target_types);
@@ -1956,9 +1984,9 @@ target_trials = [1, 4, 21];
 trial_names   = {'Trial 1 (Naive)', 'Trial 4', 'Trial 1 of Expert (Tr 21)'};
 trial_colors  = {[0 0.4470 0.7410], [0.4940 0.1840 0.5560], [0.8500 0.3250 0.0980]};
 
-target_areas = {'DMS', 'DLS', 'ACC'};
-target_types = [1, 2, 3];
-type_names   = {'MSN', 'FSN', 'TAN'};
+target_areas = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};
+target_types = [1, 2, 3, 5];
+type_names   = {'MSN', 'FSN', 'TAN', 'RS'};
 
 num_areas = length(target_areas);
 num_types = length(target_types);
