@@ -23,6 +23,7 @@ Run:  python scripts/plot_common_units.py
 
 from __future__ import annotations
 
+import argparse
 import pickle
 import sys
 from pathlib import Path
@@ -41,9 +42,24 @@ from striatum_cca import config, dataio, pipeline  # noqa: E402
 CFG = config.DEFAULT
 EPOCHS = config.EPOCH_NAMES
 EPOCH_COLOUR = config.EPOCH_COLOURS               # consistent with MATLAB
+
+# Set by main() from --variant ("plain" or "partial"). The member masks come
+# from the chosen Stage-3 run; the z-scored activity itself is variant-
+# independent (it is raw activity, not a CCA output).
 RESULTS_PKL = config.RESULTS_DIR / "stage3_committed.pkl"
+SUFFIX = "committed"
+VARIANT_NOTE = ""
 
 _ZCACHE: dict[tuple[int, str], np.ndarray] = {}
+
+
+def _configure(variant):
+    """Point the script at the plain or the partial-CCA Stage-3 membership."""
+    global RESULTS_PKL, SUFFIX, VARIANT_NOTE
+    if variant == "partial":
+        RESULTS_PKL = config.RESULTS_DIR / "stage3_committed_partial.pkl"
+        SUFFIX = "committed_partial"
+        VARIANT_NOTE = "  [PARTIAL membership -- all other areas removed]"
 
 
 def ztensor(animal, area):
@@ -136,16 +152,21 @@ def plot_pair(area_x, area_y, cells_x, cells_y):
         ax.set_xlabel("corridor position (cm)")
     axes[0, -1].legend(frameon=False, fontsize=8)
     fig.suptitle(f"Common-unit spatial activity -- {area_x}-{area_y} "
-                 f"(committed config; learners; mean +/- SEM over units)")
+                 f"(committed config; learners; mean +/- SEM over units)"
+                 + VARIANT_NOTE)
     config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    path = config.FIGURES_DIR / f"stage3_common_units_{area_x}-{area_y}_committed.png"
+    path = (config.FIGURES_DIR
+            / f"stage3_common_units_{area_x}-{area_y}_{SUFFIX}.png")
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"saved {path}")
 
 
 def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    _configure(p.parse_args().variant)
     if not RESULTS_PKL.exists():
         sys.exit(f"missing {RESULTS_PKL.name} -- run "
                  f"run_committed.py --stage 3")

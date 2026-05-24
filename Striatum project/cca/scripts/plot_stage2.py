@@ -26,6 +26,7 @@ Run:  python scripts/plot_stage2.py
 
 from __future__ import annotations
 
+import argparse
 import pickle
 import sys
 from pathlib import Path
@@ -46,9 +47,22 @@ EPOCHS = config.EPOCH_NAMES                       # naive, intermediate, expert
 EPOCH_LABEL = ["naive", "inter", "expert"]
 EPOCH_COLOUR = config.EPOCH_COLOURS               # consistent with MATLAB
 ALPHA = 0.05
+
+# Set by main() from --variant ("plain" or "partial").
 TAG = "committed"
 RESULTS_PKL = config.RESULTS_DIR / "stage2_committed_circshift.pkl"
 SUBTITLE = "committed config, circshift null"
+
+
+def _configure(variant):
+    """Point the script at the plain or the partial-CCA Stage-2 results."""
+    global TAG, RESULTS_PKL, SUBTITLE
+    if variant == "partial":
+        TAG = "committed_partial"
+        RESULTS_PKL = (config.RESULTS_DIR
+                       / "stage2_committed_circshift_partial.pkl")
+        SUBTITLE = ("committed config, circshift null, partial -- "
+                    "all other recorded areas removed")
 
 
 # --- data access -------------------------------------------------------------
@@ -270,6 +284,9 @@ def plot_ifi_window(results, window):
 
 
 def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    _configure(p.parse_args().variant)
     if not RESULTS_PKL.exists():
         sys.exit(f"missing {RESULTS_PKL.name} -- run "
                  f"run_committed.py --stage 2 --null-type circshift")

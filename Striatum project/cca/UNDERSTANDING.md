@@ -211,6 +211,17 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v12 (round 12: partial-CCA variant of the full pipeline).**
+  `pipeline.prepare_pair_partial` builds a PreparedPair with every other
+  recorded area's PC scores regressed out of X's and Y's residualised neuron
+  tensors *before* the per-epoch PCA -- neuron-level partialling, so the PCA
+  basis and the Stage-3 back-projection stay in X's / Y's own neuron space.
+  `partial.partial_out_tensor` is the 3-D helper. `run_committed.py --partial`
+  produces `stage2_committed_circshift_partial.pkl` /
+  `stage3_committed_partial.pkl`; the four plot scripts gained
+  `--variant {plain,partial}`. The partial figure set matches the plain set
+  on every metric -- inter-areal coupling is direct, not a relay through the
+  other recorded areas. 107 tests; ruff clean. Full log in NOTES.md (round 12).
 - **2026-05-24 — v11 (round 11: cross-pair subspace similarity + full partial
   CCA).**
   1. **Within-area subspace similarity** — new `crosspair.py` (+

@@ -48,6 +48,8 @@ def parse_args():
     p.add_argument("--jobs", type=int, default=4)
     p.add_argument("--max-seconds", type=float, default=0.0)
     p.add_argument("--fresh", action="store_true")
+    p.add_argument("--partial", action="store_true",
+                   help="condition every pair on all other recorded areas")
     return p.parse_args()
 
 
@@ -64,12 +66,13 @@ def _save(path, done, cfg):
 
 def _resolve(args):
     """Config, output path and per-pair worker for the requested stage."""
+    suffix = "_partial" if args.partial else ""
     if args.stage == 3:
         # Stage 3 is null-independent: one run serves every figure.
         cfg = config.DEFAULT
         if args.trials_per_epoch:
             cfg = dataclasses.replace(cfg, trials_per_epoch=args.trials_per_epoch)
-        out = config.RESULTS_DIR / "stage3_committed.pkl"
+        out = config.RESULTS_DIR / f"stage3_committed{suffix}.pkl"
         return cfg, out, stage3.analyse_subspace
 
     over = {"null_type": args.null_type, "n_shuffles": args.shuffles}
@@ -78,7 +81,7 @@ def _resolve(args):
         over["trials_per_epoch"] = args.trials_per_epoch
         tag += f"_tpe{args.trials_per_epoch}"
     cfg = dataclasses.replace(config.DEFAULT, **over)
-    out = config.RESULTS_DIR / f"stage2_committed_{tag}.pkl"
+    out = config.RESULTS_DIR / f"stage2_committed_{tag}{suffix}.pkl"
     return cfg, out, analysis.analyse_pair
 
 
@@ -86,7 +89,11 @@ def main():
     args = parse_args()
     deadline = time.time() + args.max_seconds if args.max_seconds else None
     cfg, out, worker_fn = _resolve(args)
+    prep_fn = (pipeline.prepare_pair_partial if args.partial
+               else pipeline.prepare_pair)
     print(f"stage {args.stage}; committed config ({pipeline.config_label(cfg)})"
+          + ("; PARTIAL (all other recorded areas removed)"
+             if args.partial else "")
           + (f"; null={cfg.null_type}; {cfg.n_shuffles} surrogates"
              if args.stage == 2 else "; null-independent"))
 
@@ -96,7 +103,7 @@ def main():
     for a in animals:
         entry = entries[a.animal_id]
         for ax, ay in config.PAIRS:
-            r = pipeline.prepare_pair(a, ax, ay, entry, cfg)
+            r = prep_fn(a, ax, ay, entry, cfg)
             (prepared if isinstance(r, pipeline.PreparedPair)
              else skipped).append(r)
 

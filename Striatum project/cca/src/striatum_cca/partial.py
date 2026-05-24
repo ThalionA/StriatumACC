@@ -27,6 +27,20 @@ def partial_out(target: np.ndarray, confound: np.ndarray) -> np.ndarray:
     return target - confound @ coef
 
 
+def partial_out_tensor(tensor: np.ndarray, confound: np.ndarray) -> np.ndarray:
+    """Regress ``confound`` out of a 3-D ``(n_trials, n_bins, n_features)``
+    tensor over its flattened (trial, bin) samples; the shape is preserved.
+
+    ``confound`` is ``(n_trials, n_bins, n_confound)`` with the same trial and
+    bin axes. Used to partial other areas' activity out of an area's neuron
+    tensor before the per-epoch PCA (see pipeline.prepare_pair_partial).
+    """
+    n_tr, n_bins, n_feat = tensor.shape
+    flat = tensor.reshape(n_tr * n_bins, n_feat)
+    fz = confound.reshape(n_tr * n_bins, -1)
+    return partial_out(flat, fz).reshape(n_tr, n_bins, n_feat)
+
+
 def partial_cca_cv(
     scores_x: np.ndarray, scores_y: np.ndarray, scores_z: np.ndarray, cfg
 ):

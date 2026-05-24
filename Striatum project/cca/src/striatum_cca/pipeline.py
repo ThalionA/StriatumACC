@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import config, core, dataio
+from . import config, core, dataio, partial
 
 
 @dataclass
@@ -150,6 +150,107 @@ def prepare_pair(
         pca_y[epoch] = py
         scores_x[epoch] = core.pca_transform(res_x[epoch], px)
         scores_y[epoch] = core.pca_transform(res_y[epoch], py)
+
+    return PreparedPair(
+        animal_id=animal.animal_id,
+        area_x=area_x,
+        area_y=area_y,
+        role=entry.role,
+        lp=entry.lp,
+        k=k,
+        n_units_x=n_units_x,
+        n_units_y=n_units_y,
+        unit_index_x=idx_x,
+        unit_index_y=idx_y,
+        scores_x=scores_x,
+        scores_y=scores_y,
+        pca_x=pca_x,
+        pca_y=pca_y,
+    )
+
+
+def _residual_tensors(
+    animal: dataio.Animal, area: str, entry: dataio.CohortEntry, cfg
+) -> tuple[dict[str, np.ndarray], np.ndarray] | None:
+    """Per-epoch residualised (z-scored) neuron tensors for one area.
+
+    Returns ``(res_by_epoch, unit_index)`` -- the same residual tensors
+    :func:`prepare_pair` builds internally -- or None if the area has too few
+    units or no valid epochs.
+    """
+    tensor, idx = dataio.area_tensor(animal, area, cfg)
+    if len(idx) < cfg.min_units:
+        return None
+    if cfg.zscore_units:
+        tensor = _zscore_area(tensor)
+    windows = dataio.epoch_windows(entry.lp, len(tensor), cfg)
+    if windows is None:
+        return None
+    res = {e: _residual(_slice_epoch(tensor, e_idx), cfg)
+           for e, e_idx in windows.items()}
+    return res, idx
+
+
+def prepare_pair_partial(
+    animal: dataio.Animal,
+    area_x: str,
+    area_y: str,
+    entry: dataio.CohortEntry,
+    cfg=config.DEFAULT,
+) -> PreparedPair | SkippedPair:
+    """Like :func:`prepare_pair`, but with every other recorded area removed.
+
+    Each other area's PC scores are regressed out of X's and Y's residualised
+    neuron tensors (neuron-level partialling, before the per-epoch PCA) so the
+    PCA basis -- and hence the Stage-3 back-projection -- stays in X's / Y's own
+    neuron space. Returns a SkippedPair if X or Y is unusable, or if the animal
+    has no other area to condition on.
+    """
+    rx = _residual_tensors(animal, area_x, entry, cfg)
+    ry = _residual_tensors(animal, area_y, entry, cfg)
+    if rx is None or ry is None:
+        return SkippedPair(animal.animal_id, area_x, area_y,
+                           "X or Y unusable for partial preparation")
+    res_x, idx_x = rx
+    res_y, idx_y = ry
+
+    confounds = []
+    for area_z in config.AREAS:
+        if area_z in (area_x, area_y):
+            continue
+        sz = prepare_area(animal, area_z, entry, cfg)
+        if sz is not None:
+            confounds.append(sz)
+    if not confounds:
+        return SkippedPair(animal.animal_id, area_x, area_y,
+                           "no other area to partial out")
+
+    res_xp, res_yp = {}, {}
+    for epoch in config.EPOCH_NAMES:
+        z = np.concatenate([c[epoch] for c in confounds], axis=-1)
+        res_xp[epoch] = partial.partial_out_tensor(res_x[epoch], z)
+        res_yp[epoch] = partial.partial_out_tensor(res_y[epoch], z)
+
+    n_units_x, n_units_y = len(idx_x), len(idx_y)
+    n_valid = min(core.n_valid_samples(res_xp[e]) for e in config.EPOCH_NAMES)
+    min_rank = min(
+        min(core.numerical_rank(res_xp[e]) for e in config.EPOCH_NAMES),
+        min(core.numerical_rank(res_yp[e]) for e in config.EPOCH_NAMES),
+    )
+    k = core.choose_k(n_units_x, n_units_y, n_valid, cfg, max_rank=min_rank,
+                      variance_k=_variance_k([res_xp, res_yp], cfg))
+
+    scores_x: dict[str, np.ndarray] = {}
+    scores_y: dict[str, np.ndarray] = {}
+    pca_x: dict[str, core.PCAState] = {}
+    pca_y: dict[str, core.PCAState] = {}
+    for epoch in config.EPOCH_NAMES:
+        px = core.pca_fit(res_xp[epoch], k)
+        py = core.pca_fit(res_yp[epoch], k)
+        pca_x[epoch] = px
+        pca_y[epoch] = py
+        scores_x[epoch] = core.pca_transform(res_xp[epoch], px)
+        scores_y[epoch] = core.pca_transform(res_yp[epoch], py)
 
     return PreparedPair(
         animal_id=animal.animal_id,

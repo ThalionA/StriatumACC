@@ -22,6 +22,7 @@ Run:  python scripts/plot_stage3.py
 
 from __future__ import annotations
 
+import argparse
 import pickle
 import sys
 from itertools import combinations
@@ -43,7 +44,20 @@ EPOCHS = config.EPOCH_NAMES
 EPOCH_LABEL = ["naive", "inter", "expert"]
 TRANSITIONS = ("naive->intermediate", "intermediate->expert", "naive->expert")
 TRANSITION_LABEL = ["n->i", "i->e", "n->e"]
+
+# Set by main() from --variant ("plain" or "partial").
 RESULTS_PKL = config.RESULTS_DIR / "stage3_committed.pkl"
+SUFFIX = "committed"
+VARIANT_NOTE = ""
+
+
+def _configure(variant):
+    """Point the script at the plain or the partial-CCA Stage-3 results."""
+    global RESULTS_PKL, SUFFIX, VARIANT_NOTE
+    if variant == "partial":
+        RESULTS_PKL = config.RESULTS_DIR / "stage3_committed_partial.pkl"
+        SUFFIX = "committed_partial"
+        VARIANT_NOTE = "  [PARTIAL -- all other recorded areas removed]"
 
 
 def load():
@@ -67,7 +81,7 @@ def _grid():
 def _save(fig, name):
     config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    path = config.FIGURES_DIR / f"{name}_committed.png"
+    path = config.FIGURES_DIR / f"{name}_{SUFFIX}.png"
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"saved {path}")
@@ -107,7 +121,8 @@ def plot_principal_angles(results):
     for ax in axes[::5]:
         ax.set_ylabel("principal angle (rad)")
     fig.suptitle("Stage 3 -- communication-subspace reorientation across "
-                 "learning (X side; dashed = orthogonal; '*' n->expert > floor)")
+                 "learning (X side; dashed = orthogonal; '*' n->expert > "
+                 "floor)" + VARIANT_NOTE)
     _save(fig, "stage3_principal_angles")
 
 
@@ -137,7 +152,7 @@ def plot_gini(results):
     for ax in axes[::5]:
         ax.set_ylabel("Gini (weight sparsity)")
     fig.suptitle("Stage 3 -- communication-weight sparsity across learning "
-                 "(higher = fewer units carry the coupling)")
+                 "(higher = fewer units carry the coupling)" + VARIANT_NOTE)
     _save(fig, "stage3_gini")
 
 
@@ -197,11 +212,14 @@ def plot_membership_overlap(results):
     axes[1].set_title(f"Membership stability across learning\n"
                       f"(mean = {np.nanmean(cross_epoch):.2f})", fontsize=9)
     fig.suptitle("Stage 3 -- communication-subspace membership "
-                 "(committed config; learners)")
+                 "(committed config; learners)" + VARIANT_NOTE)
     _save(fig, "stage3_membership_overlap")
 
 
 def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    _configure(p.parse_args().variant)
     results = load()
     plot_principal_angles(results)
     plot_gini(results)

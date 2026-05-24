@@ -16,6 +16,7 @@ Run:  python scripts/plot_subspace_similarity.py
 
 from __future__ import annotations
 
+import argparse
 import pickle
 import sys
 from pathlib import Path
@@ -32,7 +33,20 @@ import matplotlib.pyplot as plt  # noqa: E402
 from striatum_cca import config, crosspair  # noqa: E402
 
 EPOCHS = config.EPOCH_NAMES
+
+# Set by main() from --variant ("plain" or "partial").
 RESULTS_PKL = config.RESULTS_DIR / "stage3_committed.pkl"
+SUFFIX = "committed"
+VARIANT_NOTE = ""
+
+
+def _configure(variant):
+    """Point the script at the plain or the partial-CCA Stage-3 results."""
+    global RESULTS_PKL, SUFFIX, VARIANT_NOTE
+    if variant == "partial":
+        RESULTS_PKL = config.RESULTS_DIR / "stage3_committed_partial.pkl"
+        SUFFIX = "committed_partial"
+        VARIANT_NOTE = "  [PARTIAL -- all other recorded areas removed]"
 
 
 def load_learners():
@@ -49,7 +63,7 @@ def partners_of(area):
 
 def _save(fig, name):
     config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    path = config.FIGURES_DIR / f"{name}_committed.png"
+    path = config.FIGURES_DIR / f"{name}_{SUFFIX}.png"
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"saved {path}")
@@ -87,7 +101,8 @@ def plot_heatmaps(results):
                 ax.set_ylabel(f"{epoch}\n\npartner area", fontsize=9)
     fig.suptitle("Within-area communication-subspace similarity across an "
                  "area's pairs  (|cos| of the dominant canonical weight "
-                 "vector; committed config; learners)", fontsize=11)
+                 "vector; committed config; learners)" + VARIANT_NOTE,
+                 fontsize=11)
     fig.tight_layout(rect=[0, 0, 0.93, 1])
     cax = fig.add_axes([0.945, 0.28, 0.011, 0.45])
     fig.colorbar(im, cax=cax, label="|cosine| similarity")
@@ -111,15 +126,21 @@ def plot_summary(results):
     ax.set_ylim(0, 1)
     ax.set_xlabel("epoch")
     ax.set_ylabel("mean pairwise |cos| similarity (off-diagonal)")
-    ax.set_title("Mean within-area subspace similarity across partners\n"
-                 "(higher = an area uses a more consistent subspace "
-                 "for all its partners)", fontsize=10)
+    title = ("Mean within-area subspace similarity across partners\n"
+             "(higher = an area uses a more consistent subspace "
+             "for all its partners)")
+    if VARIANT_NOTE:
+        title += "\n" + VARIANT_NOTE.strip()
+    ax.set_title(title, fontsize=10)
     ax.legend(frameon=False, title="area")
     fig.tight_layout()
     _save(fig, "subspace_similarity_summary")
 
 
 def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    _configure(p.parse_args().variant)
     results = load_learners()
     plot_heatmaps(results)
     plot_summary(results)

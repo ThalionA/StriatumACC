@@ -6,7 +6,7 @@ import dataclasses
 
 import numpy as np
 
-from striatum_cca import config, dataio, pipeline
+from striatum_cca import config, core, dataio, pipeline
 
 CFG = config.DEFAULT
 
@@ -147,6 +147,46 @@ def test_zscore_invariant_to_global_unit_rescaling():
     for epoch in config.EPOCH_NAMES:
         assert np.allclose(fit_base.epochs[epoch].held_out_r,
                            fit_scaled.epochs[epoch].held_out_r, atol=1e-8)
+
+
+def test_prepare_pair_partial_removes_third_area_mediated_coupling():
+    # All three areas share the SAME latents, so DMS-ACC coupling runs through
+    # DLS. Partialling DLS out should substantially reduce the DMS-ACC
+    # canonical correlation (not to zero -- DLS is only a noisy proxy for the
+    # latent, so some shared variance survives; that is correct partial-
+    # correlation behaviour).
+    animal = synthetic_animal({"DMS": 25, "ACC": 25, "DLS": 25},
+                              shared_strength=1.0, noise=0.3)
+    plain = pipeline.prepare_pair(animal, "DMS", "ACC", LEARNER, CFG)
+    part = pipeline.prepare_pair_partial(animal, "DMS", "ACC", LEARNER, CFG)
+    assert isinstance(plain, pipeline.PreparedPair)
+    assert isinstance(part, pipeline.PreparedPair)
+    for epoch in config.EPOCH_NAMES:
+        plain_cc = core.cca_cv(plain.scores_x[epoch],
+                               plain.scores_y[epoch], CFG).held_out_r[0]
+        part_cc = core.cca_cv(part.scores_x[epoch],
+                              part.scores_y[epoch], CFG).held_out_r[0]
+        assert plain_cc > 0.6                   # genuine coupling
+        assert plain_cc - part_cc > 0.2         # ... substantially via DLS
+
+
+def test_prepare_pair_partial_skips_when_no_other_area():
+    animal = synthetic_animal({"DMS": 25, "ACC": 25},
+                              shared_strength=1.0, noise=0.3)
+    result = pipeline.prepare_pair_partial(animal, "DMS", "ACC", LEARNER, CFG)
+    assert isinstance(result, pipeline.SkippedPair)
+    assert "other area" in result.reason
+
+
+def test_prepare_pair_partial_returns_a_valid_prepared_pair():
+    animal = synthetic_animal({"DMS": 25, "ACC": 25, "DLS": 25},
+                              shared_strength=1.0, noise=0.3)
+    part = pipeline.prepare_pair_partial(animal, "DMS", "ACC", LEARNER, CFG)
+    assert isinstance(part, pipeline.PreparedPair)
+    assert set(part.scores_x) == set(config.EPOCH_NAMES)
+    for epoch in config.EPOCH_NAMES:
+        assert part.scores_x[epoch].shape[2] == part.k
+        assert part.scores_y[epoch].shape[2] == part.k
 
 
 def test_zscore_normalisation_spans_whole_engaged_period():

@@ -587,3 +587,32 @@ with ≥3 areas qualify). The confound regression is fitted on all samples, not
 cross-validated (as in the original `partial.py`).
 
 99 tests; ruff clean.
+
+## 2026-05-24 — round 12 (partial-CCA variant of the whole figure set)
+
+Put partial CCA -- every other recorded area regressed out -- through the full
+committed pipeline, not just the plain-vs-partial CC1 scalar of round 11.
+
+**`pipeline.prepare_pair_partial`** (+ tests): builds a PreparedPair for X-Y
+with the other areas' PC scores regressed out of X's and Y's residualised
+*neuron* tensors before the per-epoch PCA. Neuron-level (not PC-score-level)
+partialling keeps the PCA basis -- and so the Stage-3 back-projection -- in X's
+and Y's own neuron space, so the partial weights / Gini / membership /
+similarity figures stay interpretable. `partial.partial_out_tensor` is the
+3-D wrapper. `run_committed.py --partial` runs Stage 2 + Stage 3 on the
+partial pairs (`stage2_committed_circshift_partial.pkl`,
+`stage3_committed_partial.pkl`); 33 pairs qualify (a pair needs the animal to
+have ≥1 other recorded area).
+
+All four plot scripts gained `--variant {plain,partial}` -- the partial set is
+written alongside the plain set with a `_partial` filename suffix and a
+`[PARTIAL]` note in the figure titles.
+
+**Finding.** The partial figures tell the same story as the plain ones --
+held-out CC, significant-dimension counts, lag curves, IFI, subspace
+reorientation, Gini, membership, common-unit activity and within-area
+similarity are all essentially unchanged after regressing out every other
+recorded area. Consistent with the round-11 CC1 result: inter-areal coupling
+is direct, not a relay through the other recorded areas.
+
+107 tests (8 new); ruff clean.
