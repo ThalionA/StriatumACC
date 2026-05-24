@@ -11,11 +11,15 @@ cfg = project_cfg();
 % Local aliases for legacy variable names used downstream in this script.
 cfg.lp_thresh_count = cfg.lp_min_consecutive;
 cfg.lp_z_thresh     = cfg.lp_z_threshold;
-bin_size            = cfg.bin_size_au;
-n_bins              = cfg.n_bins_full;
+
+
 mov_avg_window      = 10;
 max_trials          = 300;
 trials_per_epoch    = cfg.trials_per_epoch;
+
+cfg.task_data_file     = 'processed_data/preprocessed_data2p5cm.mat';
+cfg.bin_size_au        = 2;
+n_bins              = cfg.corridor_cm/(cfg.bin_size_au*1.25);
 
 fprintf('Loading task, control 1 (spatial), and control 2 (temporal) data...\n');
 S = load(cfg.task_data_file, 'preprocessed_data');
@@ -120,8 +124,8 @@ for g = 1:3
         imagesc(ax, lick_rate);
         
         if g < 3
-            xline(20, 'w--', 'LineWidth', 1.5); 
-            xline(25, 'w-', 'LineWidth', 1.5);  
+            xline(cfg.visual_zone_cm/cfg.bin_size_au, 'w--', 'LineWidth', 1.5); 
+            xline(cfg.reward_zone_cm/cfg.bin_size_au, 'w-', 'LineWidth', 1.5);  
             xlabel('Spatial Bin');
         else
             xlabel('Temporal Bin');
@@ -177,8 +181,8 @@ if n_animals_task >= 3
     cap_val = quantile(lr(:), 0.99); lr(lr > cap_val) = cap_val;
     
     imagesc(ax1, lr);
-    xline(ax1, 20, 'w--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-    xline(ax1, 25, 'w-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+    xline(ax1, cfg.visual_zone_cm/cfg.bin_size_au, 'w--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+    xline(ax1, cfg.reward_zone_cm/cfg.bin_size_au, 'w-', 'Reward', 'LabelVerticalAlignment', 'bottom');
     xlabel('Spatial Bin'); ylabel('Trial'); title('Mouse 3 Lick Rate');
     colorbar
     
@@ -294,7 +298,7 @@ for g = 1:3
         if g < 3
             licks = curr_data(i).spatial_binned_data.licks;
             durs  = curr_data(i).spatial_binned_data.durations;
-            vel   = (bin_size * 1.25) ./ durs;
+            vel   = (cfg.bin_size_au * 1.25) ./ durs;
             vel(isinf(vel)) = nan;
         else
             licks = curr_data(i).temporal_binned_licks;
@@ -409,7 +413,7 @@ for g = 1:3
             n_tr = size(curr_data(i).spatial_binned_fr_all, 3);
             licks = curr_data(i).spatial_binned_data.licks(1:n_tr, :);
             durs  = curr_data(i).spatial_binned_data.durations(1:n_tr, :);
-            vel   = (bin_size * 1.25) ./ durs;
+            vel   = (cfg.bin_size_au * 1.25) ./ durs;
             vel(isinf(vel)) = nan;
         else
             n_tr = size(curr_data(i).firing_rates_per_bin, 3);
@@ -465,8 +469,8 @@ for g = 1:3
     end
     
     if g < 3
-        xline(20, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-        xline(25, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
         xlabel('Spatial Bin');
     else
         xlabel('Temporal Bin');
@@ -486,8 +490,8 @@ for g = 1:3
             shadedErrorBar(1:n_bins, mu, se, 'lineProps', {'Color', colors(e,:), 'LineWidth', 2});
         end
         xlabel('Spatial Bin'); ylabel('Velocity (cm/s)');
-        xline(20, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-        xline(25, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
     else
         subplot(2, 3, g+3);
         axis off; title('No Velocity (Wheel Blocked)');
@@ -925,8 +929,8 @@ for g = 1:3
     
     if g < 3
         % Plot landmarks for spatial groups
-        xline(20, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
-        xline(25, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
         xlabel('Spatial Bin');
     else
         xlabel('Temporal Bin');
@@ -963,8 +967,8 @@ for g = 1:3
     end
     
     if g < 3
-        xline(20, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
-        xline(25, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
+        xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom', 'LineWidth', 1.5);
         xlabel('Spatial Bin');
     else
         xlabel('Temporal Bin');
@@ -1169,8 +1173,8 @@ for met_idx = 1:size(metrics, 1)
                 end
                 
                 if g < 3
-                    xline(20, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
-                    xline(25, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
+                    xline(cfg.visual_zone_cm/cfg.bin_size_au, 'k--', 'Visual', 'LabelVerticalAlignment', 'bottom'); 
+                    xline(cfg.reward_zone_cm/cfg.bin_size_au, 'k-', 'Reward', 'LabelVerticalAlignment', 'bottom');
                 end
                 
                 if strcmp(avg_mode, 'Pooled')

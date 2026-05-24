@@ -1,0 +1,4 @@
+/tmp/mpl is not a writable directory
+Matplotlib created a temporary cache directory at /tmp/matplotlib-n2ojhk6w because there was an issue with the default path (/tmp/mpl); it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
+[20:29:37] Generating synthetic cohort: 14 mice x 160 trials
+[20:29:50]   mouse  1/14  nll=   1105.7  (12.5s)

@@ -23,9 +23,14 @@ function cfg = project_cfg()
     cfg.max_bin       = 30;         % spatial truncation (RZ + ~5 bins)
 
     % Landmark bins (spatial bin index)
+    
     cfg.visual_bin    = 20;
     cfg.reward_bin    = 25;
     cfg.target_rz_bin = 25;         % alias for callers that want it
+
+    cfg.corridor_cm   = 250;        % full corridor length (cm)
+    cfg.visual_zone_cm    = 80;
+    cfg.reward_zone_cm    = 100;
 
     % --- Areas ---
     % CA1 and DG added 2026-05-08. To add a new area in future:

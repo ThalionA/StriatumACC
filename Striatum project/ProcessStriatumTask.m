@@ -1,13 +1,18 @@
 %% Run preprocessing analysis
 clearvars -except all_data
 clc
+% Seed the RNG so preprocessing is reproducible. calculate_lick_precision.m
+% draws 1000 shuffles per trial via rand(); without a fixed seed the shuffled
+% lick-error mean/std -- and hence zscored_lick_errors and the learning point
+% -- wobble by a trial or two between runs. (Added 2026-05-24.)
+rng(42, 'twister');
 % --- Constants ---
-reward_zone_start_cm = 125; 
+reward_zone_start_cm = 125;
 visual_zone_start_au = 80;
 reward_zone_start_au = 100;
 reward_zone_end_au = 135;
 corridor_end_au = 200;
-bin_size = 4; 
+bin_size = 2; 
 bin_edges = 0:bin_size:corridor_end_au;
 bin_edges(end) = corridor_end_au + bin_size;
 bin_centres = bin_edges(1:end-1) + diff(bin_edges)/2;
@@ -346,7 +351,7 @@ else
         fprintf('Done with animal %d\n', ianimal);
     end
     
-    save('preprocessed_data.mat', 'preprocessed_data', '-v7.3');
+    save('preprocessed_data2p5cm.mat', 'preprocessed_data', '-v7.3');
 end
 
 %%

@@ -36,16 +36,16 @@ function [lps, avg_lp] = find_learning_points(data_struct, cfg)
         if n_trials < cfg.lp_window
             continue;
         end
-        % Sliding count of trials passing threshold within each window
-        passes = double(zerr <= cfg.lp_z_threshold);
-        win_counts = movsum(passes, [0, cfg.lp_window - 1]);
-        idx = find(win_counts >= cfg.lp_min_consecutive, 1, 'first');
+        % Sliding count of trials passing threshold within each window.
+        passes = zerr <= cfg.lp_z_threshold;
+        win_counts = movsum(double(passes), [0, cfg.lp_window - 1]);
+        % LP = the first trial that is ITSELF below threshold and from which
+        % performance is sustained (its [t, t+window-1] window holds
+        % >= lp_min_consecutive sub-threshold trials). The previous rule
+        % returned the window START, which can be an above-threshold trial
+        % -- so the LP could land on a non-learning trial. (Fixed 2026-05-24.)
+        idx = find(passes & (win_counts >= cfg.lp_min_consecutive), 1, 'first');
         if ~isempty(idx)
-            % LP = start of the first qualifying window. This matches
-            % IntegratedAll_v1, processTaskData and the legacy
-            % learning_points_task script. Callers wanting the "end of
-            % qualifying window" convention (e.g. MutualInformationStriatum_v2)
-            % can shift with lp_end = lp + cfg.lp_window - 1.
             lps(i) = idx;
         end
     end

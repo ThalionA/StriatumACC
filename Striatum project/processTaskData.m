@@ -28,8 +28,16 @@ function [task_data_processed, learning_points, avg_learning_point, aligned_lick
     win = cfg.task_lp_window_length; % e.g., 10 for current + next 9
     min_consecutive = cfg.task_lp_min_consecutive; % e.g., 8
 
+    % Learning point = the first trial that is ITSELF below threshold and
+    % from which performance is sustained (its [t, t+win-1] window holds
+    % >= min_consecutive sub-threshold trials). The previous rule returned
+    % the window START, which can be an above-threshold trial -- so the LP
+    % could land on a trial that had not itself reached z <= thresh.
+    % (Fixed 2026-05-24.)
     learning_point_all = cellfun(@(x) ...
-        find(movsum(x <= thresh, [0, win-1], 'omitnan') >= min_consecutive, 1, 'first'), ...
+        find((x <= thresh) & ...
+             (movsum(x <= thresh, [0, win-1], 'omitnan') >= min_consecutive), ...
+             1, 'first'), ...
         zscored_lick_errors_all, 'UniformOutput', false);
 
     has_learning_point = ~cellfun(@isempty, learning_point_all);
