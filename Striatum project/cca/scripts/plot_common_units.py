@@ -5,9 +5,10 @@ area, the bottom row is the Y area; the three columns are the naive,
 intermediate and expert epochs. Within every panel the area's units are split
 into communication-subspace members (top-quartile contributors to the
 dominant canonical dimension) and non-members, and their mean z-scored
-activity across corridor position is drawn (member solid, non-member dashed;
-mean +/- SEM over units). Shows whether the units carrying the inter-areal
-coupling have a distinct spatial tuning, and whether it shifts across learning.
+activity across corridor position is drawn -- members in the epoch colour,
+non-members in grey, both solid, mean +/- SEM over units. Shows whether the
+units carrying the inter-areal coupling have a distinct spatial tuning, and
+whether it shifts across learning.
 
 z-scored activity is re-derived exactly as the pipeline does it -- whole-
 engaged-period per-unit z-scoring of the area tensor, before residualisation
@@ -39,6 +40,8 @@ from striatum_cca import config, dataio, pipeline  # noqa: E402
 
 CFG = config.DEFAULT
 EPOCHS = config.EPOCH_NAMES
+EPOCH_COLOUR = {"naive": "tab:blue", "intermediate": "tab:green",
+                "expert": "tab:red"}
 RESULTS_PKL = config.RESULTS_DIR / "stage3_committed.pkl"
 
 _ZCACHE: dict[tuple[int, str], np.ndarray] = {}
@@ -100,18 +103,18 @@ def collect(results, animals, side):
     return by_pair
 
 
-def _draw_panel(ax, member, nonmember):
-    """Member (solid) and non-member (dashed) mean +/- SEM profiles."""
-    for arr, colour, style, lw, label in (
-            (nonmember, "0.55", "--", 1.1, "non-member"),
-            (member, "tab:red", "-", 1.9, "member")):
+def _draw_panel(ax, epoch, member, nonmember):
+    """Member (epoch colour) and non-member (grey) mean +/- SEM profiles."""
+    for arr, colour, lw, label in (
+            (nonmember, "0.6", 1.3, "non-member"),
+            (member, EPOCH_COLOUR[epoch], 1.9, "member")):
         if not arr.size:
             continue
         n_bins = arr.shape[1]
         pos = (np.arange(n_bins) + 0.5) * config.bin_size_cm(n_bins)
         mean, sem = _mean_sem(arr)
-        ax.plot(pos, mean, style, color=colour, lw=lw, label=label)
-        ax.fill_between(pos, mean - sem, mean + sem, color=colour, alpha=0.18)
+        ax.plot(pos, mean, "-", color=colour, lw=lw, label=label)
+        ax.fill_between(pos, mean - sem, mean + sem, color=colour, alpha=0.2)
     ax.axhline(0, color="k", lw=0.5)
     ax.text(0.03, 0.96, f"member {member.shape[0]} / non {nonmember.shape[0]}",
             transform=ax.transAxes, fontsize=7, va="top", color="0.3")
@@ -125,7 +128,7 @@ def plot_pair(area_x, area_y, cells_x, cells_y):
             (("X", area_x, cells_x), ("Y", area_y, cells_y))):
         for col, epoch in enumerate(EPOCHS):
             ax = axes[row, col]
-            _draw_panel(ax, *cells[epoch])
+            _draw_panel(ax, epoch, *cells[epoch])
             if row == 0:
                 ax.set_title(epoch, fontsize=11)
         axes[row, 0].set_ylabel(f"{side_label}: {area}\n"
