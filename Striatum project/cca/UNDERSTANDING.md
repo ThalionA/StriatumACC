@@ -211,6 +211,22 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v11 (round 11: cross-pair subspace similarity + full partial
+  CCA).**
+  1. **Within-area subspace similarity** — new `crosspair.py` (+
+     `test_crosspair.py`): the |cosine| similarity of an area's dominant
+     canonical weight vector between the pairs it joins, compared within an
+     animal and averaged across animals. `plot_subspace_similarity.py` draws
+     a 3-epoch × 5-area grid of partner-similarity heatmaps + a summary.
+     Subspaces are largely partner-specific (mean |cos| ~0.2–0.4, near the
+     random-vector baseline) — an area does not use one shared read-out for
+     all partners.
+  2. **Partial CCA generalised** — `run_partial.py` extended from the
+     DMS/DLS/ACC triplet to all 10 pairs, conditioning each pair on every
+     other recorded area at once (`partial.py` unchanged — a concatenated Z).
+     `plot_partial.py` draws plain vs partial held-out CC1. Coupling is
+     direct: partial CC1 ≈ plain CC1 everywhere.
+  99 tests; ruff clean. Full log in NOTES.md (round 11).
 - **2026-05-24 — v10 (round 10: intermediate epoch restored + circshift null).**
   1. **Three epochs again** — `EPOCH_NAMES = ("naive", "intermediate",
      "expert")`; `dataio.epoch_windows` and `stage3.EPOCH_TRANSITIONS`

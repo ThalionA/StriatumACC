@@ -560,3 +560,30 @@ every Python plot script imports it so figures match across both halves of
 the project.
 
 88 tests; ruff clean.
+
+## 2026-05-24 — round 11 (cross-pair subspace similarity + full partial CCA)
+
+Two new analyses on the committed config.
+
+**Within-area subspace similarity.** New `crosspair.py` + `test_crosspair.py`
+(11 tests): for each area, the |cosine| similarity of its dominant
+communication-weight vector between the pairs it joins, compared *within an
+animal* (the vectors live in that animal's neuron space) and averaged across
+animals. `plot_subspace_similarity.py` renders a 3-epoch × 5-area grid of 4×4
+partner-similarity heatmaps plus a summary line plot. Finding: mean pairwise
+similarity sits at ~0.2–0.4 — barely above the random-vector baseline
+(≈0.15–0.25 for 10–30-unit areas) — so each area uses a largely *different*
+subspace for each partner; the communication channel is partner-specific, not
+one shared read-out.
+
+**Partial CCA, full conditioning.** `run_partial.py` rewritten: committed
+config, all 10 pairs; for each pair every other recorded area is regressed out
+of both X and Y at once (the conditioning set is whatever areas that animal
+has — size varies, recorded per cell as `n_control`). `plot_partial.py` draws
+plain vs partial held-out CC1 per pair × epoch. Finding: partial CC1 ≈ plain
+CC1 for every pair, often slightly *higher* — inter-areal coupling is direct,
+not explained away by the other areas. 99 cells from 9 animals (only animals
+with ≥3 areas qualify). The confound regression is fitted on all samples, not
+cross-validated (as in the original `partial.py`).
+
+99 tests; ruff clean.
