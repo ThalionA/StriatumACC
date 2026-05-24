@@ -632,3 +632,30 @@ inclusion does enlarge the cohort, since more area × animal cells clear the
 `min_units` floor: plain 37 → 48 pairs, partial 33 → 46.
 
 107 tests; ruff clean.
+
+## 2026-05-24 — round 14 (lock-in)
+
+The committed configuration is frozen. The committed analysis is **partial
+CCA** with:
+
+- spatial **2.5 cm** bins (100-bin preprocessing);
+- **residual** CCA (per-(bin,unit) trial mean subtracted);
+- whole-engaged-period per-unit **z-scoring**, applied before residualisation;
+- **fast-spiking units excluded** (`min_units` 6);
+- **3 epochs** (naive / intermediate / expert), 10 trials each; **LP
+  criterion 7**;
+- PCs by the samples rule, **15 samples per PC** (`k_cap` 30);
+- 5-fold whole-trial CV; held-out-CC per-dimension significance, **p < 0.05**;
+- **circshift** surrogate null, min shift 15 bins, **n_shuffles 250** (raised
+  from 200 at this lock-in);
+- **partial CCA -- every other recorded area regressed out of each pair --
+  is the committed default** (round 12). `run_committed.py` runs partial
+  unless `--plain`; the four plot scripts default to `--variant partial`;
+- Stage 3 communication subspace = the dominant canonical dimension
+  (`d_sub` 1);
+- learners-only cohort for all reported figures; animal 8 forced non-learner.
+
+`config.DEFAULT.n_shuffles` 200 → 250; `run_committed.py --shuffles` default
+250; `--partial` replaced by `--plain` (partial is now the no-flag default).
+All five Stage-2 pkls (plain/partial × FS-excl/incl, plus the trial-null
+comparison run) re-run at 250 surrogates. 107 tests; ruff clean.

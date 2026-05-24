@@ -139,7 +139,7 @@ def plot_summary(results):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    p.add_argument("--variant", choices=("plain", "partial"), default="partial")
     _configure(p.parse_args().variant)
     results = load_learners()
     plot_heatmaps(results)

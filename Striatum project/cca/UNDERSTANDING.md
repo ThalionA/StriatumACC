@@ -211,6 +211,15 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v14 (round 14: lock-in).** Committed configuration frozen.
+  `config.DEFAULT.n_shuffles` 200 → 250. Partial CCA made the committed
+  default: `run_committed.py` runs partial unless `--plain`, and the four
+  plot scripts default to `--variant partial`. **The committed analysis:**
+  partial CCA · 2.5 cm spatial bins · residual · FS-excluded (`min_units` 6)
+  · whole-period z-scored · 3 epochs × 10 trials · LP-7 · samples-per-PC 15
+  · circshift null (min shift 15, 250 surrogates) · held-out-CC significance
+  p < 0.05 · `d_sub` 1 · learners only. All five Stage-2 pkls re-run at 250
+  surrogates. Full log in NOTES.md (round 14).
 - **2026-05-24 — v13 (round 13: IFI window 10, FS units in vs out).**
   `run_committed.py --include-fs` runs Stage 2 with `exclude_fast_spiking=
   False` (filenames get `_fsincl`); `plot_ifi_fs.py` compares the Information

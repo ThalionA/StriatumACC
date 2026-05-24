@@ -285,7 +285,7 @@ def plot_ifi_window(results, window):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    p.add_argument("--variant", choices=("plain", "partial"), default="partial")
     _configure(p.parse_args().variant)
     if not RESULTS_PKL.exists():
         sys.exit(f"missing {RESULTS_PKL.name} -- run "

@@ -165,7 +165,7 @@ def plot_pair(area_x, area_y, cells_x, cells_y):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--variant", choices=("plain", "partial"), default="plain")
+    p.add_argument("--variant", choices=("plain", "partial"), default="partial")
     _configure(p.parse_args().variant)
     if not RESULTS_PKL.exists():
         sys.exit(f"missing {RESULTS_PKL.name} -- run "

@@ -8,11 +8,17 @@ results/stage2_committed_<tag>.pkl where <tag> encodes the overrides.
 
 Stage 3 (``--stage 3``) runs the subspace driver (membership, Gini, principal
 angles). Stage 3 is null-independent, so a single run serves every Stage 3
-figure regardless of the surrogate. Saves results/stage3_committed.pkl.
+figure regardless of the surrogate. Saves results/stage3_committed*.pkl.
+
+Partial CCA -- every other recorded area regressed out of the pair -- is the
+committed default (round-14 lock-in); pass ``--plain`` for plain CCA.
+``--include-fs`` keeps fast-spiking units. Output filenames carry ``_partial``
+/ ``_fsincl`` tags accordingly.
 
 Resumable; --max-seconds chunks the run.
 
-Run:  python scripts/run_committed.py --stage 2 --null-type circshift
+Run:  python scripts/run_committed.py --stage 2          # committed: partial
+      python scripts/run_committed.py --stage 2 --plain  # plain comparison
       python scripts/run_committed.py --stage 3
 """
 
@@ -44,15 +50,18 @@ def parse_args():
                    default="circshift")
     p.add_argument("--trials-per-epoch", type=int, default=0,
                    help="0 = use the config default")
-    p.add_argument("--shuffles", type=int, default=200)
+    p.add_argument("--shuffles", type=int, default=250)
     p.add_argument("--jobs", type=int, default=4)
     p.add_argument("--max-seconds", type=float, default=0.0)
     p.add_argument("--fresh", action="store_true")
-    p.add_argument("--partial", action="store_true",
-                   help="condition every pair on all other recorded areas")
+    p.add_argument("--plain", action="store_true",
+                   help="plain CCA; the committed default is partial "
+                        "(every other recorded area regressed out)")
     p.add_argument("--include-fs", action="store_true",
                    help="include fast-spiking units (committed default excludes)")
-    return p.parse_args()
+    args = p.parse_args()
+    args.partial = not args.plain          # partial CCA is the committed default
+    return args
 
 
 def _key(o):
