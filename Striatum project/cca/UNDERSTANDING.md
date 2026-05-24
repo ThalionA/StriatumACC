@@ -211,6 +211,13 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v13 (round 13: IFI window 10, FS units in vs out).**
+  `run_committed.py --include-fs` runs Stage 2 with `exclude_fast_spiking=
+  False` (filenames get `_fsincl`); `plot_ifi_fs.py` compares the Information
+  Flow Index at |lag| <= 10 bins, FS-excluded vs FS-included, for the plain
+  and the partial pipelines. The IFI(w10) result is unchanged by FS
+  inclusion, which only enlarges the cohort (plain 37 → 48, partial 33 → 46
+  pairs). Full log in NOTES.md (round 13).
 - **2026-05-24 — v12 (round 12: partial-CCA variant of the full pipeline).**
   `pipeline.prepare_pair_partial` builds a PreparedPair with every other
   recorded area's PC scores regressed out of X's and Y's residualised neuron

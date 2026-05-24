@@ -50,6 +50,8 @@ def parse_args():
     p.add_argument("--fresh", action="store_true")
     p.add_argument("--partial", action="store_true",
                    help="condition every pair on all other recorded areas")
+    p.add_argument("--include-fs", action="store_true",
+                   help="include fast-spiking units (committed default excludes)")
     return p.parse_args()
 
 
@@ -67,12 +69,16 @@ def _save(path, done, cfg):
 def _resolve(args):
     """Config, output path and per-pair worker for the requested stage."""
     suffix = "_partial" if args.partial else ""
+    fs = "_fsincl" if args.include_fs else ""
     if args.stage == 3:
         # Stage 3 is null-independent: one run serves every figure.
-        cfg = config.DEFAULT
+        repl = {}
         if args.trials_per_epoch:
-            cfg = dataclasses.replace(cfg, trials_per_epoch=args.trials_per_epoch)
-        out = config.RESULTS_DIR / f"stage3_committed{suffix}.pkl"
+            repl["trials_per_epoch"] = args.trials_per_epoch
+        if args.include_fs:
+            repl["exclude_fast_spiking"] = False
+        cfg = dataclasses.replace(config.DEFAULT, **repl) if repl else config.DEFAULT
+        out = config.RESULTS_DIR / f"stage3_committed{fs}{suffix}.pkl"
         return cfg, out, stage3.analyse_subspace
 
     over = {"null_type": args.null_type, "n_shuffles": args.shuffles}
@@ -80,6 +86,9 @@ def _resolve(args):
     if args.trials_per_epoch:
         over["trials_per_epoch"] = args.trials_per_epoch
         tag += f"_tpe{args.trials_per_epoch}"
+    if args.include_fs:
+        over["exclude_fast_spiking"] = False
+        tag += "_fsincl"
     cfg = dataclasses.replace(config.DEFAULT, **over)
     out = config.RESULTS_DIR / f"stage2_committed_{tag}{suffix}.pkl"
     return cfg, out, analysis.analyse_pair

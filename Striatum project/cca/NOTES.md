@@ -616,3 +616,19 @@ recorded area. Consistent with the round-11 CC1 result: inter-areal coupling
 is direct, not a relay through the other recorded areas.
 
 107 tests (8 new); ruff clean.
+
+## 2026-05-24 — round 13 (IFI window 10 -- FS units in vs out)
+
+`run_committed.py` gained `--include-fs` (sets `exclude_fast_spiking=False`;
+output filenames get `_fsincl`). Ran FS-included Stage 2 for both the plain
+and the partial pipelines. New `plot_ifi_fs.py` overlays the Information Flow
+Index at the widest lag window (|lag| <= 10 bins), FS-excluded vs FS-included,
+per pair × epoch -- one figure per pipeline
+(`ifi_fs_win10_{plain,partial}.png`).
+
+Finding: including FS units leaves the IFI(w10) result essentially unchanged
+in both pipelines -- the directionality story is robust to FS inclusion. FS
+inclusion does enlarge the cohort, since more area × animal cells clear the
+`min_units` floor: plain 37 → 48 pairs, partial 33 → 46.
+
+107 tests; ruff clean.
