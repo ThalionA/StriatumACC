@@ -128,31 +128,23 @@ def test_n_usable_trials_uses_full_length_when_no_change_point():
 def test_epoch_windows_are_disjoint_and_correct():
     win = dataio.epoch_windows(lp=42, n_usable=100, cfg=CFG)
     assert win is not None
-    assert set(win) == {"naive", "expert"}
+    assert set(win) == {"naive", "intermediate", "expert"}
     assert np.array_equal(win["naive"], np.arange(0, 10))
+    assert np.array_equal(win["intermediate"], np.arange(32, 42))
     assert np.array_equal(win["expert"], np.arange(42, 52))
 
 
-def test_epoch_windows_valid_for_fast_learner():
-    # Intermediate is gone (round 7): naive vs expert only needs the two
-    # windows not to overlap, so a fast learner (10 <= lp < 20) is now valid.
-    win = dataio.epoch_windows(lp=12, n_usable=100, cfg=CFG)
+def test_epoch_windows_boundary_lp_equals_twice_trials_per_epoch():
+    # lp == 2*trials_per_epoch: naive [0,10) and intermediate [10,20) abut.
+    win = dataio.epoch_windows(lp=20, n_usable=100, cfg=CFG)
     assert win is not None
-    assert set(win) == {"naive", "expert"}
-    assert np.array_equal(win["naive"], np.arange(0, 10))
-    assert np.array_equal(win["expert"], np.arange(12, 22))
-
-
-def test_epoch_windows_boundary_lp_equals_trials_per_epoch():
-    # lp == trials_per_epoch: naive [0, 10) and expert [10, 20) just abut.
-    win = dataio.epoch_windows(lp=10, n_usable=100, cfg=CFG)
-    assert win is not None
-    assert np.array_equal(win["expert"], np.arange(10, 20))
+    assert np.array_equal(win["intermediate"], np.arange(10, 20))
+    assert np.array_equal(win["expert"], np.arange(20, 30))
 
 
 def test_epoch_windows_reject_overlap_when_lp_too_early():
-    # lp < trials_per_epoch would make naive and expert overlap.
-    assert dataio.epoch_windows(lp=9, n_usable=100, cfg=CFG) is None
+    # lp < 2*trials_per_epoch makes naive and intermediate overlap.
+    assert dataio.epoch_windows(lp=19, n_usable=100, cfg=CFG) is None
 
 
 def test_epoch_windows_reject_when_expert_exceeds_trials():

@@ -190,25 +190,24 @@ def n_usable_trials(animal: Animal) -> int:
 
 
 def epoch_windows(lp: int, n_usable: int, cfg) -> dict[str, np.ndarray] | None:
-    """Return the 0-indexed trial indices of the two learning epochs.
+    """Return the 0-indexed trial indices of the three learning epochs.
 
-    naive   = trials 1..10                  (0-indexed 0..9)
-    expert  = the 10 trials after lp         (0-indexed lp .. lp+9)
+    naive        = trials 1..10                  (0-indexed 0..9)
+    intermediate = the 10 trials ending at lp     (0-indexed lp-10 .. lp-1)
+    expert       = the 10 trials after lp         (0-indexed lp .. lp+9)
 
-    The intermediate epoch was dropped in round 7: the analysis contrasts
-    naive vs expert directly. With no intermediate window, the only constraint
-    is that naive and expert must not overlap (lp >= trials_per_epoch) and the
-    expert window must fit inside the usable trials.
-
-    Returns None if either constraint fails.
+    The intermediate epoch was re-added in round 10. Returns None if the
+    windows would overlap (lp < 2 * trials_per_epoch) or the expert window
+    would exceed the usable trials.
     """
     e = cfg.trials_per_epoch
-    if lp < e:                     # naive and expert would overlap
+    if lp < 2 * e:                 # naive and intermediate would overlap
         return None
     if lp + e > n_usable:          # expert window exceeds usable trials
         return None
     return {
         "naive": np.arange(0, e),
+        "intermediate": np.arange(lp - e, lp),
         "expert": np.arange(lp, lp + e),
     }
 

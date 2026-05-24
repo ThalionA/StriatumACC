@@ -177,8 +177,9 @@ def test_cca_handles_rank_deficient_input():
 # choose_k
 # ---------------------------------------------------------------------------
 def test_choose_k_samples_rule():
-    # 500 samples / 25 = 20, within unit counts and the cap.
-    assert core.choose_k(60, 60, 500, CFG) == 20
+    # samples rule: floor(n_samples / samples_per_pc), within unit/cap limits.
+    cfg = dataclasses.replace(CFG, k_mode="samples", samples_per_pc=25)
+    assert core.choose_k(60, 60, 500, cfg) == 20          # 500 / 25
 
 
 def test_choose_k_capped_by_units():

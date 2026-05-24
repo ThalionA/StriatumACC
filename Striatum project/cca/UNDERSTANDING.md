@@ -211,6 +211,36 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-05-24 — v10 (round 10: intermediate epoch restored + circshift null).**
+  1. **Three epochs again** — `EPOCH_NAMES = ("naive", "intermediate",
+     "expert")`; `dataio.epoch_windows` and `stage3.EPOCH_TRANSITIONS`
+     reverted to 3. Re-instates the cohort gate `lp >= 2*trials_per_epoch`.
+     Partly undoes v7 item 1. LP criterion stays at 7.
+  2. **Circshift committed as the primary null** — `config.null_type`
+     (`"trials"` | `"circshift"`) and `config.circshift_min_bins = 15`.
+     `surrogate.py` gains `circshift_bins` (per-trial circular roll of the
+     bin axis by a random shift ≥ 15 bins); `build_null` dispatches on
+     `null_type`. `config.DEFAULT.null_type` is now `"circshift"` — the
+     surrogate Gonzalez et al. use, and the defensible one (Theo's call,
+     round 10). The two trial-permutation tests in `test_surrogate.py` are
+     pinned to `null_type="trials"`. Caveat: circshift preserves trial
+     pairing, so it is the more permissive test (533 vs 201 significant
+     dims pooled over all pairs×epochs); `compare_nulls.py` records the
+     dependence (`figures/null_comparison.{csv,png}`).
+  3. **Full committed figure set** — `run_committed.py` extended with
+     `--stage {2,3}` (Stage 3 is null-independent → `stage3_committed.pkl`).
+     `plot_stage2.py`, `plot_stage3.py` rewritten for the 3-epoch committed
+     config; new `plot_common_units.py` plots member vs non-member spatial
+     activity profiles. `d_sub` stays 1 for Stage 3 (set by the split-half
+     stability floor, not the surrogate). 88 tests; ruff clean. Full log in
+     NOTES.md (round 10).
+- **2026-05-24 — v9 (round 9: committed config).** The sweep's defensible
+  region was promoted to `config.DEFAULT`: residual CCA, z-scoring on,
+  2.5 cm bins, `samples_per_pc=15`, `min_units=6`, `lp_min_consecutive=7`,
+  `trials_per_epoch=10`, `n_shuffles=200`. Parcoords rebuilt per-pair (pair
+  is never a hyperparameter). Two V1 "findings" (V1-ACC strength, V1-DMS IFI
+  flip) traced to 2-animal artifacts at LP-8 and dropped; `trials_per_epoch`
+  15 rejected (no gain, cohort cost). Full log in NOTES.md (round 9).
 - **2026-05-23 — v8 (round 8: parameter sweep + temporal arm).**
   1. **Spatial parameter sweep (27 configs)** — 2x2x2x2 factorial (bin width
      x residual/signal x FS x z-scoring) plus one-at-a-time sweeps of the

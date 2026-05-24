@@ -8,10 +8,13 @@ larger value) and spuriously passed -- inflating the apparent subspace
 dimensionality. The held-out CC of a noise dimension is ~0 regardless of its
 index, so the held-out test is properly calibrated.
 
-Null: permute the trial correspondence between the two areas (H&H), recompute
-the cross-validated CCA, and compare the real held-out CC of each dimension to
-the shuffle distribution. The number of dimensions passing is the
-communication-subspace dimensionality -- used as the statistical n.
+Null (cfg.null_type): "trials" permutes the trial correspondence between the
+two areas (H&H -- tests trial-to-trial communication); "circshift" circularly
+shifts each trial's bin axis (tests within-trial co-tuning, preserving spatial
+autocorrelation). Either way the cross-validated CCA is recomputed and the real
+held-out CC of each dimension compared to the shuffle distribution. The number
+of dimensions passing is the communication-subspace dimensionality -- the
+statistical n.
 """
 
 from __future__ import annotations
@@ -26,6 +29,24 @@ from . import core
 def permute_trials(tensor: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """Shuffle the trial axis (axis 0) -- breaks cross-area trial pairing (H&H)."""
     return tensor[rng.permutation(tensor.shape[0])]
+
+
+def circshift_bins(tensor: np.ndarray, rng: np.random.Generator,
+                   min_shift: int) -> np.ndarray:
+    """Circularly shift each trial's bin axis by a random offset of at least
+    ``min_shift`` bins.
+
+    Breaks the within-trial bin alignment between the two areas while
+    preserving each area's spatial autocorrelation -- a small shift would
+    leave adjacent bins almost aligned, hence the minimum.
+    """
+    n_tr, n_bin, _ = tensor.shape
+    out = np.empty_like(tensor)
+    hi = n_bin - min_shift
+    for t in range(n_tr):
+        s = int(rng.integers(min_shift, hi + 1)) if hi > min_shift else 0
+        out[t] = np.roll(tensor[t], s, axis=0)
+    return out
 
 
 def p_value(real: float, null: np.ndarray) -> float:
@@ -65,9 +86,11 @@ def build_null(
 
     null = np.full((cfg.n_shuffles, d), np.nan)
     for s in range(cfg.n_shuffles):
-        held_out = core.cca_cv(
-            scores_x, permute_trials(scores_y, rng), cfg
-        ).held_out_r
+        if cfg.null_type == "circshift":
+            shuffled_y = circshift_bins(scores_y, rng, cfg.circshift_min_bins)
+        else:
+            shuffled_y = permute_trials(scores_y, rng)
+        held_out = core.cca_cv(scores_x, shuffled_y, cfg).held_out_r
         m = min(d, held_out.shape[0])
         null[s, :m] = held_out[:m]
 

@@ -39,7 +39,8 @@ def test_analyse_subspace_structure():
         assert es.member_x.shape == (10,)
         assert 0.0 <= es.gini_x <= 1.0
         assert es.member_x.sum() >= 1                       # quartile non-empty
-    assert set(result.angles_x) == {"naive->expert"}
+    assert set(result.angles_x) == {
+        "naive->intermediate", "intermediate->expert", "naive->expert"}
     for angles in result.angles_x.values():
         assert np.all((angles >= 0) & (angles <= np.pi / 2 + 1e-9))
 

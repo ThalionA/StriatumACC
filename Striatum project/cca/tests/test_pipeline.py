@@ -138,7 +138,10 @@ def test_zscore_invariant_to_global_unit_rescaling():
     base = synthetic_animal({"DMS": 25, "ACC": 25}, shared_strength=1.0, noise=0.3)
     scaled = synthetic_animal({"DMS": 25, "ACC": 25}, shared_strength=1.0, noise=0.3)
     scaled.spatial_fr[:, :, 0] *= 100.0
-    zcfg = dataclasses.replace(CFG, zscore_units=True)
+    # k_fixed < n_units so PCA genuinely reduces -- otherwise (k == n_units)
+    # a full-rank PCA makes the result invariant to z-scoring trivially.
+    zcfg = dataclasses.replace(CFG, zscore_units=True, k_mode="fixed",
+                               k_fixed=10)
     fit_base = pipeline.fit_pair(base, "DMS", "ACC", LEARNER, zcfg)
     fit_scaled = pipeline.fit_pair(scaled, "DMS", "ACC", LEARNER, zcfg)
     for epoch in config.EPOCH_NAMES:
@@ -156,7 +159,10 @@ def test_zscore_normalisation_spans_whole_engaged_period():
                                    shared_strength=1.0, noise=0.3)
     expert = np.arange(LEARNER.lp, LEARNER.lp + CFG.trials_per_epoch)
     expert_only.spatial_fr[expert, :, 0] *= 50.0
-    zcfg = dataclasses.replace(CFG, zscore_units=True)
+    # k_fixed < n_units so PCA genuinely reduces (z-scoring is a no-op when
+    # k == n_units: a full-rank PCA + scale-invariant CCA).
+    zcfg = dataclasses.replace(CFG, zscore_units=True, k_mode="fixed",
+                               k_fixed=10)
     fit_base = pipeline.fit_pair(base, "DMS", "ACC", LEARNER, zcfg)
     fit_expert = pipeline.fit_pair(expert_only, "DMS", "ACC", LEARNER, zcfg)
     assert not np.allclose(fit_base.epochs["naive"].held_out_r,

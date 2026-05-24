@@ -16,6 +16,8 @@ import numpy as np
 from . import config, core, membership, pipeline, subspace
 
 EPOCH_TRANSITIONS = (
+    ("naive", "intermediate"),
+    ("intermediate", "expert"),
     ("naive", "expert"),
 )
 # Canonical dims defining the "communication subspace" (D9/D10).

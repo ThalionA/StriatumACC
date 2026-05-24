@@ -468,3 +468,87 @@ array) — guarded as empty.
 (`stage2_{res,sig}_fs*.pkl`, `stage2_s5cm_*.pkl`, `stage3_main.pkl`,
 `stage3_s5cm.pkl`) — superseded by the sweep's `stage2_<tag>.pkl` /
 `stage3_<tag>.pkl`; plus older non-sweep figures.
+
+---
+
+## 2026-05-24 — round 9 (commit the config + IFI deep-dive)
+
+The sweep surfaced one defensible region; Theo committed to it and we made
+it `config.DEFAULT`: **residual CCA, z-scoring on, 2.5 cm bins,
+`samples_per_pc=15`, `min_units=6`, `lp_min_consecutive=7`,
+`trials_per_epoch=10`, `n_shuffles=200`**. Parcoords plots
+(`plot_parcoords.py`) were rebuilt as a per-pair grid after Theo's note that
+**pair is never a hyperparameter — always show all pairs**.
+
+Honest corrections logged this round:
+- `min_units` 4→6 does **not** cost the V1 cohorts (the cohort tables show
+  V1-DMS / V1-ACC = 2 learners at *every* min_units). The real cohort lever
+  is the LP criterion: LP-7 → 3 learners on V1 pairs, LP-8 → 2.
+- The min_units=6 / LP-8 / samp-15 config that sharpened V1-ACC strength
+  (p ≈ 0.02–0.03) was a **2-animal artifact** — reverting to LP-7 (n=3)
+  pushed it to p ≈ 0.26 and the V1-DMS IFI flip vanished. Both V1 "findings"
+  were two-mouse noise; reported as such.
+- `trials_per_epoch=15` gave no extra significant dims (134→129) and cost
+  cohort (33→27 learner pairs) — stayed at 10.
+
+## 2026-05-24 — round 10 (intermediate epoch back + circshift null)
+
+Re-added the **intermediate epoch** — pipeline is 3-epoch again
+(`EPOCH_NAMES = naive/intermediate/expert`; `dataio.epoch_windows` and
+`stage3.EPOCH_TRANSITIONS` reverted to 3). LP stays at 7.
+
+Added a second surrogate null. `config` gained `null_type`
+(`"trials"` | `"circshift"`) and `circshift_min_bins=15`; `surrogate.py`
+gained `circshift_bins` (per-trial `np.roll` of the bin axis by a random
+shift in `[min_shift, n_bins-min_shift]`) and `build_null` now dispatches on
+`null_type`. `run_committed.py` rewritten to run `config.DEFAULT` under
+`--null-type {trials,circshift}`; `compare_nulls.py` builds the comparison
+(`figures/null_comparison.{csv,png}`).
+
+**Result — the circshift null is much more permissive.** Significant
+subspace dims pooled over all pairs×epochs: **trial-perm = 201,
+circshift = 533** (≈2.6×). Every pair×epoch gains dims. Why: circshift
+keeps each trial paired with itself and only destroys *within-trial bin
+alignment*, so any trial-level co-modulation (a shared per-trial gain — e.g.
+arousal/running-speed drift) **survives** the null and is counted as real.
+Trial-permutation destroys the trial pairing and is the stricter test.
+
+What the null choice does and does not change:
+- **Epoch shape is preserved** — which epoch peaks/declines is the same
+  under both nulls for every pair (e.g. DLS-ACC peaks at intermediate and
+  collapses at expert under both; V1-DMS / V1-ACC / CA1-V1 decline from
+  naive under both). The learning-related *pattern* is robust to the null.
+- **Magnitudes shift.** Mean held-out CC of the significant pool is
+  uniformly *lower* under circshift (the extra dims it admits are weak
+  ones — DMS-DLS naive 0.245→0.139). IFI (w3) is the least robust: signs
+  flip between nulls on several cells (V1-ACC expert +0.18→−0.07).
+
+**Decision — circshift committed as the primary null.** Theo's call: it is
+the surrogate Gonzalez et al. use, it is the defensible one, and it recovers
+many more significant subspace dimensions. `config.DEFAULT.null_type` is now
+`"circshift"`; the two trial-permutation tests in `test_surrogate.py` are
+pinned to `null_type="trials"` so that path stays covered. The caveat stands
+and is worth keeping in mind when writing up: circshift leaves trial-level
+co-modulation (e.g. arousal/running-speed drift) in the "real" signal, so it
+is the more permissive test — `compare_nulls.py` remains the record of how
+much the count depends on the null.
+
+### Full figure set — committed config, circshift, three epochs
+`run_committed.py` extended with `--stage {2,3}` (Stage 3 is null-independent
+— one run, `stage3_committed.pkl`). All three plot scripts rewritten for the
+3-epoch committed config:
+- `plot_stage2.py` — single committed config (4-config grid dropped), reads
+  `stage2_committed_circshift.pkl`: communication strength (held-out CC),
+  subspace dimensionality, lag curves, IFI for every window 1–10. Each
+  figure: 3-epoch boxes, vs-0 stars, naive→expert paired + unpaired p.
+- `plot_stage3.py` — reads `stage3_committed.pkl`: principal angles (floor +
+  the 3 transitions), Gini sparsity, membership overlap.
+- `plot_common_units.py` (new) — re-derives the z-scored area tensors
+  (`pipeline._zscore_area`) and, per pair × epoch, plots the mean spatial
+  activity of communication-subspace member vs non-member units (X- and
+  Y-side figures). Members are *not* an activity-distinct subpopulation —
+  member and non-member profiles overlap.
+`d_sub` stays 1 for Stage 3: the split-half stability floor sets it, and the
+surrogate (a held-out-CC test, a different measurement) does not change that.
+
+88 tests; ruff clean.

@@ -63,10 +63,10 @@ def bin_size_cm(n_bins: int) -> float:
 NTYPE_COL = 4
 FS_TYPE_CODE = 2
 
-# --- Epoch names (ordered naive -> expert) -----------------------------------
-# The intermediate epoch was dropped in round 7: the analysis contrasts naive
-# vs expert directly (paired and unpaired). See UNDERSTANDING.md edit log.
-EPOCH_NAMES: tuple[str, str] = ("naive", "expert")
+# --- Epoch names (ordered naive -> intermediate -> expert) -------------------
+# Intermediate re-added in round 10 (dropped round 7): naive = trials 1-10,
+# intermediate = the 10 trials ending at LP, expert = the 10 after LP.
+EPOCH_NAMES: tuple[str, str, str] = ("naive", "intermediate", "expert")
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ class Config:
     # Learning point detection (project rule; see UNDERSTANDING.md).
     lp_z_threshold: float = -2.0
     lp_window: int = 10
-    lp_min_consecutive: int = 7
+    lp_min_consecutive: int = 7        # round-8: kept at 7 (LP-8 cost 3 learners)
     # Animals forced to non-learner regardless of a detected LP. Animal 8's
     # detected LP (16) is implausibly early — likely a detection artefact;
     # it is yoked instead (UNDERSTANDING.md edit log v2).
@@ -97,15 +97,16 @@ class Config:
     temporal_bin_ms: int = 20
     temporal_max_trial_ms: int = 60_000
 
-    # Unit inclusion. min_units lowered 5 -> 4 at the Stage 1 checkpoint
-    # (edit log v4). The FS-included vs FS-excluded comparison flips
-    # exclude_fast_spiking; FS-excluded is the primary.
-    min_units: int = 4
+    # Unit inclusion. min_units committed at 6 in round 8 (was 4); the
+    # FS-included vs FS-excluded comparison flips exclude_fast_spiking;
+    # FS-excluded is the primary committed default.
+    min_units: int = 6
     exclude_fast_spiking: bool = True
 
-    # Committed analysis (round 6): residual CCA, FS-excluded, z-scored units,
-    # held-out CC. These are the defaults below; the factorial knobs remain so
-    # alternatives can still be run if needed.
+    # Committed analysis (round 8): residual CCA, FS-excluded, z-scored units,
+    # held-out CC, 2.5 cm bins, min_units 6, LP-criterion 7, samples-per-PC 15
+    # -- the configuration the parameter sweep converged on. The sweep knobs
+    # remain so alternatives can still be run.
     # Residualisation (D2): subtract the per-(bin, unit) trial mean.
     subtract_trial_mean: bool = True
     # Z-score each unit by its std over the entire engaged period, applied to
@@ -122,7 +123,7 @@ class Config:
     k_mode: str = "samples"
     k_fixed: int = 10
     k_variance: float = 0.90
-    samples_per_pc: int = 25
+    samples_per_pc: int = 15           # round-8 committed config (was 25)
     k_cap: int = 30
 
     # Cross-validation (D8): 5-fold over whole trials.
@@ -134,9 +135,17 @@ class Config:
     # 50-bin preprocessing.
     max_lag_bins: int = 10
 
-    # Surrogate null (D7): trial-permutation, held-out-CC per-dimension test.
+    # Surrogate null (D7): held-out-CC per-dimension permutation test.
+    # null_type "circshift" -- per-trial circular shift of the bin axis by
+    # >= circshift_min_bins (tests within-trial co-tuning, preserving each
+    # area's spatial autocorrelation; the surrogate used by Gonzalez et al.).
+    # "trials" -- permute the trial correspondence (H&H; tests trial-to-trial
+    # communication). Committed to "circshift" in round 10: it is the
+    # defensible null and flags ~2.6x more significant subspace dimensions.
     n_shuffles: int = 200
     surrogate_seed: int = 0
+    null_type: str = "circshift"
+    circshift_min_bins: int = 15
 
     # Parallelism (D11): processes for the cohort run.
     n_jobs: int = 4
