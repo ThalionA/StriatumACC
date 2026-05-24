@@ -1,10 +1,16 @@
 %% ================= Configuration =======================================================
 clear; clc; close all;
 % rng(0)
-% --- Data Files (paths from project_cfg; updated 2026-05-07) ---
+% --- Data Files ---
+% TCA deliberately runs on the 5 cm preprocessing, NOT the 2.5 cm files
+% that project_cfg now points at (2026-05-24). The 2.5 cm spatial binning
+% leaves frequent unsampled-bin NaN gaps; TCA's NaN filter drops any
+% neuron with any NaN, and because a gap is shared across a mouse's
+% neurons it wipes whole mice — including every mouse that carries V1/CA1.
+% At 5 cm the gaps are rare (13/14 mice survive), so V1/CA1 are retained.
 proj = project_cfg();
-cfg.task_data_file     = proj.task_data_file;
-cfg.control_data_file  = proj.control_data_file;
+cfg.task_data_file     = 'processed_data/preprocessed_data5cm.mat';
+cfg.control_data_file  = 'processed_data/preprocessed_data_control5cm.mat';
 cfg.control2_data_file = proj.control2_data_file;
 clear proj
 
@@ -38,7 +44,7 @@ cfg.tca.fixed_n_factors = 5; % Used if select_factors_method is 'fixed' or as fa
 cfg.plot.zone_params.visual_zones_au  = [80 100];
 cfg.plot.zone_params.reward_zone_au   = [100 135];
 cfg.plot.zone_params.corridor_end_au = 200;
-cfg.plot.zone_params.bin_size = 4;
+cfg.plot.zone_params.bin_size = 4;   % 5 cm bins = 4 a.u./bin (TCA runs on the 5 cm data)
 
 % Per-area colours — pulled from project_cfg() so the same palette
 % appears in every figure across the project.
