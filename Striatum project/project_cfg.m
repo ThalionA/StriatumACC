@@ -15,18 +15,21 @@ function cfg = project_cfg()
     cfg = struct();
 
     % --- Spatial geometry ---
-    cfg.bin_size_au   = 4;          % bins are 4 a.u. wide
+    % 2.5 cm binning, 100 bins/corridor (2026-05-24, to match the
+    % preprocessed_data2p5cm.mat data paths). a.u./cm and corridor length
+    % are physical; the bin-index constants are 2.5 cm values.
+    cfg.bin_size_au   = 2;          % bins are 2 a.u. wide
     cfg.au_to_cm      = 1.25;       % 1 VR a.u. = 1.25 cm
-    cfg.bin_size_cm   = cfg.bin_size_au * cfg.au_to_cm;  % 5 cm/bin
+    cfg.bin_size_cm   = cfg.bin_size_au * cfg.au_to_cm;  % 2.5 cm/bin
     cfg.corridor_au   = 200;        % full corridor length (a.u.)
-    cfg.n_bins_full   = 50;         % corridor / bin_size_au
-    cfg.max_bin       = 30;         % spatial truncation (RZ + ~5 bins)
+    cfg.n_bins_full   = 100;        % corridor_au / bin_size_au
+    cfg.max_bin       = 60;         % spatial truncation (RZ + ~10 bins)
 
     % Landmark bins (spatial bin index)
     
-    cfg.visual_bin    = 20;
-    cfg.reward_bin    = 25;
-    cfg.target_rz_bin = 25;         % alias for callers that want it
+    cfg.visual_bin    = 40;
+    cfg.reward_bin    = 50;
+    cfg.target_rz_bin = 50;         % alias for callers that want it
 
     cfg.corridor_cm   = 250;        % full corridor length (cm)
     cfg.visual_zone_cm    = 80;
@@ -93,7 +96,9 @@ function cfg = project_cfg()
     cfg.seed              = 42;
 
     % --- Data paths (override per-script if your CWD differs) ---
-    cfg.task_data_file     = 'processed_data/preprocessed_data.mat';
-    cfg.control_data_file  = 'processed_data/preprocessed_data_control.mat';
+    % Task and Control 1 use the 2.5 cm preprocessing (100 spatial bins;
+    % repointed 2026-05-24). Control 2 has no 2.5 cm variant.
+    cfg.task_data_file     = 'processed_data/preprocessed_data2p5cm.mat';
+    cfg.control_data_file  = 'processed_data/preprocessed_data_control2p5cm.mat';
     cfg.control2_data_file = 'processed_data/preprocessed_data_control2.mat';
 end
