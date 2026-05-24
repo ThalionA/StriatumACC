@@ -544,10 +544,12 @@ much the count depends on the null.
 - `plot_stage3.py` — reads `stage3_committed.pkl`: principal angles (floor +
   the 3 transitions), Gini sparsity, membership overlap.
 - `plot_common_units.py` (new) — re-derives the z-scored area tensors
-  (`pipeline._zscore_area`) and, per pair × epoch, plots the mean spatial
-  activity of communication-subspace member vs non-member units (X- and
-  Y-side figures). Members are *not* an activity-distinct subpopulation —
-  member and non-member profiles overlap.
+  (`pipeline._zscore_area`) and plots the mean spatial activity of
+  communication-subspace member vs non-member units. One figure per pair,
+  a 2×3 grid (rows = X / Y area, columns = naive / intermediate / expert).
+  Member and non-member profiles share spatial structure; member units sit
+  modestly higher in amplitude in several pairs but are not a starkly
+  distinct subpopulation.
 `d_sub` stays 1 for Stage 3: the split-half stability floor sets it, and the
 surrogate (a held-out-CC test, a different measurement) does not change that.
 

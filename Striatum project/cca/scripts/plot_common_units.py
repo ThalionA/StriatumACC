@@ -1,19 +1,21 @@
 """Common-unit spatial activity profiles -- committed config.
 
-For each area pair, splits the area's units into communication-subspace
-members (top-quartile contributors to the dominant canonical dimension) and
-non-members, and plots their mean z-scored activity across corridor position,
-one curve per epoch. Shows whether the units carrying the inter-areal coupling
-have a distinct spatial tuning profile, and whether it shifts across learning.
+One figure per area pair. Each figure is a 2 x 3 grid: the top row is the X
+area, the bottom row is the Y area; the three columns are the naive,
+intermediate and expert epochs. Within every panel the area's units are split
+into communication-subspace members (top-quartile contributors to the
+dominant canonical dimension) and non-members, and their mean z-scored
+activity across corridor position is drawn (member solid, non-member dashed;
+mean +/- SEM over units). Shows whether the units carrying the inter-areal
+coupling have a distinct spatial tuning, and whether it shifts across learning.
 
 z-scored activity is re-derived exactly as the pipeline does it -- whole-
 engaged-period per-unit z-scoring of the area tensor, before residualisation
 (pipeline._zscore_area) -- and trial-averaged within each epoch. Membership is
 read from results/stage3_committed.pkl. Profiles are pooled over the learner
-animals of a pair (n = units); one panel per pair, no pooling across pairs.
+animals of a pair (n = units); one figure per pair, no pooling across pairs.
 
-Writes figures/stage3_common_units_x_committed.png and ..._y_committed.png
-(X side and Y side of every pair).
+Writes figures/stage3_common_units_<AX>-<AY>_committed.png for every pair.
 
 Run:  python scripts/plot_common_units.py
 """
@@ -37,8 +39,6 @@ from striatum_cca import config, dataio, pipeline  # noqa: E402
 
 CFG = config.DEFAULT
 EPOCHS = config.EPOCH_NAMES
-EPOCH_COLOUR = {"naive": "tab:blue", "intermediate": "tab:green",
-                "expert": "tab:red"}
 RESULTS_PKL = config.RESULTS_DIR / "stage3_committed.pkl"
 
 _ZCACHE: dict[tuple[int, str], np.ndarray] = {}
@@ -100,44 +100,44 @@ def collect(results, animals, side):
     return by_pair
 
 
-def plot_side(by_pair, side):
-    """One 2x5 pair grid: member (solid) vs non-member (dashed) profiles."""
-    fig, axes = plt.subplots(2, 5, figsize=(16, 6.5))
-    axes = axes.ravel()
-    for ax, (ax_x, ax_y) in zip(axes, config.PAIRS):
-        cells = by_pair[(ax_x, ax_y)]
-        area = ax_x if side == "x" else ax_y
-        n_member = 0
-        for e in EPOCHS:
-            member, nonmember = cells[e]
-            colour = EPOCH_COLOUR[e]
-            if member.size:
-                n_bins = member.shape[1]
-                pos = (np.arange(n_bins) + 0.5) * config.bin_size_cm(n_bins)
-                mean, sem = _mean_sem(member)
-                ax.plot(pos, mean, "-", color=colour, lw=1.8, label=e)
-                ax.fill_between(pos, mean - sem, mean + sem,
-                                color=colour, alpha=0.2)
-                n_member += member.shape[0]
-            if nonmember.size:
-                n_bins = nonmember.shape[1]
-                pos = (np.arange(n_bins) + 0.5) * config.bin_size_cm(n_bins)
-                mean, _ = _mean_sem(nonmember)
-                ax.plot(pos, mean, "--", color=colour, lw=0.9, alpha=0.7)
-        ax.axhline(0, color="k", lw=0.6)
-        ax.set_title(f"{ax_x}-{ax_y}  [{area}]  ({n_member} member units)",
-                     fontsize=9)
-    for ax in axes[::5]:
-        ax.set_ylabel("mean z-scored activity")
-    for ax in axes[5:]:
+def _draw_panel(ax, member, nonmember):
+    """Member (solid) and non-member (dashed) mean +/- SEM profiles."""
+    for arr, colour, style, lw, label in (
+            (nonmember, "0.55", "--", 1.1, "non-member"),
+            (member, "tab:red", "-", 1.9, "member")):
+        if not arr.size:
+            continue
+        n_bins = arr.shape[1]
+        pos = (np.arange(n_bins) + 0.5) * config.bin_size_cm(n_bins)
+        mean, sem = _mean_sem(arr)
+        ax.plot(pos, mean, style, color=colour, lw=lw, label=label)
+        ax.fill_between(pos, mean - sem, mean + sem, color=colour, alpha=0.18)
+    ax.axhline(0, color="k", lw=0.5)
+    ax.text(0.03, 0.96, f"member {member.shape[0]} / non {nonmember.shape[0]}",
+            transform=ax.transAxes, fontsize=7, va="top", color="0.3")
+
+
+def plot_pair(area_x, area_y, cells_x, cells_y):
+    """One 2 x 3 figure: rows = X / Y area, columns = epochs."""
+    fig, axes = plt.subplots(2, len(EPOCHS), figsize=(13, 6.2),
+                             sharex=True, sharey="row")
+    for row, (side_label, area, cells) in enumerate(
+            (("X", area_x, cells_x), ("Y", area_y, cells_y))):
+        for col, epoch in enumerate(EPOCHS):
+            ax = axes[row, col]
+            _draw_panel(ax, *cells[epoch])
+            if row == 0:
+                ax.set_title(epoch, fontsize=11)
+        axes[row, 0].set_ylabel(f"{side_label}: {area}\n"
+                                f"mean z-scored activity")
+    for ax in axes[1, :]:
         ax.set_xlabel("corridor position (cm)")
-    axes[0].legend(frameon=False, fontsize=8, title="solid=member\ndash=non-mem")
-    fig.suptitle(f"Stage 3 -- spatial activity of communication-subspace member "
-                 f"vs non-member units, {side.upper()} side "
+    axes[0, -1].legend(frameon=False, fontsize=8)
+    fig.suptitle(f"Common-unit spatial activity -- {area_x}-{area_y} "
                  f"(committed config; learners; mean +/- SEM over units)")
     config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    path = config.FIGURES_DIR / f"stage3_common_units_{side}_committed.png"
+    path = config.FIGURES_DIR / f"stage3_common_units_{area_x}-{area_y}_committed.png"
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"saved {path}")
@@ -150,9 +150,14 @@ def main():
     with open(RESULTS_PKL, "rb") as fh:
         results = pickle.load(fh)["results"]
     animals = {a.animal_id: a for a in dataio.load_animals()}
-    for side in ("x", "y"):
-        by_pair = collect(results, animals, side)
-        plot_side(by_pair, side)
+    by_pair_x = collect(results, animals, "x")
+    by_pair_y = collect(results, animals, "y")
+    for area_x, area_y in config.PAIRS:
+        if not learners(results, area_x, area_y):
+            print(f"skip {area_x}-{area_y}: no learner pairs")
+            continue
+        plot_pair(area_x, area_y,
+                  by_pair_x[(area_x, area_y)], by_pair_y[(area_x, area_y)])
     print("common-unit figures done.")
 
 
