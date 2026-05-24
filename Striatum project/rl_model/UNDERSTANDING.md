@@ -48,14 +48,20 @@ inhibitory / efficiency control of action, not appraisal.
 2. **Critic `V(b)` (fast).** Reward-only TD: `δ_critic = r + γV′ − V`,
    `w_critic += η_w·δ_critic·b`. Fast `η_w` → a sharp RZ value bump within a few
    trials. The critic never sees the costs. `value` locks on fast.
-3. **Lick actor (slow, NEW).** Spatial weight `w_lick`; policy
-   `λ = λ_max·σ(β·V + w_lick·b − θ)` — the value drive gives the early RZ peak,
-   the actor term gives slow spatial gating. Policy-gradient updated by the actor
-   RPE. Starts permissive (broad early licking) → learns to suppress licks where
-   they go unrewarded.
+3. **Lick actor (slow, NEW).** Spatial weight `w_lick`; the policy sets a lick
+   *rate* `λ_rate = λ_max·σ(β·V + w_lick·b − θ)` and the per-bin count is
+   `Poisson(λ_rate·dt)` — the value drive gives the early RZ peak, the actor
+   term gives slow spatial gating, and `dt` couples licking to velocity (run
+   fast → no time to lick). Policy-gradient updated by the actor RPE. Starts
+   permissive (broad early licking) → learns to suppress licks where they go
+   unrewarded.
 4. **Velocity actor (slow, NEW).** Spatial weight `w_vel`;
-   `log_v_mean = v_base + v_slope·V + w_vel·b` — `V` gives the RZ dip, the actor
-   learns the corridor speed-up. Policy-gradient updated by the actor RPE.
+   `log_v_mean = v_base + v_slope·V + w_vel·b`. Policy-gradient updated by the
+   actor RPE. Made viable by *consequential speed*: path-integration noise
+   scales with velocity (`Q_eff = Q·(1 + kappa_v·v)`), so fast running widens
+   the belief and blurs the value read-out — RZ licking and reward become less
+   reliable. The actor learns to slow approaching the RZ and run fast in the far
+   corridor; `precision` consequently evolves across trials.
 5. **Costs → actor only.** Per-lick cost `c_lick`; time cost `−ρ·dt` (`ρ` a fixed
    fitted parameter; `dt` is already computed in `bin_step`). Actor RPE:
    `δ_actor = (r − c_lick·lick − ρ·dt) + γV′ − V`. Because the critic is
@@ -256,6 +262,90 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
 ---
 
 ## Edit log
+
+- **2026-05-24 (velocity v3 — real fit + validation)** — Refitted all 16 mice
+  with the graded-reward + deterministic-velocity-actor model (`real_fits_v5`)
+  and re-ran the per-epoch validation. **Lick channel much improved**: held-out
+  CV gain +0.57 nats/bin, **16/16 mice positive** (old model +0.12, 10/16); the
+  per-epoch lick change is reproduced for **11/16 mice** (mean Δr 0.70).
+  **Velocity improved but still the weaker channel**: per-epoch velocity change
+  reproduced for 6/16 mice (mean Δr 0.37, up from 0.28) — the model now produces
+  an RZ dip that partially tracks the data instead of flat noise; held-out
+  velocity CV is still marginally negative (−0.07). Recovery v6 confirmed the
+  parameters (`eta_a` 0.89, `rho` 0.76; perceptual params remain sloppy,
+  `kappa_v` now unidentified — a drop candidate). Open: `plot_real_data.py`
+  latent export still on v3 — needs the v5 update for the neural regression.
+
+- **2026-05-24 (velocity v2)** — Strengthened the velocity channel. Licking is
+  now a *time-limited* Poisson process: the policy sets a lick rate (licks/s)
+  and the per-bin count is `Poisson(λ_rate·dt)`. Running fast shrinks `dt` and
+  so the lick count, so the agent must slow in the RZ to emit a lick and collect
+  reward — velocity now genuinely trades off against licking, and `δ_actor`
+  carries a strong reward-backed velocity signal (the `rho·dt` term is the
+  reward-rate opportunity cost — "rewards per fixed time"). `lambda_max`
+  reinterpreted as a rate (typical 3 → 10).
+
+- **2026-05-24 (velocity v2b)** — Time-limited licking alone did not make
+  velocity consequential: with a 9-bin RZ and a binary "first lick" reward the
+  agent collects the water at any speed (~20+ expected RZ licks), so it had no
+  reason to slow. Reward changed to **graded and saturating**:
+  `r_total = reward_magnitude·(1 − exp(−cumulative_RZ_licks / K_REWARD))`,
+  `K_REWARD = 10` fixed; the per-bin reward is that total's increment. Running
+  fast emits fewer RZ licks and collects less of the drop — a smooth
+  velocity/lick/reward-rate trade-off with an interior optimum. `rho` typical
+  lowered (0.40 → 0.15) for the new regime.
+
+- **2026-05-24 (velocity v2c)** — Graded reward alone still left the velocity
+  actor inert: its *stochastic* policy gradient keys on the covariance of small
+  velocity exploration noise with small per-bin outcomes — negligible. That was
+  the real bottleneck behind every failed velocity attempt. Replaced with a
+  **deterministic gradient**: `w_vel += eta_a·g_vel·b`, `g_vel = ∂δ_actor/∂logv`
+  computed analytically (positive in the corridor — faster saves time cost;
+  negative in the RZ — faster loses graded reward). Also re-pinned `C_LICK`
+  0.15 → 0.025 (kept below the marginal RZ reward `R_max/K_REWARD` so RZ licking
+  stays net-positive). Generative sanity: the velocity actor now works — corridor
+  speeds up (~+12 cm/s over a session), the RZ slowdown emerges (dip +1 → +9
+  cm/s), `a_vel` develops real spatial structure. Recovery re-run as v6, real
+  refit as `real_fits_v5`.
+
+- **2026-05-24 (real fit + validation)** — Fitted all 16 task mice with the
+  redesigned model (`real_fits_v4/`, interleaved CV) and built the per-epoch
+  validation (`scripts/plot_epoch_validation.py`, figures
+  `fig_epoch_validation_{lick,vel}.png`). **The redesign meets its goal on the
+  lick channel**: the model reproduces the Naive→Expert lick-profile change for
+  10/16 mice (mean Δr = 0.66 between the model's epoch-change and the observed
+  one) — the old model had frozen latents and could show no epoch structure at
+  all. M13 needed a multi-restart refit (`n_restarts=1` had landed in a bad
+  basin, nll 26027 → 14240); M01/M07 spot-checked and already optimal, so the
+  remaining moderate-Δr mice (M01/M02/M05/M07) are model limitations, not fit
+  failures. Velocity remains the weak channel (5/16, Δr 0.28) — the velocity
+  actor is structurally weak, as flagged. Held-out interleaved CV is ~on par
+  with the old model, but interleaved CV barely tests learning-curve structure;
+  the per-epoch comparison is the intended metric. `fitting.py` gained
+  `maxiter` / `u_start` knobs; `fit_real_data.py` gained `n_restarts` / refit
+  support. Open: `plot_real_data.py` (latent export to `rl_latents.mat`) still
+  points at v3 — needs the v4 path/version update before the neural regression.
+
+- **2026-05-24 (recovery)** — Parameter-recovery test (v4, 12 synthetic mice,
+  120-trial sessions). Latents recover well (value/lick_rate/v_mean r > 0.99,
+  precision 0.96, RPE 0.90) and most parameters recover; but `eta_a` was
+  non-identifiable (r = −0.17) — it degenerates with `c_lick`, the product
+  `eta_a·c_lick` recovering at r = 0.95. Fix: `c_lick` pinned to the fixed
+  constant `C_LICK = 0.15`; `eta_a` carries the suppression-speed degree of
+  freedom and becomes identifiable. 16 free parameters. `rho` / `kappa_v`
+  remain weakly identified, like the perceptual parameters — not blockers, the
+  latents recover regardless. Recovery re-run as v5.
+
+- **2026-05-24 (build)** — Redesign implemented in `config.py` / `agent.py`.
+  Two-timescale actor-critic: fast reward-only critic, slow lick-suppression
+  actor (reward-modulated three-factor rule), slow velocity actor (policy
+  gradient).  Implementation surfaced that speed is inconsequential in a
+  bin-grid corridor, so the velocity actor had nothing to optimise; resolved by
+  making speed consequential — path-integration noise scales with speed
+  (`Q_eff = Q·(1 + kappa_v·v)`, new param `kappa_v`; 17 params total), a
+  speed/accuracy trade-off that also makes the `precision` latent evolve across
+  trials.  Lick side (fast value lock-on + slow suppression emergence) verified
+  on simulated data; velocity side re-checked after the `kappa_v` change.
 
 - **2026-05-24** — Redesign agreed (not yet implemented). Diagnosis: the fitted
   model collapses the within-session learning curve — `value`/`precision` latents

@@ -36,9 +36,9 @@ from rl_model.fitting import fit_mouse                         # noqa: E402
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESDIR = os.path.join(HERE, "results")
-REALDIR = os.path.join(RESDIR, "real_fits_v3")   # v3: + w_init prior, disengagement truncation
+REALDIR = os.path.join(RESDIR, "real_fits_v5")   # v5: graded reward + deterministic velocity actor
 os.makedirs(REALDIR, exist_ok=True)
-MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data.mat")
+MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data5cm.mat")
 
 TEST_EVERY = 5            # interleaved CV: every 5th trial held out
 TIME_BUDGET = 25.0        # seconds of fitting per invocation (stay under shell timeout)
@@ -91,7 +91,7 @@ def _per_bin(ll, idx, mask, idx_set):
     return ll[idx_set].sum() / max(mask[idx_set].sum(), 1.0)
 
 
-def fit_one(mouse, cfg):
+def fit_one(mouse, cfg, n_restarts=1, maxiter=None):
     """Fit one mouse; return a dict of everything to persist."""
     nt = mouse["n_trials"]
     T = bucket_len(nt)
@@ -104,8 +104,11 @@ def fit_one(mouse, cfg):
     fit_mask = mask_p.copy()
     fit_mask[test_idx, :] = 0.0                     # exclude test trials from the fit
 
-    res = fit_mouse(licks_p, logv_p, mask=fit_mask, cfg=cfg, n_restarts=1,
-                    seed=int(mouse["mouse"][1:]))
+    # Long sessions get fewer optimiser iterations so each fit stays inside the
+    # shell time slice; short sessions use the full count.
+    mi = maxiter if maxiter is not None else (250 if nt > 200 else 400)
+    res = fit_mouse(licks_p, logv_p, mask=fit_mask, cfg=cfg, n_restarts=n_restarts,
+                    seed=int(mouse["mouse"][1:]), maxiter=mi)
     u_fit = res["u_fit"]
 
     lat = session_latents(jnp.asarray(u_fit), licks_p, logv_p, mask=mask_p, cfg=cfg)

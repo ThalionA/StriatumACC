@@ -26,6 +26,18 @@ REWARD_END_AU = 135.0                              # RZ end
 BIN_CENTRES_AU = (np.arange(N_BINS) + 0.5) * BIN_SIZE_AU
 RZ_MASK = (BIN_CENTRES_AU >= REWARD_START_AU) & (BIN_CENTRES_AU <= REWARD_END_AU)
 
+# Fixed agent constant: per-lick cost charged to the actor RPE.  Held fixed (not
+# fitted) — it degenerates with the actor learning rate eta_a (only the product
+# is identifiable; parameter recovery, 2026-05-24).  Kept well below the marginal
+# RZ reward (R_max/K_REWARD = 0.1) so that RZ licking stays net-positive up to an
+# interior optimum while non-RZ licking is still suppressed.
+C_LICK = 0.025
+
+# Fixed agent constant: RZ-lick scale of the saturating reward.  Total water
+# collected in a trial is reward_magnitude*(1 - exp(-cumulative_RZ_licks/K_REWARD)).
+# Held fixed — a task/physical constant (how much licking consumes the drop).
+K_REWARD = 10.0
+
 
 @dataclass(frozen=True)
 class TaskConfig:
@@ -65,6 +77,7 @@ PARAMS: tuple[Param, ...] = (
     Param("R0",            "exp",     2.0,  "base visual observation noise variance"),
     Param("R_slope",       "exp",     0.2,  "growth of obs noise with distance from the landmark"),
     Param("iti_inflation", "exp",     5.0,  "perceptual variance injected between trials"),
+    Param("kappa_v",       "exp",     0.03, "speed-dependence of path-integration noise: Q_eff = Q*(1 + kappa_v*v)"),
     # --- Value process ("what is best", slow) ---
     Param("eta_w",         "sigmoid", 0.09, "critic (state-value) learning rate"),
     Param("gamma",         "sigmoid", 0.80, "TD discount factor (localises value to the RZ)"),
@@ -72,11 +85,18 @@ PARAMS: tuple[Param, ...] = (
     # --- Lick policy (Poisson-count readout of the critic) ---
     Param("beta",          "exp",     7.0,  "lick policy gain (inverse temperature)"),
     Param("theta",         "identity",0.28, "lick value threshold"),
-    Param("lambda_max",    "exp",     3.0,  "saturation lick count per bin (Poisson rate ceiling)"),
+    Param("lambda_max",    "exp",    10.0,  "saturation lick RATE, licks/s (per-bin count ~ Poisson(rate*dt))"),
     # --- Velocity policy (continuous, log-normal readout of the critic) ---
     Param("v_base",        "identity",3.30, "baseline log-velocity (cm/s in log space)"),
     Param("v_slope",       "identity",-0.9, "value -> log-velocity slope (slow when value high)"),
     Param("log_sigma_v",   "identity",-1.4, "log of velocity emission SD (log-velocity space)"),
+    # --- Slow control: actor costs & learning rate (redesign 2026-05-24) ---
+    # The actor weight vectors w_lick / w_vel are learned latents initialised at
+    # zero (see agent.py); only these two scalars are free parameters.  The
+    # per-lick cost is the fixed constant C_LICK above — fitting it degenerates
+    # with eta_a (only the product is identifiable; parameter recovery v4).
+    Param("rho",           "exp",      0.15, "time-cost coefficient; the actor RPE pays rho*dt per bin"),
+    Param("eta_a",         "sigmoid",  0.02, "actor learning rate (lick & velocity); slow, << eta_w"),
 )
 
 PARAM_NAMES: tuple[str, ...] = tuple(p.name for p in PARAMS)

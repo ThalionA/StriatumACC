@@ -40,7 +40,8 @@ def _objective(licks, logv, mask, cfg, prior_sd):
 
 
 def fit_mouse(licks, logv, mask=None, cfg: TaskConfig | None = None,
-              n_restarts: int = 6, seed: int = 0, prior_sd: float | None = 4.0):
+              n_restarts: int = 6, seed: int = 0, prior_sd: float | None = 4.0,
+              maxiter: int = 400):
     """Fit one mouse's session.  `licks`/`logv`/`mask` are (n_trials, n_bins).
 
     `mask` (1 = valid bin, 0 = missing behavioural data) defaults to all-valid.
@@ -66,7 +67,7 @@ def fit_mouse(licks, logv, mask=None, cfg: TaskConfig | None = None,
         u0 = base if r == 0 else base + 0.5 * rng.standard_normal(N_PARAMS)
         u0 = np.clip(u0, -_BOUND, _BOUND)
         res = minimize(scipy_obj, u0, jac=True, method="L-BFGS-B",
-                       bounds=bounds, options=dict(maxiter=400, ftol=1e-10))
+                       bounds=bounds, options=dict(maxiter=maxiter, ftol=1e-10))
         nlls.append(float(res.fun))
         if best is None or res.fun < best.fun:
             best = res

@@ -50,14 +50,14 @@ from rl_model.fitting import fit_mouse  # noqa: E402
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIGDIR = os.path.join(HERE, "figures")
 RESDIR = os.path.join(HERE, "results")
-FITSDIR = os.path.join(RESDIR, "fits_v3")
-RESULTS_NPZ = os.path.join(RESDIR, "recovery_v3.npz")
-DONE_MARK = os.path.join(RESDIR, "DONE_v3")
+FITSDIR = os.path.join(RESDIR, "fits_v6")              # v6: graded reward + deterministic velocity actor
+RESULTS_NPZ = os.path.join(RESDIR, "recovery_v6.npz")
+DONE_MARK = os.path.join(RESDIR, "DONE_v6")
 for d in (FIGDIR, RESDIR, FITSDIR):
     os.makedirs(d, exist_ok=True)
 
 N_MICE = 12
-N_TRIALS = 160
+N_TRIALS = 120
 N_RESTARTS = 1          # restart-1 (from defaults) reliably wins; see UNDERSTANDING
 BATCH = 4               # mice fit per invocation (keeps each run inside the shell timeout)
 LATENT_KEYS = ["value", "rpe", "precision", "lick_rate", "v_mean"]
@@ -165,7 +165,7 @@ def finalize(cohort, cfg):
 # Figures
 # --------------------------------------------------------------------------
 def _fig_param_recovery(p_true, p_fit, param_r):
-    fig, axes = plt.subplots(4, 4, figsize=(13, 12.5))
+    fig, axes = plt.subplots(5, 4, figsize=(13, 15.5))
     for i, name in enumerate(PARAM_NAMES):
         ax = axes.flat[i]
         t, f = p_true[:, i], p_fit[:, i]
