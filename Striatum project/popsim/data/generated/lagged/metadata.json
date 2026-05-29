@@ -1,0 +1,117 @@
+{
+  "name": "lagged",
+  "n_timesteps": 3000,
+  "dt": 1.0,
+  "epoch_boundaries": [],
+  "seed": 2,
+  "areas": [
+    {
+      "name": "A",
+      "n_latents": 4,
+      "n_neurons": 60,
+      "dynamics": "ar1",
+      "observation": "gaussian",
+      "tau": 20.0,
+      "snr": 3.0,
+      "baseline": 0.0,
+      "dynamics_kwargs": {}
+    },
+    {
+      "name": "B",
+      "n_latents": 5,
+      "n_neurons": 80,
+      "dynamics": "ar1",
+      "observation": "gaussian",
+      "tau": 20.0,
+      "snr": 3.0,
+      "baseline": 0.0,
+      "dynamics_kwargs": {}
+    },
+    {
+      "name": "C",
+      "n_latents": 3,
+      "n_neurons": 40,
+      "dynamics": "ar1",
+      "observation": "gaussian",
+      "tau": 20.0,
+      "snr": 3.0,
+      "baseline": 0.0,
+      "dynamics_kwargs": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "A",
+      "target": "B",
+      "gain": 1.2,
+      "lag": 10,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "epochs": null
+    },
+    {
+      "source": "C",
+      "target": "B",
+      "gain": 1.2,
+      "lag": 25,
+      "matrix": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "epochs": null
+    }
+  ]
+}

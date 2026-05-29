@@ -36,8 +36,12 @@ correlation `partial_correlation(zA0, zB0 | zC)` ≈ 0 — that is the clean
 ## Gotchas
 - The dev container's `tau`/timescales are in **bins**, not seconds (dt defaults
   to 1.0). Cross-correlogram lags are likewise in bins.
-- Generated `.npy` arrays are git-ignored (regenerable, ~5 MB); `metadata.json`
-  and figures are committed.
+- Generated `.npy` arrays and `.png` figures are git-ignored (regenerable from
+  the seeded scripts; the repo ignores `*.png` globally). Only the small
+  `metadata.json` ground-truth files are committed.
+- **No numpy/pytest in the bare `python3`.** Use the uv venv:
+  `uv venv .venv && uv pip install --python .venv numpy scipy matplotlib pytest ruff`,
+  then `.venv/bin/python -m pytest`.
 
 ## Possible next steps
 - Add a trial/condition axis (currently a single continuous session) to exercise

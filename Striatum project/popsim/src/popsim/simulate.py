@@ -139,7 +139,10 @@ def simulate(config: SimConfig) -> SimResult:
     """
     parent = np.random.default_rng(config.seed)
     children = parent.spawn(len(config.areas))
-    streams = {a.name: np.random.default_rng(c) for a, c in zip(config.areas, children)}
+    streams = {
+        a.name: np.random.default_rng(c)
+        for a, c in zip(config.areas, children, strict=True)
+    }
 
     intrinsic: dict[str, np.ndarray] = {}
     loadings: dict[str, np.ndarray] = {}

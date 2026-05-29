@@ -51,7 +51,8 @@ def test_lagged_injection_shifts_in_time():
     a = np.random.default_rng(1).standard_normal((n, 1))
     intrinsic = {"A": a, "B": np.zeros((n, 1))}
     lag = 7
-    out = resolve_latents(intrinsic, [CouplingEdge("A", "B", lag=lag, matrix=np.eye(1))])
+    edge = CouplingEdge("A", "B", lag=lag, matrix=np.eye(1))
+    out = resolve_latents(intrinsic, [edge])
     np.testing.assert_allclose(out["B"][lag:], a[:-lag])
     np.testing.assert_allclose(out["B"][:lag], 0.0)
 

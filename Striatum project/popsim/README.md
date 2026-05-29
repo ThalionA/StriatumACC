@@ -69,14 +69,17 @@ result = simulate(cfg)
 
 ```bash
 cd "Striatum project/popsim"
-python scripts/generate_datasets.py          # -> data/generated/<scenario>/
-python scripts/plot_scenarios.py             # -> figures/<scenario>.png
-pytest -q                                     # ground-truth validation tests
+uv venv .venv                                 # one-time environment setup
+uv pip install --python .venv numpy scipy matplotlib pytest ruff
+.venv/bin/python scripts/generate_datasets.py # -> data/generated/<scenario>/
+.venv/bin/python scripts/plot_scenarios.py    # -> figures/<scenario>.png
+.venv/bin/python -m pytest -q                 # ground-truth validation tests
 ```
 
-Generated arrays (`*.npy`) are git-ignored because they regenerate
-deterministically from the seeded scripts; the small `metadata.json` ground-truth
-files and the validation figures are kept.
+Generated arrays (`*.npy`) and figures (`*.png`) are git-ignored because they
+regenerate deterministically from the seeded scripts (the repository ignores
+`*.png` globally). The small `metadata.json` ground-truth files are committed so
+the configured coupling for each scenario is recorded in version control.
 
 ## Layout
 
