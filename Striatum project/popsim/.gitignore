@@ -1,0 +1,7 @@
+# Bulky regenerable simulation arrays (deterministic from generate_datasets.py).
+# The tiny metadata.json ground-truth files are kept (see negation below).
+data/generated/**/*.npy
+
+__pycache__/
+*.pyc
+.pytest_cache/
