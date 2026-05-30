@@ -316,12 +316,20 @@ def partial_mediation(
     """Graded mediation: one A->B channel is relayed by C, another is direct.
 
     Two parallel channels: ``A0 -> C0 -> B0`` is mediated, while ``A1 -> B1`` is
-    a direct edge that never touches C. Conditioning on C removes the mediated
-    channel but leaves the direct one, so partial CCA(A, B | C) is reduced
-    relative to the marginal yet stays clearly above zero (contrast with
-    ``mediated``, which collapses). Routing the direct path through a *separate*
-    dimension pair makes it identifiable: because C is collinear with A0, a
-    direct path on dim0 would be absorbed when C is partialled out.
+    a direct edge that never touches C. The two levels of analysis tell
+    complementary stories:
+
+    - *Per latent dimension*: conditioning on C collapses the mediated pair
+      (A0, B0) but leaves the direct pair (A1, B1) intact -- the grading is
+      visible dimension-by-dimension (see ``test_partial_mediation_is_graded``).
+    - *Population CCA*: the top canonical correlation is carried by the direct
+      channel, so partial CCA(A, B | C) barely drops -- the A-B coupling
+      *survives* partialling C, in clear contrast to ``mediated`` (which
+      collapses) and ``common_input`` (also collapses).
+
+    Routing the direct path through a *separate* dimension pair makes it
+    identifiable: because C is collinear with A0, a direct path on dim0 would be
+    absorbed when C is partialled out.
     """
     edges = [
         CouplingEdge("A", "C", gain=gain, lag=0,

@@ -1,17 +1,19 @@
 """Lightweight metrics for validating simulated coupling.
 
-These small, dependency-light helpers are used by the tests and plotting scripts
-to confirm that a simulation has the coupling structure it was configured with.
-They are deliberately *not* a full communication-subspace analysis library (the
-sibling ``striatum_cca`` package is that):
+These small, dependency-light helpers are used by the tests and the recovery
+benchmark to confirm that a simulation has the coupling structure it was
+configured with. They are deliberately *not* a full communication-subspace
+analysis library (the sibling ``striatum_cca`` package is that):
 
 - :func:`cross_correlation` / :func:`lag_of_peak_xcorr` characterise the lag at
   which two scalar signals are maximally correlated.
 - :func:`cca` returns canonical correlations (and weights) between two
-  multivariate signals.
+  multivariate signals; :func:`canonical_variates` projects onto the top pair.
 - :func:`partial_cca` / :func:`partial_correlation` remove the linear influence
   of a conditioning signal before measuring association -- how a mediated
   (A -> C -> B) coupling is shown to collapse once C is controlled for.
+- :func:`pca_reduce` reduces a population to its top principal components, the
+  standard pre-step before cross-area CCA on neural data.
 """
 
 from __future__ import annotations
@@ -22,9 +24,11 @@ __all__ = [
     "cross_correlation",
     "lag_of_peak_xcorr",
     "cca",
+    "canonical_variates",
     "partial_cca",
     "partial_correlation",
     "regress_out",
+    "pca_reduce",
 ]
 
 
@@ -117,6 +121,20 @@ def cca(
     return corrs, A, B
 
 
+def canonical_variates(
+    X: np.ndarray, Y: np.ndarray, component: int = 0
+) -> tuple[float, np.ndarray, np.ndarray]:
+    """Top (or ``component``-th) canonical correlation and the variate pair.
+
+    Returns ``(corr, u, v)`` where ``u`` and ``v`` are the 1-D canonical variates
+    of (centred) ``X`` and ``Y`` for the requested component.
+    """
+    corrs, A, B = cca(X, Y)
+    Xc = X - X.mean(axis=0, keepdims=True)
+    Yc = Y - Y.mean(axis=0, keepdims=True)
+    return float(corrs[component]), Xc @ A[:, component], Yc @ B[:, component]
+
+
 def regress_out(target: np.ndarray, conditioning: np.ndarray) -> np.ndarray:
     """Return ``target`` with the linear contribution of ``conditioning`` removed.
 
@@ -157,3 +175,17 @@ def partial_correlation(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> float:
     xr = regress_out(np.asarray(x).ravel(), z)
     yr = regress_out(np.asarray(y).ravel(), z)
     return float(np.corrcoef(xr.ravel(), yr.ravel())[0, 1])
+
+
+def pca_reduce(X: np.ndarray, k: int) -> np.ndarray:
+    """Project ``X`` (n_samples, n_features) onto its top ``k`` principal axes.
+
+    Returns ``(n_samples, k)`` PC scores (centred). This is the standard
+    dimensionality reduction applied to each area's population before cross-area
+    CCA, mirroring ``striatum_cca``'s per-area PCA step.
+    """
+    X = np.asarray(X, dtype=float)
+    Xc = X - X.mean(axis=0, keepdims=True)
+    k = min(k, Xc.shape[1])
+    _, _, Vt = np.linalg.svd(Xc, full_matrices=False)
+    return Xc @ Vt[:k].T
