@@ -2,7 +2,8 @@
 
 A :class:`SimConfig` fully specifies a multi-area simulation (per-area latent
 dimensions and population sizes, intrinsic dynamics, observation model, realism
-knobs, and the inter-area coupling edges). Two entry points run it:
+knobs, inter-area coupling edges, and observation-level shared-noise groups).
+Two entry points run it:
 
 - :func:`simulate`        -- one continuous session, ``area -> (T, n_neurons)``.
 - :func:`simulate_trials` -- trial-structured, ``area -> (n_trials, n_bins,
@@ -21,11 +22,12 @@ from typing import Any
 import numpy as np
 
 from .coupling import CouplingEdge, resolve_latents
-from .latents import generate_latents
+from .latents import ar1_latents, generate_latents
 from .observation import RealismParams, project_population, random_loadings
 
 __all__ = [
     "AreaSpec",
+    "SharedNoise",
     "SimConfig",
     "SimResult",
     "TrialResult",
@@ -64,6 +66,32 @@ class AreaSpec:
 
 
 @dataclass
+class SharedNoise:
+    """A shared additive fluctuation injected into several areas' populations.
+
+    This is correlation at the *observation* level only -- there is no
+    latent-level communication -- so it models a confound (e.g. shared arousal
+    or motion) that a naive cross-area correlation would mistake for
+    communication. Each named area receives a scaled copy of one smooth AR(1)
+    time course (with non-negative per-neuron weights). All listed areas must
+    use the ``"gaussian"`` observation model.
+
+    Attributes
+    ----------
+    areas:
+        Area names that share the fluctuation.
+    strength:
+        Multiplicative scale of the shared signal (relative to unit variance).
+    tau:
+        AR(1) timescale (bins) of the shared signal.
+    """
+
+    areas: list[str]
+    strength: float = 0.3
+    tau: float = 15.0
+
+
+@dataclass
 class SimConfig:
     """Full specification of a multi-area simulation."""
 
@@ -72,6 +100,7 @@ class SimConfig:
     n_timesteps: int = 3000
     dt: float = 1.0
     epoch_boundaries: list[int] = field(default_factory=list)
+    shared_noise: list[SharedNoise] = field(default_factory=list)
     seed: int = 0
     name: str = "sim"
 
@@ -105,9 +134,45 @@ def _base_metadata(config: SimConfig, extra: dict[str, Any]) -> dict[str, Any]:
         "seed": config.seed,
         "areas": [asdict(a) for a in config.areas],
         "edges": edges,
+        "shared_noise": [asdict(s) for s in config.shared_noise],
     }
     meta.update(extra)
     return meta
+
+
+def _check_shared_noise(config: SimConfig) -> None:
+    """Validate shared-noise groups reference known, gaussian areas."""
+    for grp in config.shared_noise:
+        for area in grp.areas:
+            spec = config.area(area)  # raises KeyError if unknown
+            if spec.observation != "gaussian":
+                raise ValueError(
+                    f"shared_noise requires gaussian areas; {area} is "
+                    f"{spec.observation!r}"
+                )
+
+
+def _apply_shared_noise(
+    neural2d: dict[str, np.ndarray], config: SimConfig
+) -> dict[str, np.ndarray]:
+    """Add cross-area shared fluctuations to flat ``(time, neurons)`` arrays.
+
+    Uses an RNG stream independent of the per-area streams (so toggling shared
+    noise does not perturb the rest of the simulation) but still deterministic
+    in ``config.seed``.
+    """
+    if not config.shared_noise:
+        return neural2d
+    rng = np.random.default_rng([config.seed, 0x5EED])
+    n_t = next(iter(neural2d.values())).shape[0]
+    out = {k: v.copy() for k, v in neural2d.items()}
+    for grp in config.shared_noise:
+        shared = ar1_latents(n_t, 1, tau=grp.tau, dt=config.dt, rng=rng)[:, 0]
+        for area in grp.areas:
+            n_neurons = out[area].shape[1]
+            weights = np.abs(rng.standard_normal(n_neurons))
+            out[area] = out[area] + grp.strength * shared[:, None] * weights[None, :]
+    return out
 
 
 @dataclass
@@ -199,6 +264,7 @@ def simulate(config: SimConfig) -> SimResult:
     Deterministic in ``config.seed``: one independent RNG stream per area, so
     adding an area does not perturb earlier areas' streams.
     """
+    _check_shared_noise(config)
     streams = _streams(config)
 
     intrinsic: dict[str, np.ndarray] = {}
@@ -225,6 +291,7 @@ def simulate(config: SimConfig) -> SimResult:
             rng=rng,
         )
 
+    neural = _apply_shared_noise(neural, config)
     return SimResult(resolved, intrinsic, neural, loadings, config)
 
 
@@ -250,6 +317,7 @@ def simulate_trials(
         raise ValueError("n_trials and n_bins must be positive")
     if burn_in is None:
         burn_in = max(20, config.max_lag + 10)
+    _check_shared_noise(config)
 
     streams = _streams(config)
     gen_len = burn_in + n_bins
@@ -287,5 +355,13 @@ def simulate_trials(
             rng=rng,
         )
         neural[spec.name] = x.reshape(n_trials, n_bins, spec.n_neurons)
+
+    if config.shared_noise:
+        flat = {a: neural[a].reshape(n_trials * n_bins, -1) for a in neural}
+        flat = _apply_shared_noise(flat, config)
+        neural = {
+            spec.name: flat[spec.name].reshape(n_trials, n_bins, spec.n_neurons)
+            for spec in config.areas
+        }
 
     return TrialResult(latents, neural, loadings, config, n_trials, n_bins)

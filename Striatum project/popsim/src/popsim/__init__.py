@@ -27,6 +27,7 @@ from .latents import (
 from .observation import RealismParams, project_population, random_loadings
 from .simulate import (
     AreaSpec,
+    SharedNoise,
     SimConfig,
     SimResult,
     TrialResult,
@@ -36,6 +37,7 @@ from .simulate import (
 
 __all__ = [
     "AreaSpec",
+    "SharedNoise",
     "SimConfig",
     "SimResult",
     "TrialResult",

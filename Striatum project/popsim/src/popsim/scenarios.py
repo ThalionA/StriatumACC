@@ -2,26 +2,36 @@
 
 Each builder returns a :class:`~popsim.simulate.SimConfig` for three areas
 (``A``, ``B``, ``C``) with heterogeneous latent counts (4, 5, 3) and population
-sizes, differing only in their inter-area coupling structure:
+sizes, differing only in their inter-area coupling structure.
 
-================  ============================================================
-Scenario          Ground-truth coupling
-================  ============================================================
-``no_coupling``   none -- three independent areas.
-``zero_lag``      A -> B instantaneously (peak cross-correlation at lag 0).
-``lagged``        A -> B at +10 bins and C -> B at +25 bins; the same A->B
-                  edge appears at lag -10 when the pair is ordered (B, A),
-                  demonstrating positive and negative lags.
-``mediated``      A -> C -> B with no direct A -> B; controlling for C
-                  (partial CCA / partial correlation) collapses A-B coupling.
-``epoch_varying`` A->B then B->A then A->B again across three epochs, changing
-                  strength (gain), orientation (which latent dims), and
-                  direction.
-================  ============================================================
+Base scenarios::
 
-The coupling routing matrices are intentionally simple ("single-link" maps that
-connect one source latent to one target latent) so that lag and mediation
-structure are exactly recoverable in latent space; see :mod:`popsim.metrics`.
+    no_coupling     none -- three independent areas.
+    zero_lag        A -> B instantaneously (peak cross-correlation at lag 0).
+    lagged          A -> B at +10 bins and C -> B at +25 bins; the A->B edge
+                    appears at lag -10 when the pair is ordered (B, A).
+    mediated        A -> C -> B with no direct A -> B; partial CCA(A,B|C)
+                    collapses the apparent A-B coupling.
+    epoch_varying   A->B, then B->A, then A->B again across three epochs,
+                    changing strength, orientation, and direction.
+
+Extended scenarios (Phase 2)::
+
+    bidirectional   A -> B and B -> A at different positive lags on separate
+                    latent dims (reciprocal communication).
+    common_input    C drives both A and B (a shared-input confound); A-B
+                    coupling collapses under partial CCA(A,B|C).
+    rotated_subspace A -> B through a rank-r rotated (non-axis-aligned) subspace;
+                    CCA recovers exactly r strong canonical correlations.
+    partial_mediation part of A->B is relayed by C and part is direct (on a
+                    separate dim pair), so partial CCA is reduced but not zeroed.
+    noise_correlation no latent coupling, but A and B share additive
+                    observation-level noise (correlation without communication).
+
+Routing matrices are intentionally simple ("single-link" maps connecting one
+source latent to one target latent, or explicit low-rank maps) so the lag,
+mediation, and subspace structure are exactly recoverable; see
+:mod:`popsim.metrics`.
 """
 
 from __future__ import annotations
@@ -29,17 +39,23 @@ from __future__ import annotations
 import numpy as np
 
 from .coupling import CouplingEdge
-from .simulate import AreaSpec, SimConfig
+from .simulate import AreaSpec, SharedNoise, SimConfig
 
 __all__ = [
     "single_link_matrix",
     "orthonormal_matrix",
+    "low_rank_matrix",
     "default_areas",
     "no_coupling",
     "zero_lag",
     "lagged",
     "mediated",
     "epoch_varying",
+    "bidirectional",
+    "common_input",
+    "rotated_subspace",
+    "partial_mediation",
+    "noise_correlation",
     "SCENARIOS",
 ]
 
@@ -66,6 +82,23 @@ def orthonormal_matrix(d_target: int, d_source: int, seed: int = 0) -> np.ndarra
     rng = np.random.default_rng(seed)
     q, _ = np.linalg.qr(rng.standard_normal((d_target, d_source)))
     return q[:, :d_source]
+
+
+def low_rank_matrix(
+    d_target: int, d_source: int, rank: int, seed: int = 0, scale: float = 1.0
+) -> np.ndarray:
+    """Rank-``rank`` mixing matrix with rotated (non-axis-aligned) structure.
+
+    Built as ``scale * U @ V.T`` with orthonormal ``U`` (d_target x rank) and
+    ``V`` (d_source x rank), so communication flows through a ``rank``-dimensional
+    rotated subspace of the source latents rather than along single axes.
+    """
+    if rank < 1 or rank > min(d_target, d_source):
+        raise ValueError("rank must be in 1..min(d_target, d_source)")
+    rng = np.random.default_rng(seed)
+    u, _ = np.linalg.qr(rng.standard_normal((d_target, rank)))
+    v, _ = np.linalg.qr(rng.standard_normal((d_source, rank)))
+    return scale * (u @ v.T)
 
 
 def default_areas(
@@ -195,6 +228,139 @@ def epoch_varying(
     )
 
 
+def bidirectional(
+    n_timesteps: int = 3000,
+    seed: int = 5,
+    lag_ab: int = 5,
+    lag_ba: int = 12,
+    gain: float = 1.2,
+    **area_kw,
+) -> SimConfig:
+    """Reciprocal communication: A -> B and B -> A on separate dims and lags.
+
+    ``A0 -> B0`` at lag ``lag_ab`` and ``B1 -> A1`` at lag ``lag_ba``. Using
+    distinct dimension pairs keeps the two directions independently recoverable,
+    and using positive lags on both means there is no instantaneous loop. In the
+    (A, B) cross-correlogram the forward link peaks at +``lag_ab`` (dim0) and the
+    backward link at -``lag_ba`` (dim1).
+    """
+    edges = [
+        CouplingEdge("A", "B", gain=gain, lag=lag_ab,
+                     matrix=single_link_matrix(5, 4, t_idx=0, s_idx=0)),
+        CouplingEdge("B", "A", gain=gain, lag=lag_ba,
+                     matrix=single_link_matrix(4, 5, t_idx=1, s_idx=1)),
+    ]
+    return SimConfig(
+        areas=default_areas(**area_kw),
+        edges=edges,
+        n_timesteps=n_timesteps,
+        seed=seed,
+        name="bidirectional",
+    )
+
+
+def common_input(
+    n_timesteps: int = 3000, seed: int = 6, gain: float = 2.0, **area_kw
+) -> SimConfig:
+    """Shared-input confound: C drives both A and B, with no direct A-B link.
+
+    ``C0 -> A0`` and ``C0 -> B0`` (zero-lag single-link). A and B are correlated
+    only because they share C's input, so partial CCA(A, B | C) -- and the
+    scalar partial correlation on the shared dimension -- collapse to zero, just
+    like ``mediated`` but with C *upstream* of both rather than in the middle.
+    """
+    edges = [
+        CouplingEdge("C", "A", gain=gain, lag=0,
+                     matrix=single_link_matrix(4, 3, t_idx=0, s_idx=0)),
+        CouplingEdge("C", "B", gain=gain, lag=0,
+                     matrix=single_link_matrix(5, 3, t_idx=0, s_idx=0)),
+    ]
+    return SimConfig(
+        areas=default_areas(**area_kw),
+        edges=edges,
+        n_timesteps=n_timesteps,
+        seed=seed,
+        name="common_input",
+    )
+
+
+def rotated_subspace(
+    n_timesteps: int = 3000, seed: int = 7, rank: int = 2, gain: float = 1.6,
+    **area_kw,
+) -> SimConfig:
+    """A -> B through a rank-``rank`` rotated communication subspace.
+
+    The mixing matrix is an explicit rank-``rank`` map with orthonormal factors
+    (see :func:`low_rank_matrix`), so communication occupies exactly ``rank``
+    dimensions of a *rotated* (non-axis-aligned) subspace. CCA(A, B) should
+    recover ``rank`` strong canonical correlations and a clear drop at the next.
+    """
+    M = low_rank_matrix(d_target=5, d_source=4, rank=rank, seed=200, scale=gain)
+    edges = [CouplingEdge("A", "B", gain=1.0, lag=0, matrix=M)]
+    return SimConfig(
+        areas=default_areas(**area_kw),
+        edges=edges,
+        n_timesteps=n_timesteps,
+        seed=seed,
+        name="rotated_subspace",
+    )
+
+
+def partial_mediation(
+    n_timesteps: int = 3000,
+    seed: int = 8,
+    gain: float = 1.6,
+    direct_gain: float = 1.6,
+    **area_kw,
+) -> SimConfig:
+    """Graded mediation: one A->B channel is relayed by C, another is direct.
+
+    Two parallel channels: ``A0 -> C0 -> B0`` is mediated, while ``A1 -> B1`` is
+    a direct edge that never touches C. Conditioning on C removes the mediated
+    channel but leaves the direct one, so partial CCA(A, B | C) is reduced
+    relative to the marginal yet stays clearly above zero (contrast with
+    ``mediated``, which collapses). Routing the direct path through a *separate*
+    dimension pair makes it identifiable: because C is collinear with A0, a
+    direct path on dim0 would be absorbed when C is partialled out.
+    """
+    edges = [
+        CouplingEdge("A", "C", gain=gain, lag=0,
+                     matrix=single_link_matrix(3, 4, t_idx=0, s_idx=0)),
+        CouplingEdge("C", "B", gain=gain, lag=0,
+                     matrix=single_link_matrix(5, 3, t_idx=0, s_idx=0)),
+        CouplingEdge("A", "B", gain=direct_gain, lag=0,
+                     matrix=single_link_matrix(5, 4, t_idx=1, s_idx=1)),
+    ]
+    return SimConfig(
+        areas=default_areas(**area_kw),
+        edges=edges,
+        n_timesteps=n_timesteps,
+        seed=seed,
+        name="partial_mediation",
+    )
+
+
+def noise_correlation(
+    n_timesteps: int = 3000, seed: int = 9, strength: float = 0.6, **area_kw
+) -> SimConfig:
+    """Correlation without communication: A and B share additive output noise.
+
+    There are no coupling edges, so the *latents* of A and B are independent
+    (latent CCA ~ 0). A :class:`SharedNoise` group injects one common smooth
+    fluctuation into A's and B's populations, so the recorded activity is
+    correlated at the observation level only -- the canonical "correlation is
+    not communication" confound. Requires gaussian observation (the default).
+    """
+    return SimConfig(
+        areas=default_areas(**area_kw),
+        edges=[],
+        shared_noise=[SharedNoise(areas=["A", "B"], strength=strength, tau=15.0)],
+        n_timesteps=n_timesteps,
+        seed=seed,
+        name="noise_correlation",
+    )
+
+
 # Registry for scripts / tests: name -> builder.
 SCENARIOS = {
     "no_coupling": no_coupling,
@@ -202,4 +368,9 @@ SCENARIOS = {
     "lagged": lagged,
     "mediated": mediated,
     "epoch_varying": epoch_varying,
+    "bidirectional": bidirectional,
+    "common_input": common_input,
+    "rotated_subspace": rotated_subspace,
+    "partial_mediation": partial_mediation,
+    "noise_correlation": noise_correlation,
 }
