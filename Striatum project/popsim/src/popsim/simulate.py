@@ -1,10 +1,16 @@
 """Top-level simulation: config -> ground-truth-carrying result.
 
 A :class:`SimConfig` fully specifies a multi-area simulation (per-area latent
-dimensions and population sizes, intrinsic dynamics, observation model, and the
-inter-area coupling edges). :func:`simulate` runs it and returns a
-:class:`SimResult` carrying everything needed to reproduce the run and to score
-an analysis against the known ground truth.
+dimensions and population sizes, intrinsic dynamics, observation model, realism
+knobs, and the inter-area coupling edges). Two entry points run it:
+
+- :func:`simulate`        -- one continuous session, ``area -> (T, n_neurons)``.
+- :func:`simulate_trials` -- trial-structured, ``area -> (n_trials, n_bins,
+  n_neurons)`` with *independent* trials (each an independent latent draw), as
+  required by trial-permutation nulls and the ``striatum_cca`` pipeline.
+
+Both return a result object carrying everything needed to reproduce the run and
+to score an analysis against the known ground truth.
 """
 
 from __future__ import annotations
@@ -16,9 +22,16 @@ import numpy as np
 
 from .coupling import CouplingEdge, resolve_latents
 from .latents import generate_latents
-from .observation import project_population, random_loadings
+from .observation import RealismParams, project_population, random_loadings
 
-__all__ = ["AreaSpec", "SimConfig", "SimResult", "simulate"]
+__all__ = [
+    "AreaSpec",
+    "SimConfig",
+    "SimResult",
+    "TrialResult",
+    "simulate",
+    "simulate_trials",
+]
 
 
 @dataclass
@@ -34,6 +47,7 @@ class AreaSpec:
     snr: float = 2.0
     baseline: float = 0.0
     dynamics_kwargs: dict = field(default_factory=dict)
+    realism: RealismParams = field(default_factory=RealismParams)
 
     def __post_init__(self) -> None:
         if not (3 <= self.n_latents <= 5):
@@ -45,6 +59,8 @@ class AreaSpec:
             raise ValueError(f"unknown dynamics: {self.dynamics!r}")
         if self.observation not in ("gaussian", "poisson"):
             raise ValueError(f"unknown observation: {self.observation!r}")
+        if isinstance(self.realism, dict):
+            self.realism = RealismParams(**self.realism)
 
 
 @dataclass
@@ -65,19 +81,47 @@ class SimConfig:
                 return a
         raise KeyError(name)
 
+    @property
+    def max_lag(self) -> int:
+        return max((e.lag for e in self.edges), default=0)
+
+
+def _base_metadata(config: SimConfig, extra: dict[str, Any]) -> dict[str, Any]:
+    edges = [
+        {
+            "source": e.source,
+            "target": e.target,
+            "gain": e.gain,
+            "lag": e.lag,
+            "matrix": None if e.matrix is None else e.matrix.tolist(),
+            "epochs": e.epochs,
+        }
+        for e in config.edges
+    ]
+    meta = {
+        "name": config.name,
+        "dt": config.dt,
+        "epoch_boundaries": list(config.epoch_boundaries),
+        "seed": config.seed,
+        "areas": [asdict(a) for a in config.areas],
+        "edges": edges,
+    }
+    meta.update(extra)
+    return meta
+
 
 @dataclass
 class SimResult:
-    """Outputs and ground truth of a simulation.
+    """Outputs and ground truth of a continuous-session simulation.
 
     Attributes
     ----------
     latents:
-        ``area -> array(n_timesteps, n_latents)`` resolved latents (post-coupling).
+        ``area -> array(T, n_latents)`` resolved latents (post-coupling).
     intrinsic_latents:
-        ``area -> array(n_timesteps, n_latents)`` latents *before* coupling.
+        ``area -> array(T, n_latents)`` latents *before* coupling.
     neural:
-        ``area -> array(n_timesteps, n_neurons)`` observed population activity.
+        ``area -> array(T, n_neurons)`` observed population activity.
     loadings:
         ``area -> array(n_neurons, n_latents)`` projection matrices.
     config:
@@ -96,27 +140,46 @@ class SimResult:
 
     def metadata(self) -> dict[str, Any]:
         """JSON-serialisable description of config and ground-truth couplings."""
-        edges = []
-        for e in self.config.edges:
-            edges.append(
-                {
-                    "source": e.source,
-                    "target": e.target,
-                    "gain": e.gain,
-                    "lag": e.lag,
-                    "matrix": None if e.matrix is None else e.matrix.tolist(),
-                    "epochs": e.epochs,
-                }
-            )
-        return {
-            "name": self.config.name,
-            "n_timesteps": self.config.n_timesteps,
-            "dt": self.config.dt,
-            "epoch_boundaries": list(self.config.epoch_boundaries),
-            "seed": self.config.seed,
-            "areas": [asdict(a) for a in self.config.areas],
-            "edges": edges,
-        }
+        return _base_metadata(
+            self.config,
+            {"structure": "continuous", "n_timesteps": self.config.n_timesteps},
+        )
+
+
+@dataclass
+class TrialResult:
+    """Outputs and ground truth of a trial-structured simulation.
+
+    Arrays are 3-D ``(n_trials, n_bins, ...)``; trials are independent latent
+    draws sharing the same loadings and coupling, so they are exchangeable for
+    trial-permutation nulls.
+    """
+
+    latents: dict[str, np.ndarray]      # area -> (n_trials, n_bins, n_latents)
+    neural: dict[str, np.ndarray]       # area -> (n_trials, n_bins, n_neurons)
+    loadings: dict[str, np.ndarray]     # area -> (n_neurons, n_latents)
+    config: SimConfig
+    n_trials: int
+    n_bins: int
+
+    @property
+    def area_names(self) -> list[str]:
+        return [a.name for a in self.config.areas]
+
+    def metadata(self) -> dict[str, Any]:
+        return _base_metadata(
+            self.config,
+            {"structure": "trials", "n_trials": self.n_trials, "n_bins": self.n_bins},
+        )
+
+
+def _streams(config: SimConfig) -> dict[str, np.random.Generator]:
+    """One independent RNG stream per area, spawned from the master seed."""
+    children = np.random.default_rng(config.seed).spawn(len(config.areas))
+    return {
+        a.name: np.random.default_rng(c)
+        for a, c in zip(config.areas, children, strict=True)
+    }
 
 
 def _intrinsic_for_area(
@@ -131,18 +194,12 @@ def _intrinsic_for_area(
 
 
 def simulate(config: SimConfig) -> SimResult:
-    """Run a simulation and return latents, populations, and ground truth.
+    """Run a continuous-session simulation.
 
-    A single seeded :class:`numpy.random.Generator` is split into independent
-    child streams per area, so results are deterministic in ``config.seed`` and
-    adding an area does not perturb earlier areas' random streams.
+    Deterministic in ``config.seed``: one independent RNG stream per area, so
+    adding an area does not perturb earlier areas' streams.
     """
-    parent = np.random.default_rng(config.seed)
-    children = parent.spawn(len(config.areas))
-    streams = {
-        a.name: np.random.default_rng(c)
-        for a, c in zip(config.areas, children, strict=True)
-    }
+    streams = _streams(config)
 
     intrinsic: dict[str, np.ndarray] = {}
     loadings: dict[str, np.ndarray] = {}
@@ -164,13 +221,71 @@ def simulate(config: SimConfig) -> SimResult:
             model=spec.observation,
             snr=spec.snr,
             baseline=spec.baseline,
+            realism_params=spec.realism,
             rng=rng,
         )
 
-    return SimResult(
-        latents=resolved,
-        intrinsic_latents=intrinsic,
-        neural=neural,
-        loadings=loadings,
-        config=config,
-    )
+    return SimResult(resolved, intrinsic, neural, loadings, config)
+
+
+def simulate_trials(
+    config: SimConfig,
+    n_trials: int,
+    n_bins: int,
+    burn_in: int | None = None,
+) -> TrialResult:
+    """Run a trial-structured simulation with independent, exchangeable trials.
+
+    Each trial is an independent draw of every area's intrinsic latents, coupled
+    and projected through the *same* loadings. A per-trial ``burn_in`` (default
+    ``max(20, max_edge_lag + 10)``) is generated and discarded so that lagged
+    couplings are fully ramped up by the first retained bin.
+
+    Loadings and any realism nuisance (per-neuron gains, global fluctuation,
+    drift) are drawn once over the whole concatenated session, so neuron
+    identity is consistent across trials and drift is smooth across trial index;
+    the *signal* (latents) is independent across trials.
+    """
+    if n_trials <= 0 or n_bins <= 0:
+        raise ValueError("n_trials and n_bins must be positive")
+    if burn_in is None:
+        burn_in = max(20, config.max_lag + 10)
+
+    streams = _streams(config)
+    gen_len = burn_in + n_bins
+
+    # Fixed loadings (drawn once, before trial generation).
+    loadings = {
+        spec.name: random_loadings(spec.n_neurons, spec.n_latents, streams[spec.name])
+        for spec in config.areas
+    }
+
+    # Independent intrinsic draws per trial, coupled per trial, burn-in dropped.
+    per_trial: dict[str, list[np.ndarray]] = {a.name: [] for a in config.areas}
+    for _ in range(n_trials):
+        intrinsic = {
+            spec.name: _intrinsic_for_area(spec, gen_len, config.dt, streams[spec.name])
+            for spec in config.areas
+        }
+        resolved = resolve_latents(intrinsic, config.edges)
+        for name, z in resolved.items():
+            per_trial[name].append(z[burn_in:])
+
+    latents = {name: np.stack(trials, axis=0) for name, trials in per_trial.items()}
+
+    neural: dict[str, np.ndarray] = {}
+    for spec in config.areas:
+        rng = streams[spec.name]
+        flat = latents[spec.name].reshape(n_trials * n_bins, spec.n_latents)
+        x = project_population(
+            flat,
+            loadings[spec.name],
+            model=spec.observation,
+            snr=spec.snr,
+            baseline=spec.baseline,
+            realism_params=spec.realism,
+            rng=rng,
+        )
+        neural[spec.name] = x.reshape(n_trials, n_bins, spec.n_neurons)
+
+    return TrialResult(latents, neural, loadings, config, n_trials, n_bins)

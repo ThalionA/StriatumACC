@@ -16,7 +16,7 @@ Typical use::
 
 from __future__ import annotations
 
-from . import metrics, scenarios
+from . import metrics, realism, scenarios
 from .coupling import CouplingEdge, resolve_latents, topological_order
 from .latents import (
     ar1_latents,
@@ -24,14 +24,23 @@ from .latents import (
     lds_latents,
     oscillatory_latents,
 )
-from .observation import project_population, random_loadings
-from .simulate import AreaSpec, SimConfig, SimResult, simulate
+from .observation import RealismParams, project_population, random_loadings
+from .simulate import (
+    AreaSpec,
+    SimConfig,
+    SimResult,
+    TrialResult,
+    simulate,
+    simulate_trials,
+)
 
 __all__ = [
     "AreaSpec",
     "SimConfig",
     "SimResult",
+    "TrialResult",
     "simulate",
+    "simulate_trials",
     "CouplingEdge",
     "resolve_latents",
     "topological_order",
@@ -41,6 +50,8 @@ __all__ = [
     "generate_latents",
     "project_population",
     "random_loadings",
+    "RealismParams",
     "scenarios",
     "metrics",
+    "realism",
 ]
