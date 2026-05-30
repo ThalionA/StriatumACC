@@ -56,17 +56,30 @@ def plot_scenario(name: str, out_dir: str, n_timesteps: int, max_lag: int) -> st
     ax.set_title("Example latent traces")
     ax.legend(loc="upper right", fontsize=8)
 
-    # Panel 2: A-vs-B cross-correlogram on the leading latent dimension.
+    # Panel 2: A-vs-B cross-correlogram on the leading latent dimension. When the
+    # scenario has epochs, draw one curve per epoch so a changing lag/direction
+    # is visible (a single pooled curve would average the epochs together).
     ax = axes[1]
-    lags, corr = cross_correlation(zA[:, 0], zB[:, 0], max_lag)
-    ax.plot(lags, corr, lw=1.2)
+    bounds = cfg.epoch_boundaries
+    if bounds:
+        edges = [0, *bounds, n_timesteps]
+        names = [f"epoch {i + 1}" for i in range(len(edges) - 1)]
+        for i, label in enumerate(names):
+            seg = slice(edges[i], edges[i + 1])
+            lags, corr = cross_correlation(zA[seg, 0], zB[seg, 0], max_lag)
+            peak = lags[np.nanargmax(np.abs(corr))]
+            ax.plot(lags, corr, lw=1.2, label=f"{label} (peak {peak:+d})")
+        ax.set_title("A->B cross-correlogram per epoch")
+    else:
+        lags, corr = cross_correlation(zA[:, 0], zB[:, 0], max_lag)
+        ax.plot(lags, corr, lw=1.2)
+        peak = lags[np.nanargmax(np.abs(corr))]
+        ax.axvline(peak, color="r", lw=0.8, ls="--", label=f"peak lag = {peak}")
+        ax.set_title("A->B latent cross-correlogram")
     ax.axvline(0, color="k", lw=0.6, ls=":")
     ax.axhline(0, color="k", lw=0.6, ls=":")
-    peak = lags[np.nanargmax(np.abs(corr))]
-    ax.axvline(peak, color="r", lw=0.8, ls="--", label=f"peak lag = {peak}")
     ax.set_xlabel("lag (bins): A(t) vs B(t+lag)")
     ax.set_ylabel("correlation")
-    ax.set_title("A->B latent cross-correlogram")
     ax.legend(loc="upper right", fontsize=8)
 
     # Panel 3: marginal vs partial canonical correlations.
