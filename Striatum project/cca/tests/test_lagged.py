@@ -116,3 +116,46 @@ def test_lag_curve_returns_all_dimensions():
     # back-compatible dominant-dimension accessors
     assert result.cc1.shape == (n_lags,)
     assert result.cc1[0] == result.cc_per_dim[0, 0]
+
+
+# ---------------------------------------------------------------------------
+# directionality sign convention — the adversarial cases (Y-leads, held-out,
+# null symmetry) the original suite did not cover
+# ---------------------------------------------------------------------------
+def test_lag_curve_recovers_planted_y_lead():
+    # X is Y shifted forward by 3 bins: now Y's earlier-position activity
+    # predicts X's later activity -> Y leads -> peak at lag -3, IFI < 0.
+    rng = np.random.default_rng(11)
+    y = rng.standard_normal((14, 30, 4))
+    x = np.empty_like(y)
+    x[:, 3:, :] = y[:, :-3, :] + 0.1 * rng.standard_normal((14, 27, 4))
+    x[:, :3, :] = rng.standard_normal((14, 3, 4))
+    result = lagged.lag_curve(x, y, CFG, max_lag=5)
+    assert result.peak_lag == -3
+    assert result.ifi < -0.3
+    assert result.cc1[result.lags == -3][0] > 0.8
+
+
+def test_lag_curve_recovers_planted_lead_held_out():
+    # Same X-leads construction as the in-sample planted test, but through the
+    # 5-fold cross-validated path: the held-out curve must still peak at +3.
+    rng = np.random.default_rng(12)
+    x = rng.standard_normal((14, 30, 4))
+    y = np.empty_like(x)
+    y[:, 3:, :] = x[:, :-3, :] + 0.1 * rng.standard_normal((14, 27, 4))
+    y[:, :3, :] = rng.standard_normal((14, 3, 4))
+    result = lagged.lag_curve(x, y, CFG, max_lag=5, held_out=True)
+    assert result.peak_lag == 3
+    assert result.ifi > 0.3
+
+
+def test_lag_curve_independent_data_has_symmetric_ifi():
+    # No coupling at any lag: bin-trimming must not bias the IFI sign. Averaged
+    # over many independent X/Y draws the mean IFI sits at ~0.
+    ifis = []
+    for seed in range(40):
+        rng = np.random.default_rng(100 + seed)
+        x = rng.standard_normal((14, 30, 3))
+        y = rng.standard_normal((14, 30, 3))
+        ifis.append(lagged.lag_curve(x, y, CFG, max_lag=5).ifi)
+    assert abs(np.mean(ifis)) < 0.1

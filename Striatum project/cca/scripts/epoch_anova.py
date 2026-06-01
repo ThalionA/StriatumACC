@@ -33,57 +33,29 @@ from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_cca import config, epoch_stats  # noqa: E402
+from striatum_cca import aggregate, config, epoch_stats  # noqa: E402
 
 EPOCHS = config.EPOCH_NAMES
 EPOCH_IDX = np.arange(3, dtype=float)
-ALPHA = 0.05
+ALPHA = aggregate.ALPHA
 IFI_WINDOW = 10
 METRICS = ("cc", "ifi")
 VARIANT_PKL = {"plain": "stage2_committed_circshift.pkl",
                "partial": "stage2_committed_circshift_partial.pkl"}
 
 
-# --- data access -------------------------------------------------------------
-def learner_pairs(results, area_x, area_y):
-    return [r for r in results
-            if (r.area_x, r.area_y) == (area_x, area_y) and r.role == "learner"]
-
-
-def _sig(ea):
-    return np.where(ea.p_per_dim < ALPHA)[0]
-
-
-def dim_values(r, epoch, metric):
-    """Significant-dim CC or IFI(w10) values for one pair x epoch."""
-    ea = r.epochs[epoch]
-    js = _sig(ea)
-    if metric == "cc":
-        return ea.held_out_cc[js]
-    return ea.ifi_windows[js, IFI_WINDOW - 1]
+# --- data access (shared with plot_stage2.py via striatum_cca.aggregate) -----
+learner_pairs = aggregate.learner_pairs
 
 
 def per_dim_groups(learners, metric):
     """Three arrays -- significant-dim values per epoch, pooled over animals."""
-    groups = []
-    for epoch in EPOCHS:
-        vals = (np.concatenate([dim_values(r, epoch, metric) for r in learners])
-                if learners else np.array([]))
-        groups.append(vals[np.isfinite(vals)])
-    return groups
+    return aggregate.per_dim_groups(learners, metric, IFI_WINDOW)
 
 
 def per_animal_matrix(learners, metric):
     """(n_complete_animals, 3) of per-animal mean over significant dims."""
-    rows = []
-    for r in learners:
-        row = []
-        for epoch in EPOCHS:
-            v = dim_values(r, epoch, metric)
-            row.append(float(np.nanmean(v)) if v.size else np.nan)
-        rows.append(row)
-    mat = np.array(rows, dtype=float) if rows else np.empty((0, 3))
-    return mat[np.all(np.isfinite(mat), axis=1)] if mat.size else mat
+    return aggregate.per_animal_matrix(learners, metric, IFI_WINDOW)
 
 
 # --- statistics --------------------------------------------------------------

@@ -15,11 +15,17 @@ suffix:
 Every metric is reported per area-pair (one panel per pair; no pooling across
 pairs). Statistics, learners only:
   * '*' above a box  -- that epoch's values differ from 0 (one-sample
-                        Wilcoxon, n = significant dims)
-  * pair p           -- naive vs expert, paired Wilcoxon over per-pair means
-                        of the significant dims (n = pairs)
-  * unp p            -- naive vs expert, Mann-Whitney over all significant
-                        dims pooled within the pair (n = dims)
+                        Wilcoxon over the significant dims, n = dims)
+  * panel title      -- the epoch effect by repeated-measures ANOVA over
+                        learner animals (n = animals; each animal's value is
+                        its mean over the significant dims), with Holm-corrected
+                        paired-t post-hoc for naive-inter / inter-expert /
+                        naive-expert. The pooled significant-dim count (n = dims)
+                        is shown alongside so both samplings are visible. The
+                        full numeric table (per-dim ANOVA + per-animal RM-ANOVA)
+                        is in figures/epoch_stats_<variant>.csv (epoch_anova.py).
+
+The subspace-dimensionality panel keeps its n-based (per-animal count) stats.
 
 Run:  python scripts/plot_stage2.py
 """
@@ -41,12 +47,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from scipy import stats  # noqa: E402
 
-from striatum_cca import config  # noqa: E402
+from striatum_cca import aggregate, config, epoch_stats  # noqa: E402
 
 EPOCHS = config.EPOCH_NAMES                       # naive, intermediate, expert
 EPOCH_LABEL = ["naive", "inter", "expert"]
 EPOCH_COLOUR = config.EPOCH_COLOURS               # consistent with MATLAB
-ALPHA = 0.05
+ALPHA = aggregate.ALPHA
 
 # Set by main() from --variant ("plain" or "partial").
 TAG = "committed"
@@ -64,31 +70,14 @@ def _configure(variant):
         SUBTITLE = "committed config, circshift null, partial CCA"
 
 
-# --- data access -------------------------------------------------------------
-def learner_pairs(results, area_x, area_y):
-    return [r for r in results
-            if (r.area_x, r.area_y) == (area_x, area_y) and r.role == "learner"]
+# --- data access (shared with epoch_anova.py / directionality_table.py) ------
+learner_pairs = aggregate.learner_pairs
+sig_dims = aggregate.sig_dims
 
 
-def sig_dims(epoch_analysis):
-    """Indices of canonical dimensions passing the held-out significance test."""
-    return np.where(epoch_analysis.p_per_dim < ALPHA)[0]
-
-
-def dim_values(r, epoch, kind, window=0):
-    """Significant-dim values for one pair x epoch ('cc' or 'ifi')."""
-    ea = r.epochs[epoch]
-    js = sig_dims(ea)
-    if kind == "cc":
-        return ea.held_out_cc[js]
-    return ea.ifi_windows[js, window - 1]
-
-
-def pooled(rs, epoch, kind, window=0):
-    """All significant-dim values pooled across this pair's animals (n = dims)."""
-    if not rs:
-        return np.array([])
-    return np.concatenate([dim_values(r, epoch, kind, window) for r in rs])
+def per_epoch_pooled(rs, kind, window=10):
+    """The three pooled significant-dim arrays (n = dims) the box plot shows."""
+    return aggregate.per_dim_groups(rs, kind, window)
 
 
 # --- statistics --------------------------------------------------------------
@@ -171,27 +160,28 @@ def _star_vs0(ax, per_epoch):
                     fontsize=14, ha="center")
 
 
-def _anova(per_epoch):
-    """One-way ANOVA across epochs + Tukey HSD post-hoc.
+def _rm_stats(rs, metric, window=10):
+    """Per-animal repeated-measures ANOVA of the epoch effect (n = animals).
 
-    Runs on ``per_epoch`` -- the exact three significant-dimension arrays the
-    box plot shows -- so the test always matches the figure. Returns
-    ``(omnibus_p, (naive-inter, inter-expert, naive-expert))``.
+    Each learner animal contributes its mean over the significant dims, per
+    epoch; animals missing any epoch are dropped. Returns
+    ``(n_animals, omnibus_p, (naive-inter, inter-expert, naive-expert))`` from
+    the Holm-corrected paired-t post-hoc. This is the statistically honest test
+    (epoch is a within-animal factor), replacing the earlier between-groups
+    one-way ANOVA over pooled dims.
     """
-    groups = [v[np.isfinite(v)] for v in per_epoch]
-    if min(g.size for g in groups) < 2:
-        return np.nan, (np.nan, np.nan, np.nan)
-    omnibus = float(stats.f_oneway(*groups).pvalue)
-    th = stats.tukey_hsd(*groups).pvalue
-    return omnibus, (float(th[0, 1]), float(th[1, 2]), float(th[0, 2]))
+    mat = aggregate.per_animal_matrix(rs, metric, window)
+    res = epoch_stats.rm_anova_posthoc(mat)
+    return res["n"], res["p"], res["posthoc"]
 
 
-def _stat_title(pair, n_animals, n_dims, anova_p, tukey):
-    """Two-line panel title: cohort line, then the ANOVA + Tukey line."""
-    tk = "  ".join(f"{lab} {_fmt_p(p)}"
-                   for lab, p in zip(("n-i", "i-e", "n-e"), tukey))
-    return (f"{pair}  n={n_animals}  {n_dims}d\n"
-            f"ANOVA p={_fmt_p(anova_p)}   Tukey {tk}")
+def _stat_title(pair, n_animals, n_dims, rm_p, posthoc):
+    """Two-line panel title: cohort line (both sample sizes), then the
+    per-animal RM-ANOVA + Holm post-hoc line."""
+    ph = "  ".join(f"{lab} {_fmt_p(p)}"
+                   for lab, p in zip(("n-i", "i-e", "n-e"), posthoc))
+    return (f"{pair}  n={n_animals}a  {n_dims}d\n"
+            f"RM-ANOVA p={_fmt_p(rm_p)}   Holm {ph}")
 
 
 # --- figures -----------------------------------------------------------------
@@ -200,19 +190,19 @@ def plot_comm_strength(results):
     fig, axes = _grid()
     for ax, (ax_x, ax_y) in zip(axes, config.PAIRS):
         rs = learner_pairs(results, ax_x, ax_y)
-        per_epoch = [pooled(rs, e, "cc") for e in EPOCHS]
+        per_epoch = per_epoch_pooled(rs, "cc")
         _box_by_epoch(ax, per_epoch)
         ax.axhline(0, color="k", lw=0.6)
         _star_vs0(ax, per_epoch)
-        anova_p, tukey = _anova(per_epoch)
-        n = sum(v.size for v in per_epoch)
-        ax.set_title(_stat_title(f"{ax_x}-{ax_y}", len(rs), n, anova_p, tukey),
-                     fontsize=7.5)
+        n_animals, rm_p, posthoc = _rm_stats(rs, "cc")
+        n_dims = sum(v.size for v in per_epoch)
+        ax.set_title(_stat_title(f"{ax_x}-{ax_y}", n_animals, n_dims, rm_p,
+                                 posthoc), fontsize=7.5)
     for ax in axes[::5]:
         ax.set_ylabel("held-out CC (significant dims)")
     fig.suptitle(f"Stage 2 -- communication strength ({SUBTITLE}; learners) "
-                 f"-- '*' CC!=0 per epoch (Wilcoxon); ANOVA + Tukey HSD over "
-                 f"significant dims", fontsize=10)
+                 f"-- '*' CC!=0 per epoch (Wilcoxon, n=dims); per-animal "
+                 f"RM-ANOVA + Holm post-hoc (n=animals) in title", fontsize=10)
     _save(fig, "stage2_comm_strength")
 
 
@@ -273,20 +263,21 @@ def plot_ifi_window(results, window):
     fig, axes = _grid()
     for ax, (ax_x, ax_y) in zip(axes, config.PAIRS):
         rs = learner_pairs(results, ax_x, ax_y)
-        per_epoch = [pooled(rs, e, "ifi", window) for e in EPOCHS]
+        per_epoch = per_epoch_pooled(rs, "ifi", window)
         _box_by_epoch(ax, per_epoch)
         ax.axhline(0, color="k", lw=0.6)
         ax.set_ylim(-1.05, 1.05)
         _star_vs0(ax, per_epoch)
-        anova_p, tukey = _anova(per_epoch)
-        n = sum(v.size for v in per_epoch)
-        ax.set_title(_stat_title(f"{ax_x}-{ax_y}", len(rs), n, anova_p, tukey),
-                     fontsize=7.5)
+        n_animals, rm_p, posthoc = _rm_stats(rs, "ifi", window)
+        n_dims = sum(v.size for v in per_epoch)
+        ax.set_title(_stat_title(f"{ax_x}-{ax_y}", n_animals, n_dims, rm_p,
+                                 posthoc), fontsize=7.5)
     for ax in axes[::5]:
         ax.set_ylabel("IFI  (+ve: X leads Y)")
     fig.suptitle(f"Stage 2 -- Information Flow Index, |lag| <= {window} bins "
-                 f"({SUBTITLE}; learners) -- '*' IFI!=0 per epoch (Wilcoxon); "
-                 f"ANOVA + Tukey HSD over significant dims", fontsize=10)
+                 f"({SUBTITLE}; learners) -- '*' IFI!=0 per epoch (Wilcoxon, "
+                 f"n=dims); per-animal RM-ANOVA + Holm post-hoc (n=animals) in "
+                 f"title", fontsize=10)
     _save(fig, f"stage2_ifi_win{window:02d}")
 
 

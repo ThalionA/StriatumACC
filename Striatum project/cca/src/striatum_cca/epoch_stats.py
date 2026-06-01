@@ -58,3 +58,48 @@ def holm(pvalues) -> np.ndarray:
         running = max(running, (m - rank) * p[idx])
         adj[idx] = min(running, 1.0)
     return adj
+
+
+# Epoch contrasts for the 3-epoch design, as (i, j) column pairs into a
+# (subjects x 3) matrix: naive-inter, inter-expert, naive-expert.
+_CONTRASTS = ((0, 1), (1, 2), (0, 2))
+
+
+def rm_anova_posthoc(data: np.ndarray) -> dict:
+    """One-way RM-ANOVA over the 3 epochs plus Holm-corrected paired-t post-hoc.
+
+    ``data`` is ``(n_subjects, 3)`` and must be complete (drop incomplete cases
+    first). Returns a dict with the omnibus ``F``/``p`` (from :func:`rm_anova`),
+    the subject count ``n``, and ``posthoc`` -- the Holm-adjusted paired-t
+    p-values for (naive-inter, inter-expert, naive-expert), in that order. Cells
+    with no variance in a contrast are NaN.
+    """
+    data = np.asarray(data, dtype=float)
+    n = data.shape[0]
+    f, p = rm_anova(data)
+    posthoc: tuple[float, float, float] = (np.nan, np.nan, np.nan)
+    if data.ndim == 2 and data.shape[1] >= 3 and n >= 2:
+        raw = np.array([
+            stats.ttest_rel(data[:, a], data[:, b]).pvalue
+            if np.any(data[:, a] != data[:, b]) else np.nan
+            for a, b in _CONTRASTS])
+        adj = np.full(3, np.nan)
+        finite = np.isfinite(raw)
+        if finite.any():
+            adj[finite] = holm(raw[finite])
+        posthoc = tuple(float(v) for v in adj)
+    return {"n": int(n), "F": float(f), "p": float(p), "posthoc": posthoc}
+
+
+def linear_trend(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    """Least-squares slope of ``y`` on ``x`` and its two-sided p-value.
+
+    Used for the epoch-index linear trend (x = 0/1/2). Returns ``(nan, nan)``
+    when the fit is degenerate (fewer than 3 points or no spread in x).
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if x.size < 3 or np.ptp(x) == 0:
+        return np.nan, np.nan
+    lr = stats.linregress(x, y)
+    return float(lr.slope), float(lr.pvalue)
