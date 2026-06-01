@@ -226,211 +226,6 @@ for ds_idx = 1:size(datasets, 1)
 end % End loop datasets
 fprintf('--- Comprehensive Spatiotemporal Plots Complete ---\n\n');
 
-%% ================= Comprehensive Spatiotemporal Activity by Neuron Type =================
-fprintf('--- Generating Comprehensive Plots by NEURON TYPE (Task & Control) ---\n');
-
-% --- 1. Prepare Data Labels ---
-valid_group = combined_labels.group_labels_all(valid_idx);
-valid_mouse = combined_labels.mouse_labels_all(valid_idx);
-valid_ntype = combined_labels.neurontype_labels_all(valid_idx);
-
-% Define groups to loop over
-group_ids = [1, 2];
-group_names = {'Task', 'Control'};
-
-% --- 2. Plotting Configuration ---
-epoch_trials = {1:3, 4:10, 11:20, 21:30};
-epoch_names  = {'Trials 1-3', 'Trials 4-10', cfg.plot.epoch_names{2}, cfg.plot.epoch_names{3}};
-color_t1_3   = min(cfg.plot.colors.epoch_early + 0.3, 1);
-epoch_colors = {color_t1_3, cfg.plot.colors.epoch_early, cfg.plot.colors.epoch_middle, cfg.plot.colors.epoch_expert};
-
-neurontype_map = containers.Map({1, 2, 3}, {'MSN', 'FSN', 'TAN'});
-target_keys = sort(cell2mat(neurontype_map.keys));
-num_types = numel(target_keys);
-type_colors = lines(num_types); 
-
-bin_size = cfg.plot.zone_params.bin_size;
-v_zone = cfg.plot.zone_params.visual_zones_au / bin_size;
-r_zone = cfg.plot.zone_params.reward_zone_au / bin_size;
-
-avg_methods = {'Pooled', 'Hierarchical'};
-
-% --- 3. Loop over Groups (Task and Control) ---
-for g_idx = 1:length(group_ids)
-    current_group_id = group_ids(g_idx);
-    current_group_name = group_names{g_idx};
-    
-    fprintf('\n>>> Processing Group: %s <<<\n', current_group_name);
-    
-    idx_group = (valid_group == current_group_id);
-    if sum(idx_group) == 0
-        fprintf('No data found for %s group. Skipping...\n', current_group_name);
-        continue;
-    end
-    
-    group_tensor_raw = tensor_full_raw(idx_group, :, :);
-    group_tensor_z   = tensor_full_z(idx_group, :, :);
-    group_mouse      = valid_mouse(idx_group);
-    group_ntype      = valid_ntype(idx_group);
-    
-    metrics  = {group_tensor_raw, 'Raw FR'; group_tensor_z, 'Z-Scored'};
-    
-    for met_idx = 1:size(metrics, 1)
-        current_tensor = metrics{met_idx, 1};
-        met_name       = metrics{met_idx, 2};
-        
-        for avg_idx = 1:length(avg_methods)
-            avg_mode = avg_methods{avg_idx};
-            
-            fig_prefix = sprintf('[%s] Neuron Types: %s - %s', current_group_name, met_name, avg_mode);
-            fprintf('Generating plots for: %s\n', fig_prefix);
-            
-            % -----------------------------------------------------------------
-            % FIGURE A: SPATIAL TUNING BY NEURON TYPE AND EPOCH
-            % -----------------------------------------------------------------
-            fig_spatial_type = figure('Name', sprintf('%s: Spatial', fig_prefix), 'Position', [100, 100, 500 * num_types, 450]);
-            t_spatial_type = tiledlayout(1, num_types, 'TileSpacing', 'compact', 'Padding', 'compact');
-            
-            for i = 1:num_types
-                current_key = target_keys(i);
-                current_name = neurontype_map(current_key);
-                
-                nexttile; hold on;
-                legend_handles_spatial_type = [];
-                
-                idx_type = (group_ntype == current_key);
-                idx_type(isnan(idx_type)) = false;
-                
-                n_units_this_type = sum(idx_type);
-                
-                if n_units_this_type > 0
-                    target_tensor = current_tensor(idx_type, :, :);
-                    target_mice = group_mouse(idx_type);
-                    unique_target_mice = unique(target_mice);
-                    
-                    for i_epoch = 1:numel(epoch_trials)
-                        trs = epoch_trials{i_epoch};
-                        epoch_data = target_tensor(:, :, trs);
-                        
-                        if strcmp(avg_mode, 'Pooled')
-                            activity_per_neuron = squeeze(mean(epoch_data, 3, 'omitnan'));
-                            mean_space = mean(activity_per_neuron, 1, 'omitnan');
-                            sem_space  = std(activity_per_neuron, 0, 1, 'omitnan') / sqrt(n_units_this_type);
-                        else
-                            n_m = length(unique_target_mice);
-                            mouse_means = nan(n_m, size(epoch_data, 2));
-                            for m = 1:n_m
-                                m_idx = (target_mice == unique_target_mice(m));
-                                m_data = epoch_data(m_idx, :, :);
-                                mouse_means(m, :) = mean(mean(m_data, 3, 'omitnan'), 1, 'omitnan');
-                            end
-                            mean_space = mean(mouse_means, 1, 'omitnan');
-                            sem_space  = std(mouse_means, 0, 1, 'omitnan') / sqrt(n_m);
-                        end
-                        
-                        h = shadedErrorBar(1:size(mean_space, 2), mean_space, sem_space, ...
-                            'lineprops', {'-','Color', epoch_colors{i_epoch}, 'LineWidth', 2});
-                        if ~isempty(h) && isvalid(h.mainLine)
-                             legend_handles_spatial_type(end+1) = h.mainLine;
-                        end
-                    end
-                    
-                    yl = ylim; y_p = [yl(1), yl(1), yl(2), yl(2)];
-                    patch([v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
-                    patch([r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, 'FaceAlpha', 0.2, 'EdgeColor', 'none');
-                    if ~isempty(legend_handles_spatial_type); uistack(legend_handles_spatial_type, 'top'); end
-                    
-                    if strcmp(avg_mode, 'Pooled')
-                        title(sprintf('%s (n=%d units)', current_name, n_units_this_type));
-                    else
-                        title(sprintf('%s (N=%d mice)', current_name, length(unique_target_mice)));
-                    end
-                    box on; xlim([0, size(current_tensor, 2)]);
-                else
-                    title(sprintf('%s (n=0)', current_name));
-                    text(0.5, 0.5, 'No Data', 'HorizontalAlignment', 'center', 'Units', 'normalized');
-                end
-            end
-            title(t_spatial_type, sprintf('%s: Spatial Tuning Evolution', fig_prefix), 'FontSize', 16);
-            xlabel(t_spatial_type, 'Spatial Bin', 'FontSize', 12);
-            ylabel(t_spatial_type, met_name, 'FontSize', 12);
-            if ~isempty(legend_handles_spatial_type)
-                lg_spatial_type = legend(legend_handles_spatial_type, epoch_names, 'Location', 'best');
-            end
-
-            % Export Figure A
-            clean_name_spatial_type = regexprep(sprintf('%s_Spatial_Type', fig_prefix), '[\[\]\s:]', '_'); 
-            save_to_svg(clean_name_spatial_type);
-            
-            % -----------------------------------------------------------------
-            % FIGURE B: TEMPORAL EVOLUTION BY NEURON TYPE
-            % -----------------------------------------------------------------
-            fig_temporal_type = figure('Name', sprintf('%s: Temporal', fig_prefix), 'Position', [250, 250, 900, 500]);
-            hold on;
-            legend_handles_temporal_type = [];
-            legend_names_temporal_type = {};
-            
-            for i = 1:num_types
-                current_key = target_keys(i);
-                current_name = neurontype_map(current_key);
-                
-                idx_type = (group_ntype == current_key);
-                idx_type(isnan(idx_type)) = false;
-                
-                if sum(idx_type) > 0
-                    target_tensor = current_tensor(idx_type, :, :);
-                    target_mice = group_mouse(idx_type);
-                    unique_target_mice = unique(target_mice);
-                    
-                    if strcmp(avg_mode, 'Pooled')
-                        activity_per_neuron_temp = squeeze(mean(target_tensor, 2, 'omitnan'));
-                        mean_time = mean(activity_per_neuron_temp, 1, 'omitnan');
-                        sem_time  = std(activity_per_neuron_temp, 0, 1, 'omitnan') / sqrt(sum(idx_type));
-                    else
-                        n_m = length(unique_target_mice);
-                        mouse_means_temp = nan(n_m, size(target_tensor, 3));
-                        for m = 1:n_m
-                            m_idx = (target_mice == unique_target_mice(m));
-                            m_data = target_tensor(m_idx, :, :);
-                            mouse_means_temp(m, :) = mean(mean(m_data, 2, 'omitnan'), 1, 'omitnan');
-                        end
-                        mean_time = mean(mouse_means_temp, 1, 'omitnan');
-                        sem_time  = std(mouse_means_temp, 0, 1, 'omitnan') / sqrt(n_m);
-                    end
-                    
-                    this_color = type_colors(i, :);
-                    h = shadedErrorBar(1:size(mean_time, 2), mean_time, sem_time, ...
-                        'lineprops', {'-','Color', this_color, 'LineWidth', 2});
-                    if ~isempty(h) && isvalid(h.mainLine)
-                        legend_handles_temporal_type(end+1) = h.mainLine;
-                        legend_names_temporal_type{end+1} = current_name;
-                    end
-                end
-            end
-            
-            xline(0, 'k--', epoch_names{1}, 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
-            xline(3, 'k--', epoch_names{2}, 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
-            xline(10, 'k--', epoch_names{3}, 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
-            xline(20, 'k--', epoch_names{4}, 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
-            
-            title(sprintf('%s: Temporal Evolution', fig_prefix));
-            xlabel('Aligned Trial Number');
-            ylabel(sprintf('Mean %s (Averaged over Space)', met_name));
-            xlim([0, size(current_tensor, 3)]);
-            if ~isempty(legend_handles_temporal_type)
-                legend(legend_handles_temporal_type, legend_names_temporal_type, 'Location', 'northwest');
-            end
-            box on; hold off;
-
-            % Export Figure B
-            clean_name_temporal_type = regexprep(sprintf('%s_Temporal_Type', fig_prefix), '[\[\]\s:]', '_'); 
-            save_to_svg(clean_name_temporal_type);
-            
-        end % End loop averaging methods
-    end % End loop metrics
-end % End loop groups (Task/Control)
-fprintf('--- Comprehensive Neuron Type Plots Complete ---\n\n');
-
 %% ================= Comprehensive Spatiotemporal Visualization (Increase/Decrease/Maintain) =================
 fprintf('--- Generating Comprehensive Spatiotemporal Plots (Pooled vs Hierarchical) ---\n');
 
@@ -515,7 +310,7 @@ r_zone = cfg.plot.zone_params.reward_zone_au / bin_size;
 % Loop structures
 datasets = {1, 'Task'; 2, 'Control'};
 metrics  = {tensor_full_raw, 'Raw FR'; tensor_full_z, 'Z-Scored'};
-avg_methods = {'Pooled', 'Hierarchical'};
+avg_methods = {'Pooled'};
 
 for ds_idx = 1:size(datasets, 1)
     group_id = datasets{ds_idx, 1};
@@ -677,195 +472,216 @@ for ds_idx = 1:size(datasets, 1)
 end % End loop datasets
 fprintf('--- Comprehensive Spatiotemporal Plots Complete ---\n\n');
 
-%% ================= Comprehensive Spatiotemporal Activity by Neuron Type =================
-fprintf('--- Generating Comprehensive Plots by NEURON TYPE (Task & Control) ---\n');
+%% ================= Spatiotemporal Activity by Neuron Type & Modulation (Area x Cell-Type grids) =================
+fprintf('--- Generating Area x Cell-Type grids per Modulation class (Task & Control) ---\n');
 
 % --- 1. Prepare Data Labels ---
 valid_group = combined_labels.group_labels_all(valid_idx);
 valid_mouse = combined_labels.mouse_labels_all(valid_idx);
 valid_ntype = combined_labels.neurontype_labels_all(valid_idx);
+valid_area  = combined_labels.area_labels_all(valid_idx);
 
-group_ids = [1, 2];
+group_ids   = [1, 2];
 group_names = {'Task', 'Control'};
 
-% --- 2. Plotting Configuration ---
-neurontype_map = containers.Map({1, 2, 3}, {'MSN', 'FSN', 'TAN'});
-target_keys = sort(cell2mat(neurontype_map.keys));
-num_types = numel(target_keys);
-type_colors = lines(num_types); 
+% --- 2. Area x Cell-Type grid spec ---
+% Neuron types: 1=MSN, 2=FS, 3=TAN (striatal); 5=RS (non-striatal). Each
+% area shows only the types that apply: MSN/FS/TAN for striatum, FS/RS else.
+target_areas   = {'DMS', 'DLS', 'ACC', 'V1', 'CA1'};
+striatal_areas = {'DMS', 'DLS'};
+target_types   = [1, 2, 3, 5];
+type_names     = {'MSN', 'FS', 'TAN', 'RS'};
+striatal_type_keys    = [1, 2, 3];
+nonstriatal_type_keys = [2, 5];
+num_areas = numel(target_areas);
+num_types = numel(target_types);
+min_units = 5;
 
 % --- 3. Loop over Groups (Task and Control) ---
 for g_idx = 1:length(group_ids)
-    current_group_id = group_ids(g_idx);
+    current_group_id   = group_ids(g_idx);
     current_group_name = group_names{g_idx};
-    
     fprintf('\n>>> Processing Group: %s <<<\n', current_group_name);
-    
+
     idx_group = (valid_group == current_group_id);
     if sum(idx_group) == 0; continue; end
-    
+
     group_tensor_raw = tensor_full_raw(idx_group, :, :);
     group_tensor_z   = tensor_full_z(idx_group, :, :);
     group_mouse      = valid_mouse(idx_group);
     group_ntype      = valid_ntype(idx_group);
-    group_mod_class  = modulation_class(idx_group); % Subpopulation alignment
-    
-    metrics  = {group_tensor_raw, 'Raw FR'; group_tensor_z, 'Z-Scored'};
-    
+    group_area       = valid_area(idx_group);
+    group_mod_class  = modulation_class(idx_group);
+
+    metrics = {group_tensor_raw, 'Raw FR'; group_tensor_z, 'Z-Scored'};
+
     for met_idx = 1:size(metrics, 1)
         current_tensor = metrics{met_idx, 1};
         met_name       = metrics{met_idx, 2};
-        
+
         for avg_idx = 1:length(avg_methods)
             avg_mode = avg_methods{avg_idx};
-            fig_prefix = sprintf('[%s] Neuron Types: %s - %s', current_group_name, met_name, avg_mode);
-            
-            % -----------------------------------------------------------------
-            % FIGURE A: SPATIAL TUNING BY NEURON TYPE (Split by Modulation)
-            % -----------------------------------------------------------------
-            fig_spatial_type = figure('Name', sprintf('%s: Spatial', fig_prefix), 'Position', [100, 100, 500 * num_types, 300 * num_mods]);
-            t_spatial_type = tiledlayout(num_mods, num_types, 'TileSpacing', 'compact', 'Padding', 'compact');
-            
+
+            % One Area x Cell-Type grid per modulation class.
             for i_mod = 1:num_mods
-                for i = 1:num_types
-                    current_key = target_keys(i);
-                    current_name = neurontype_map(current_key);
-                    
-                    nexttile; hold on;
-                    legend_handles_spatial_type = [];
-                    
-                    idx_type = (group_ntype == current_key) & (group_mod_class == i_mod);
-                    idx_type(isnan(idx_type)) = false;
-                    n_units_this_type = sum(idx_type);
-                    
-                    if n_units_this_type > 0
-                        target_tensor = current_tensor(idx_type, :, :);
-                        target_mice = group_mouse(idx_type);
-                        unique_target_mice = unique(target_mice);
-                        
-                        for i_epoch = 1:numel(epoch_trials)
-                            trs = epoch_trials{i_epoch};
-                            epoch_data = target_tensor(:, :, trs);
-                            
-                            if strcmp(avg_mode, 'Pooled')
-                                activity_per_neuron = squeeze(mean(epoch_data, 3, 'omitnan'));
-                                mean_space = mean(activity_per_neuron, 1, 'omitnan');
-                                sem_space  = std(activity_per_neuron, 0, 1, 'omitnan') / sqrt(n_units_this_type);
-                            else
-                                n_m = length(unique_target_mice);
-                                mouse_means = nan(n_m, size(epoch_data, 2));
-                                for m = 1:n_m
-                                    m_idx = (target_mice == unique_target_mice(m));
-                                    m_data = epoch_data(m_idx, :, :);
-                                    mouse_means(m, :) = mean(mean(m_data, 3, 'omitnan'), 1, 'omitnan');
-                                end
-                                mean_space = mean(mouse_means, 1, 'omitnan');
-                                sem_space  = std(mouse_means, 0, 1, 'omitnan') / sqrt(n_m);
-                            end
-                            
-                            h = shadedErrorBar(1:size(mean_space, 2), mean_space, sem_space, ...
-                                'lineprops', {'-','Color', epoch_colors{i_epoch}, 'LineWidth', 2});
-                            if ~isempty(h) && isvalid(h.mainLine); legend_handles_spatial_type(end+1) = h.mainLine; end
-                        end
-                        
-                        yl = ylim; y_p = [yl(1), yl(1), yl(2), yl(2)];
-                        patch([v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
-                        patch([r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, 'FaceAlpha', 0.2, 'EdgeColor', 'none');
-                        if ~isempty(legend_handles_spatial_type); uistack(legend_handles_spatial_type, 'top'); end
-                        
-                        if strcmp(avg_mode, 'Pooled')
-                            title(sprintf('%s - %s (n=%d)', current_name, mod_labels{i_mod}, n_units_this_type));
-                        else
-                            title(sprintf('%s - %s (N=%d mice)', current_name, mod_labels{i_mod}, length(unique_target_mice)));
-                        end
-                        box on; xlim([0, size(current_tensor, 2)]);
-                        
-                        if i_mod == num_mods && i == num_types
-                             legend(legend_handles_spatial_type, epoch_names, 'Location', 'best');
-                        end
+                fig_prefix = sprintf('[%s] %s - %s - %s', current_group_name, ...
+                                     met_name, avg_mode, mod_labels{i_mod});
+
+                % ---------------------------------------------------------
+                % FIGURE A: SPATIAL TUNING (Area x Cell-Type grid)
+                % ---------------------------------------------------------
+                figure('Name', sprintf('%s: Spatial', fig_prefix), ...
+                       'Position', [80, 80, 360 * num_types, 260 * num_areas], 'Color', 'w');
+                t_sp = tiledlayout(num_areas, num_types, 'TileSpacing', 'compact', 'Padding', 'compact');
+                legend_placed = false;
+
+                for i_area = 1:num_areas
+                    current_area = target_areas{i_area};
+                    if any(strcmp(current_area, striatal_areas))
+                        area_type_keys = striatal_type_keys;
                     else
-                        title(sprintf('%s - %s (n=0)', current_name, mod_labels{i_mod}));
-                        axis off;
+                        area_type_keys = nonstriatal_type_keys;
                     end
-                end
-            end
-            title(t_spatial_type, sprintf('%s: Spatial Tuning Evolution (Split by Modulation)', fig_prefix), 'FontSize', 16);
-            xlabel(t_spatial_type, 'Spatial Bin', 'FontSize', 12);
-            ylabel(t_spatial_type, met_name, 'FontSize', 12);
-            
-            clean_name_spatial_type = regexprep(sprintf('%s_Spatial_Type_Subpops', fig_prefix), '[\[\]\s:]', '_'); 
-            save_to_svg(clean_name_spatial_type);
-            
-            % -----------------------------------------------------------------
-            % FIGURE B: TEMPORAL EVOLUTION BY NEURON TYPE (Split by Modulation)
-            % -----------------------------------------------------------------
-            fig_temporal_type = figure('Name', sprintf('%s: Temporal', fig_prefix), 'Position', [250, 250, 1400, 450]);
-            t_temporal_type = tiledlayout(1, num_mods, 'TileSpacing', 'compact', 'Padding', 'compact');
-            
-            for i_mod = 1:num_mods
-                nexttile; hold on;
-                legend_handles_temporal_type = [];
-                valid_type_names = {};
-                
-                for i = 1:num_types
-                    current_key = target_keys(i);
-                    current_name = neurontype_map(current_key);
-                    
-                    idx_type = (group_ntype == current_key) & (group_mod_class == i_mod);
-                    idx_type(isnan(idx_type)) = false;
-                    
-                    if sum(idx_type) > 0
-                        valid_type_names{end+1} = current_name;
-                        target_tensor = current_tensor(idx_type, :, :);
-                        target_mice = group_mouse(idx_type);
-                        unique_target_mice = unique(target_mice);
-                        
-                        if strcmp(avg_mode, 'Pooled')
-                            activity_per_neuron_temp = squeeze(mean(target_tensor, 2, 'omitnan'));
-                            mean_time = mean(activity_per_neuron_temp, 1, 'omitnan');
-                            sem_time  = std(activity_per_neuron_temp, 0, 1, 'omitnan') / sqrt(sum(idx_type));
-                        else
-                            n_m = length(unique_target_mice);
-                            mouse_means_temp = nan(n_m, size(target_tensor, 3));
-                            for m = 1:n_m
-                                m_idx = (target_mice == unique_target_mice(m));
-                                m_data = target_tensor(m_idx, :, :);
-                                mouse_means_temp(m, :) = mean(mean(m_data, 2, 'omitnan'), 1, 'omitnan');
-                            end
-                            mean_time = mean(mouse_means_temp, 1, 'omitnan');
-                            sem_time  = std(mouse_means_temp, 0, 1, 'omitnan') / sqrt(n_m);
+
+                    for i_type = 1:num_types
+                        current_type_idx  = target_types(i_type);
+                        current_type_name = type_names{i_type};
+                        nexttile; hold on;
+
+                        % Skip cell types that don't apply to this area.
+                        if ~ismember(current_type_idx, area_type_keys)
+                            axis off; continue;
                         end
-                        
-                        this_color = type_colors(i, :);
-                        h = shadedErrorBar(1:size(mean_time, 2), mean_time, sem_time, ...
-                            'lineprops', {'-','Color', this_color, 'LineWidth', 2});
-                        if ~isempty(h) && isvalid(h.mainLine); legend_handles_temporal_type(end+1) = h.mainLine; end
+
+                        idx_sel = strcmp(group_area, current_area) & ...
+                                  (group_ntype == current_type_idx) & ...
+                                  (group_mod_class == i_mod);
+                        n_units = sum(idx_sel);
+
+                        if n_units >= min_units
+                            target_tensor = current_tensor(idx_sel, :, :);
+                            target_mice   = group_mouse(idx_sel);
+                            unique_mice   = unique(target_mice);
+                            legend_handles = [];
+                            for i_epoch = 1:numel(epoch_trials)
+                                trs = epoch_trials{i_epoch};
+                                epoch_data = target_tensor(:, :, trs);
+                                if strcmp(avg_mode, 'Pooled')
+                                    apn = squeeze(mean(epoch_data, 3, 'omitnan'));
+                                    mu  = mean(apn, 1, 'omitnan');
+                                    se  = std(apn, 0, 1, 'omitnan') / sqrt(n_units);
+                                else
+                                    n_m = numel(unique_mice);
+                                    mm  = nan(n_m, size(epoch_data, 2));
+                                    for m = 1:n_m
+                                        mi = (target_mice == unique_mice(m));
+                                        mm(m, :) = mean(mean(epoch_data(mi, :, :), 3, 'omitnan'), 1, 'omitnan');
+                                    end
+                                    mu = mean(mm, 1, 'omitnan');
+                                    se = std(mm, 0, 1, 'omitnan') / sqrt(n_m);
+                                end
+                                h = shadedErrorBar(1:numel(mu), mu, se, ...
+                                    'lineprops', {'-', 'Color', epoch_colors{i_epoch}, 'LineWidth', 2});
+                                if ~isempty(h) && isvalid(h.mainLine), legend_handles(end+1) = h.mainLine; end
+                            end
+                            yl = ylim; y_p = [yl(1), yl(1), yl(2), yl(2)];
+                            patch([v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
+                            patch([r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, 'FaceAlpha', 0.2, 'EdgeColor', 'none');
+                            if ~isempty(legend_handles), uistack(legend_handles, 'top'); end
+                            xlim([0, size(current_tensor, 2)]);
+                            if ~legend_placed && ~isempty(legend_handles)
+                                legend(legend_handles, epoch_names, 'Location', 'best');
+                                legend_placed = true;
+                            end
+                        else
+                            axis off;
+                            if n_units > 0
+                                text(0.5, 0.5, sprintf('n=%d', n_units), 'Units', 'normalized', ...
+                                     'HorizontalAlignment', 'center', 'Color', [0.5 0.5 0.5]);
+                            end
+                        end
+                        title(sprintf('%s - %s (n=%d)', current_area, current_type_name, n_units));
+                        box on;
                     end
                 end
-                
-                xline(0, 'k--', epoch_names{1}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
-                xline(3, 'k--', epoch_names{2}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
-                xline(10, 'k--', epoch_names{3}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
-                xline(20, 'k--', epoch_names{4}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
-                
-                title(sprintf('%s', mod_labels{i_mod}));
-                xlabel('Aligned Trial Number');
-                if i_mod == 1; ylabel(sprintf('Mean %s', met_name)); end
-                xlim([0, size(current_tensor, 3)]);
-                if ~isempty(legend_handles_temporal_type)
-                    legend(legend_handles_temporal_type, valid_type_names, 'Location', 'best');
+                title(t_sp, sprintf('%s: Spatial Tuning by Area & Cell Type', fig_prefix), 'FontSize', 14);
+                xlabel(t_sp, 'Spatial Bin'); ylabel(t_sp, met_name);
+                save_to_svg(regexprep(sprintf('%s_Spatial_Area_x_Type', fig_prefix), '[\[\]\s:]', '_'));
+
+                % ---------------------------------------------------------
+                % FIGURE B: TEMPORAL EVOLUTION (Area x Cell-Type grid)
+                % ---------------------------------------------------------
+                figure('Name', sprintf('%s: Temporal', fig_prefix), ...
+                       'Position', [120, 120, 360 * num_types, 260 * num_areas], 'Color', 'w');
+                t_tp = tiledlayout(num_areas, num_types, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+                for i_area = 1:num_areas
+                    current_area = target_areas{i_area};
+                    if any(strcmp(current_area, striatal_areas))
+                        area_type_keys = striatal_type_keys;
+                    else
+                        area_type_keys = nonstriatal_type_keys;
+                    end
+
+                    for i_type = 1:num_types
+                        current_type_idx  = target_types(i_type);
+                        current_type_name = type_names{i_type};
+                        nexttile; hold on;
+
+                        if ~ismember(current_type_idx, area_type_keys)
+                            axis off; continue;
+                        end
+
+                        idx_sel = strcmp(group_area, current_area) & ...
+                                  (group_ntype == current_type_idx) & ...
+                                  (group_mod_class == i_mod);
+                        n_units = sum(idx_sel);
+
+                        if n_units >= min_units
+                            target_tensor = current_tensor(idx_sel, :, :);
+                            target_mice   = group_mouse(idx_sel);
+                            unique_mice   = unique(target_mice);
+                            if strcmp(avg_mode, 'Pooled')
+                                apn = squeeze(mean(target_tensor, 2, 'omitnan'));
+                                mu  = mean(apn, 1, 'omitnan');
+                                se  = std(apn, 0, 1, 'omitnan') / sqrt(n_units);
+                            else
+                                n_m = numel(unique_mice);
+                                mm  = nan(n_m, size(target_tensor, 3));
+                                for m = 1:n_m
+                                    mi = (target_mice == unique_mice(m));
+                                    mm(m, :) = mean(mean(target_tensor(mi, :, :), 2, 'omitnan'), 1, 'omitnan');
+                                end
+                                mu = mean(mm, 1, 'omitnan');
+                                se = std(mm, 0, 1, 'omitnan') / sqrt(n_m);
+                            end
+                            shadedErrorBar(1:numel(mu), mu, se, ...
+                                'lineprops', {'-', 'Color', cfg.plot.colors.area_map(current_area), 'LineWidth', 2});
+                            xline(0,  'k--', epoch_names{1}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
+                            xline(3,  'k--', epoch_names{2}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
+                            xline(10, 'k--', epoch_names{3}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
+                            xline(20, 'k--', epoch_names{4}, 'LineWidth', 1.5, 'LabelVerticalAlignment', 'bottom');
+                            xlim([0, size(current_tensor, 3)]);
+                        else
+                            axis off;
+                            if n_units > 0
+                                text(0.5, 0.5, sprintf('n=%d', n_units), 'Units', 'normalized', ...
+                                     'HorizontalAlignment', 'center', 'Color', [0.5 0.5 0.5]);
+                            end
+                        end
+                        title(sprintf('%s - %s (n=%d)', current_area, current_type_name, n_units));
+                        box on;
+                    end
                 end
-                box on; hold off;
-            end
-            title(t_temporal_type, sprintf('%s: Temporal Evolution by Neuron Type', fig_prefix), 'FontSize', 16);
-            
-            clean_name_temporal_type = regexprep(sprintf('%s_Temporal_Type_Subpops', fig_prefix), '[\[\]\s:]', '_'); 
-            save_to_svg(clean_name_temporal_type);
-            
-        end % End loop averaging methods
-    end % End loop metrics
-end % End loop groups (Task/Control)
-fprintf('--- Comprehensive Neuron Type Plots Complete ---\n\n');
+                title(t_tp, sprintf('%s: Temporal Evolution by Area & Cell Type', fig_prefix), 'FontSize', 14);
+                xlabel(t_tp, 'Aligned Trial Number'); ylabel(t_tp, sprintf('Mean %s', met_name));
+                save_to_svg(regexprep(sprintf('%s_Temporal_Area_x_Type', fig_prefix), '[\[\]\s:]', '_'));
+
+            end % modulation class
+        end % averaging method
+    end % metric
+end % groups (Task/Control)
+fprintf('--- Neuron Type x Modulation Area x Cell-Type Grids Complete ---\n\n');
 
 %% ================= Comprehensive Spatiotemporal Activity by Area AND Neuron Type =================
 fprintf('--- Generating Area x Cell-Type Spatiotemporal Grids [Z-scored, Pooled] ---\n');
@@ -934,7 +750,7 @@ for ds_idx = 1:size(datasets, 1)
         continue;
     end
     
-    fprintf('Generating 3x4 grids for: %s\n', ds_name);
+    fprintf('Generating area x cell-type grids for: %s\n', ds_name);
     
     % =========================================================================
     % FIGURE A: SPATIAL TUNING (Area x Cell-Type Grid)
@@ -1272,9 +1088,11 @@ for ds_idx = 1:size(datasets, 1)
         title(t_density, sprintf('%s: KDE Activity Density (Trial 1 vs %s)', ds_name, tr_label), 'FontSize', 16);
         
         % Save Figures
+        figure(fig_scatter)
         clean_name_scatter = regexprep(sprintf('[%s]_Scatter_Tr1_vs_Tr%d', ds_name, tr_target), '[\[\]\s:]', '_'); 
         save_to_svg(clean_name_scatter);
         
+        pause(2)
         clean_name_density = regexprep(sprintf('[%s]_KDEDensity_Tr1_vs_Tr%d', ds_name, tr_target), '[\[\]\s:]', '_'); 
         figure(fig_density); % Bring to front to ensure proper saving
         save_to_svg(clean_name_density);
