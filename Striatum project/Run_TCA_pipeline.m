@@ -18,7 +18,7 @@ clear proj
 % Areas + field map are driven from project_cfg(); DG is then dropped here
 % (excluded from all figures/analyses, 2026-05-24) without touching the
 % shared config, so other pipelines that read project_cfg keep DG.
-cfg.analysis_mode = 'task_only'; % Options: 'task_only', 'control_only', 'task_and_control'
+cfg.analysis_mode = 'task_and_control'; % Options: 'task_only', 'control_only', 'task_and_control'
 proj = project_cfg();
 cfg.areas_to_include = proj.areas(~strcmp(proj.areas, 'DG'));
 cfg.area_field_map   = proj.area_field_map;
