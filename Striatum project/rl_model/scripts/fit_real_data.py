@@ -1,10 +1,11 @@
 """Fit the belief-state RL model to the 16 real task mice, with cross-validation.
 
 For each mouse:
-  * interleaved cross-validation — every 5th trial is held out as a test set;
-  * the model is fit by MAP on the train trials only (test trials still pass
-    through the agent so within-session learning is uninterrupted, but they do
-    not enter the fitting objective);
+  * cross-validation holds out a subset of trials from the fitting objective
+    (the CV scheme is selectable, see CV_MODE below);
+  * the model is fit by MAP on the train trials only.  Held-out trials still
+    pass through the agent with `learn_mask` set, so within-session teacher-
+    forced learning is genuinely uninterrupted — only the likelihood drops them;
   * held-out predictive log-likelihood is evaluated on the test trials,
     separately for the lick channel and the velocity channel, and compared with
     a null model (per-bin Poisson rate + per-bin log-normal velocity estimated
@@ -12,10 +13,24 @@ For each mouse:
     the spatial profile but no trial-by-trial learning);
   * all latents are exported for every trial.
 
+CV schemes (set RLMODEL_CV, default "interleaved"):
+  * "interleaved" — every TEST_EVERY-th trial held out.  A strong test of the
+    spatial profile, but a weak test of *learning* — adjacent trials are highly
+    correlated, so a held-out trial is nearly in-sample for the slow learning
+    curve.
+  * "forward" — hold out the LAST FORWARD_FRAC of trials (blocked / forward-
+    chaining).  Fits the early/middle trials and asks whether the fitted
+    subjective constants predict LATER behaviour: a genuine test of learning-
+    curve generalisation.  (The per-epoch validation in plot_epoch_validation.py
+    remains the headline learning-curve check; this gives a matching held-out
+    likelihood.)
+Each scheme writes to its own results dir, so the two never clobber each other.
+
 Incremental: each invocation fits as many mice as fit in a short time budget
 and the last invocation writes the cross-validation summary.  Run repeatedly:
 
-    python -m scripts.fit_real_data        # repeat until it prints DONE
+    python -m scripts.fit_real_data                  # interleaved (default)
+    RLMODEL_CV=forward python -m scripts.fit_real_data   # forward / blocked
 """
 from __future__ import annotations
 
@@ -36,18 +51,38 @@ from rl_model.fitting import fit_mouse                         # noqa: E402
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESDIR = os.path.join(HERE, "results")
-REALDIR = os.path.join(RESDIR, "real_fits_v5")   # v5: graded reward + deterministic velocity actor
+# v6: CV-mask split (held-out trials still drive learning) + closed-form velocity
+# actor gradient.  Each CV scheme gets its own dir so they never clobber.
+CV_MODE = os.environ.get("RLMODEL_CV", "interleaved")   # "interleaved" | "forward"
+REALDIR = os.path.join(RESDIR, f"real_fits_v6_{CV_MODE}")
 os.makedirs(REALDIR, exist_ok=True)
 MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data5cm.mat")
 
 TEST_EVERY = 5            # interleaved CV: every 5th trial held out
+FORWARD_FRAC = 0.25       # forward CV: fraction of trailing trials held out
 TIME_BUDGET = 25.0        # seconds of fitting per invocation (stay under shell timeout)
+# Real sessions occasionally trap a single start in a bad basin (M13: nll
+# 26027 -> 14240 only after a multi-restart refit).  Unlike the synthetic
+# cohort (where restart-1 from defaults reliably wins), the real fits use
+# several random restarts; the incremental TIME_BUDGET loop absorbs the extra
+# cost (fewer mice per invocation, just run the script more times).
+N_RESTARTS = 4
 LATENT_KEYS = ["value", "rpe", "precision", "lick_rate", "v_mean",
                "belief_mean", "sigma"]
 
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def select_test_idx(nt):
+    """Held-out trial indices for the active CV scheme (see module docstring)."""
+    if CV_MODE == "forward":
+        cut = max(int(round(nt * (1.0 - FORWARD_FRAC))), 1)
+        return np.arange(cut, nt)
+    if CV_MODE == "interleaved":
+        return np.arange(TEST_EVERY - 1, nt, TEST_EVERY)
+    raise ValueError(f"unknown RLMODEL_CV={CV_MODE!r} (use 'interleaved' or 'forward')")
 
 
 def bucket_len(nt):
@@ -91,13 +126,13 @@ def _per_bin(ll, idx, mask, idx_set):
     return ll[idx_set].sum() / max(mask[idx_set].sum(), 1.0)
 
 
-def fit_one(mouse, cfg, n_restarts=1, maxiter=None):
+def fit_one(mouse, cfg, n_restarts=N_RESTARTS, maxiter=None):
     """Fit one mouse; return a dict of everything to persist."""
     nt = mouse["n_trials"]
     T = bucket_len(nt)
     licks, logv, mask = mouse["licks"], mouse["logv"], mouse["mask"]
 
-    test_idx = np.arange(TEST_EVERY - 1, nt, TEST_EVERY)
+    test_idx = select_test_idx(nt)
     train_idx = np.setdiff1d(np.arange(nt), test_idx)
 
     licks_p, logv_p, mask_p = pad(licks, T), pad(logv, T), pad(mask, T)
@@ -180,7 +215,7 @@ def finalise(cohort):
     rows = [np.load(os.path.join(REALDIR, f"{m['mouse']}.npz"), allow_pickle=True)
             for m in cohort]
     log("=" * 70)
-    log("CROSS-VALIDATED FIT QUALITY — held-out log-likelihood per valid bin")
+    log(f"CROSS-VALIDATED FIT QUALITY ({CV_MODE}) — held-out log-likelihood per valid bin")
     log(f"{'mouse':6s} {'trials':>6s} | {'lick model':>10s} {'lick null':>9s} "
         f"{'gain':>7s} | {'vel model':>9s} {'vel null':>8s} {'gain':>7s}")
     lg, vg = [], []
@@ -199,7 +234,7 @@ def finalise(cohort):
         f"({(lg > 0).sum()}/{len(lg)} mice positive)")
     log(f"VEL : mean held-out gain over null {vg.mean():+.3f} nats/bin "
         f"({(vg > 0).sum()}/{len(vg)} mice positive)")
-    with open(os.path.join(RESDIR, "DONE_real"), "w") as fh:
+    with open(os.path.join(RESDIR, f"DONE_real_v6_{CV_MODE}"), "w") as fh:
         fh.write("ok\n")
     log("DONE")
 

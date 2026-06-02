@@ -313,9 +313,22 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
   `test_velocity_grad_matches_autodiff`; it is preferred over autodiff-in-scan
   because it keeps the reverse-mode tape from growing through the velocity
   sub-computation on the long padded real sessions (up to 512 trials).
-  **Open:** real refit (`real_fits_v6`) + per-epoch re-validation + encoding
-  re-run need the `.mat` (not in this container) — the velocity-channel and
-  `kappa_v`-on-real-data claims are pending that refit.
+  **Robustness (#6):** real fits now use `N_RESTARTS = 4` (was 1) — a single
+  start occasionally trapped a real mouse in a bad basin (M13); the synthetic
+  recovery keeps `n_restarts=1` (restart-1 reliably wins there).
+  **CV scheme (#4):** added a **forward / blocked** CV (`RLMODEL_CV=forward`:
+  hold out the trailing `FORWARD_FRAC=0.25` of trials, fit the earlier ones,
+  learning still teacher-forced through all) as a genuine learning-curve
+  generalisation metric, alongside the existing interleaved scheme (which barely
+  tests learning — adjacent trials are correlated). Each scheme writes its own
+  `real_fits_v6_{mode}` dir; the per-epoch validation stays the headline
+  learning check. The real fits are bumped to **v6** (CV-mask split + closed-form
+  velocity gradient); `plot_real_data.py` / `plot_epoch_validation.py` now read
+  `real_fits_v6_interleaved` (override with `RLMODEL_REALDIR`).
+  **Open:** real refit (`real_fits_v6_{interleaved,forward}`) + per-epoch
+  re-validation + encoding re-run need the `.mat` (not in this container) — the
+  velocity-channel, `kappa_v`-on-real-data, and forward-CV claims are pending
+  that refit.
 
 - **2026-05-24 (velocity v3 — real fit + validation)** — Refitted all 16 mice
   with the graded-reward + deterministic-velocity-actor model (`real_fits_v5`)

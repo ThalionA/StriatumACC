@@ -33,7 +33,7 @@ from rl_model.io_real import load_real_cohort                                  #
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIGDIR = os.path.join(HERE, "figures")
 RESDIR = os.path.join(HERE, "results")
-REALDIR = os.path.join(RESDIR, "real_fits_v5")   # v5: graded reward + deterministic velocity actor
+REALDIR = os.path.join(RESDIR, os.environ.get("RLMODEL_REALDIR", "real_fits_v6_interleaved"))
 MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data5cm.mat")
 
 VZ = VISUAL_LANDMARK_AU / BIN_SIZE_AU
