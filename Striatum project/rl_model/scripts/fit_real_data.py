@@ -60,7 +60,10 @@ MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data5cm.mat")
 
 TEST_EVERY = 5            # interleaved CV: every 5th trial held out
 FORWARD_FRAC = 0.25       # forward CV: fraction of trailing trials held out
-TIME_BUDGET = 25.0        # seconds of fitting per invocation (stay under shell timeout)
+# Seconds of fitting per invocation.  The small default keeps each run inside a
+# cloud shell timeout (incremental — re-run until DONE); set RLMODEL_TIME_BUDGET
+# to a large number on a local machine to fit every mouse in a single command.
+TIME_BUDGET = float(os.environ.get("RLMODEL_TIME_BUDGET", "25"))
 # Real sessions occasionally trap a single start in a bad basin (M13: nll
 # 26027 -> 14240 only after a multi-restart refit).  Unlike the synthetic
 # cohort (where restart-1 from defaults reliably wins), the real fits use

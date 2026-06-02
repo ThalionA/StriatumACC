@@ -34,7 +34,7 @@ os.makedirs(ENCDIR, exist_ok=True)
 
 MODELS = ("beh", "beh_spatial")
 PLOT_AREAS = ("acc", "dms", "dls", "v1", "ca1", "dg")
-TIME_BUDGET = 30.0
+TIME_BUDGET = float(os.environ.get("RLMODEL_TIME_BUDGET", "30"))
 ALPHA = 0.05
 
 

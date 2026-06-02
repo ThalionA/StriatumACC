@@ -60,9 +60,10 @@ os.makedirs(LADDERDIR, exist_ok=True)
 os.makedirs(FIGDIR, exist_ok=True)
 
 FORWARD_FRAC = 0.25
-# Real fits are incremental (short budget, run repeatedly); the synthetic demo
-# is small enough to finish in one go.
-TIME_BUDGET = 800.0 if SYNTH else 30.0
+# Seconds of fitting per invocation.  Small default keeps each run inside a cloud
+# shell timeout (re-run until DONE); set RLMODEL_TIME_BUDGET to a large number to
+# do every (mouse, model) cell in one command on a local machine.
+TIME_BUDGET = float(os.environ.get("RLMODEL_TIME_BUDGET", "800" if SYNTH else "30"))
 OFF = -_BOUND                       # unconstrained value that switches a rate off
 
 # name -> learning rates pinned off
