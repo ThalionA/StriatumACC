@@ -212,7 +212,9 @@ def _example_figure(mid, cohort, fits, cfg):
           np.maximum(m["mask"][:, rzw].sum(1), 1)
     pred = np.asarray(ft["lat_lick_rate"])[:, rzw].mean(1)
     k = max(nt // 25, 1)
-    sm = lambda a: np.convolve(a, np.ones(k) / k, mode="same")
+
+    def sm(a):
+        return np.convolve(a, np.ones(k) / k, mode="same")
     ax.plot(sm(obs), np.arange(nt), c="k", lw=2, label="observed")
     ax.plot(sm(pred), np.arange(nt), c="#b03030", lw=2, ls="--", label="model")
     ax.invert_yaxis()

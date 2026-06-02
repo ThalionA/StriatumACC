@@ -263,6 +263,39 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
 
 ## Edit log
 
+- **2026-06-02 (code review — three correctness fixes + hygiene)** — Acted on a
+  thorough review of the model/fitting code.
+  1. **CV mask correctness.** The single validity mask gated *both* the
+     likelihood and the learning updates, so excluding a held-out trial from the
+     fitting objective silently deleted its teacher-forced learning too —
+     contradicting `fit_real_data.py`'s own docstring. Split into `score_mask`
+     (likelihood) and `learn_mask` (updates) in `agent.py`/`fitting.py`;
+     `fit_real_data.py` now fits with `learn_mask` = full validity so held-out
+     trials still drive within-session learning. New TDD test
+     `test_learn_mask_decouples_learning_from_scoring` pins this. Single-mask
+     callers (synthetic, latents export, recovery) are unchanged (`learn_mask`
+     defaults to `mask`).
+  2. **Velocity actor gradient.** The hand-derived `g_vel` omitted the
+     `gamma*V'` pathway, i.e. the `Q_eff = Q*(1+kappa_v*v)` speed/accuracy
+     coupling — *exactly* the term `kappa_v` was introduced to create (verified:
+     omitted term ~16% of the gradient in-RZ, ~0 elsewhere at the default
+     `kappa_v`). Replaced with the exact `jax.grad` of the expected per-bin
+     advantage, which folds the precision pathway back in. Candidate explanation
+     for the previously unidentified `kappa_v` and weak velocity channel — to be
+     re-checked against recovery v7 and a real refit.
+  3. **`precision` encoding caveat.** `precision` keeps only ~6% of its variance
+     after per-bin demeaning (the Kalman filter converges within ~1 trial), so
+     its unique dR2 under the `beh_spatial` model is structurally ~0 regardless
+     of biology. `plot_encoding_detail.py` now reports `precision` under the
+     `beh` model (value/RPE stay `beh_spatial`); added
+     `neural_encoding.spatial_demean_var_ratio` to quantify/flag this.
+  Hygiene: added nothing to git history beyond this branch; fixed all `ruff`
+  findings; recorded dependencies (new `pyproject.toml`); clarified the
+  time-budget guard in `run_neural_encoding.py`; doc-drift fixes. Recovery re-run
+  as **v7**. **Open:** real refit (`real_fits_v6`) + per-epoch re-validation +
+  encoding re-run need the `.mat` (not in this container) — the velocity-channel
+  and `kappa_v` claims above are pending that refit.
+
 - **2026-05-24 (velocity v3 — real fit + validation)** — Refitted all 16 mice
   with the graded-reward + deterministic-velocity-actor model (`real_fits_v5`)
   and re-ran the per-epoch validation. **Lick channel much improved**: held-out

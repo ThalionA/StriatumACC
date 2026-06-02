@@ -16,8 +16,10 @@ _jax.config.update("jax_compilation_cache_dir",
 _jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
 _jax.config.update("jax_persistent_cache_min_entry_size_bytes", 0)
 
-from .config import PARAM_NAMES, PARAMS, TaskConfig
-from .agent import (
+# Imports follow the jax.config calls above by necessity (x64 / cache flags must
+# be set before jax is first used), so E402 is expected here.
+from .config import PARAM_NAMES, PARAMS, TaskConfig          # noqa: E402
+from .agent import (                                         # noqa: E402
     default_unconstrained,
     session_latents,
     session_loglik,
@@ -25,8 +27,8 @@ from .agent import (
     to_constrained,
     to_unconstrained,
 )
-from .synthetic import make_cohort, sample_params
-from .fitting import fit_mouse
+from .synthetic import make_cohort, sample_params            # noqa: E402
+from .fitting import fit_mouse                                # noqa: E402
 
 __all__ = [
     "PARAM_NAMES", "PARAMS", "TaskConfig",

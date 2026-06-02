@@ -17,21 +17,27 @@ from .config import N_PARAMS, PARAM_NAMES, TaskConfig
 _BOUND = 12.0  # generous box in unconstrained space, keeps the optimiser sane
 
 
-def _objective(licks, logv, mask, cfg, prior_sd):
+def _objective(licks, logv, mask, learn_mask, cfg, prior_sd):
     """Return a jitted (value, grad) function of the unconstrained vector.
 
     With `prior_sd` set, this is a MAP objective: the negative log-likelihood
     plus a broad isotropic Gaussian prior centred on the default parameters.
     The prior is weak — it leaves well-identified parameters untouched and
     merely keeps flat (unidentified) directions from drifting to the bounds.
+
+    `mask` gates the likelihood; `learn_mask` gates the within-session learning
+    updates (see `agent` module docstring).  They differ only under
+    cross-validation, where held-out trials are dropped from `mask` but kept in
+    `learn_mask` so the agent's teacher-forced trajectory is uninterrupted.
     """
     licks_j = jnp.asarray(licks, dtype=float)
     logv_j = jnp.asarray(logv, dtype=float)
     mask_j = jnp.asarray(mask, dtype=float)
+    learn_j = jnp.asarray(learn_mask, dtype=float)
     u0 = default_unconstrained()
 
     def nll(u):
-        ll = -session_loglik(u, licks_j, logv_j, mask_j, cfg)
+        ll = -session_loglik(u, licks_j, logv_j, mask_j, learn_j, cfg)
         if prior_sd is not None:
             ll = ll + 0.5 * jnp.sum(((u - u0) / prior_sd) ** 2)
         return ll
@@ -39,19 +45,24 @@ def _objective(licks, logv, mask, cfg, prior_sd):
     return jax.jit(jax.value_and_grad(nll))
 
 
-def fit_mouse(licks, logv, mask=None, cfg: TaskConfig | None = None,
+def fit_mouse(licks, logv, mask=None, learn_mask=None, cfg: TaskConfig | None = None,
               n_restarts: int = 6, seed: int = 0, prior_sd: float | None = 4.0,
               maxiter: int = 400):
     """Fit one mouse's session.  `licks`/`logv`/`mask` are (n_trials, n_bins).
 
-    `mask` (1 = valid bin, 0 = missing behavioural data) defaults to all-valid.
+    `mask` (1 = valid bin, 0 = missing behavioural data) gates the likelihood and
+    defaults to all-valid.  `learn_mask` gates the learning updates and defaults
+    to `mask`; pass a wider `learn_mask` to keep held-out CV trials driving
+    teacher-forced learning while excluding them from the fitting objective.
     Returns a dict with the fitted unconstrained vector, the natural-space
     parameter dict, the negative log-likelihood, and per-restart diagnostics.
     """
     cfg = cfg or TaskConfig()
     if mask is None:
         mask = np.ones_like(np.asarray(licks, dtype=float))
-    vg = _objective(licks, logv, mask, cfg, prior_sd)
+    if learn_mask is None:
+        learn_mask = mask
+    vg = _objective(licks, logv, mask, learn_mask, cfg, prior_sd)
 
     def scipy_obj(u_np):
         val, grad = vg(jnp.asarray(u_np))

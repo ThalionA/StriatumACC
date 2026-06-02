@@ -85,6 +85,34 @@ def test_mask_zeroes_likelihood_contribution():
                                     mask=np.zeros((30, CFG.n_bins)), cfg=CFG))) < 1e-6
 
 
+def test_learn_mask_decouples_learning_from_scoring():
+    """A trial dropped from the SCORE mask must leave the likelihood there at
+    zero, yet — if kept in the LEARN mask — must still drive within-session
+    learning, so the later value trajectory is unchanged.  Dropping it from the
+    learn mask too must instead perturb the later trajectory.  (CV correctness:
+    held-out trials still happened to the mouse.)"""
+    u = default_unconstrained()
+    out = simulate_session(u, jax.random.PRNGKey(11), 40, CFG)
+    licks, logv = out["lick"], out["logv"]
+    full = np.ones((40, CFG.n_bins))
+    score = full.copy()
+    score[10, :] = 0.0                                   # hold trial 10 out of scoring
+
+    base = session_latents(u, licks, logv, mask=full, cfg=CFG)
+    keep = session_latents(u, licks, logv, mask=score, learn_mask=full, cfg=CFG)
+    drop = session_latents(u, licks, logv, mask=score, learn_mask=score, cfg=CFG)
+
+    # held-out trial contributes nothing to the likelihood in both variants
+    assert abs(float(np.asarray(keep["loglik"])[10].sum())) < 1e-9
+    assert abs(float(np.asarray(drop["loglik"])[10].sum())) < 1e-9
+
+    vb = np.asarray(base["value"])
+    # learning kept -> value trajectory is identical to the all-valid baseline
+    assert np.allclose(np.asarray(keep["value"]), vb, atol=1e-8)
+    # learning interrupted -> later-trial value trajectory is perturbed
+    assert np.max(np.abs(np.asarray(drop["value"])[11:] - vb[11:])) > 1e-4
+
+
 def test_true_params_beat_wrong_params():
     """The data-generating parameters score higher likelihood than wrong ones."""
     u_true = sample_params(seed=5, jitter=0.3)

@@ -105,10 +105,12 @@ def fit_batch():
     if not todo:
         return True
     t0 = time.time()
+    n_this_run = 0
     for i, m in todo:
-        if time.time() - t0 > TIME_BUDGET and len(done) > len(todo) * 0:
-            if done:                       # at least one done this run
-                break
+        # Stop once over the time budget, but only after encoding at least one
+        # mouse this invocation so every run makes forward progress.
+        if time.time() - t0 > TIME_BUDGET and n_this_run > 0:
+            break
         mid = m["mouse"]
         nt = m["n_trials"]
         fr = neural[i]["fr"][:nt]
@@ -124,6 +126,7 @@ def fit_batch():
                 out[f"pvalbin_{mdl}_{k}"] = res[mdl]["pval_bin"][k]
         np.savez(os.path.join(ENCDIR, f"{mid}.npz"), **out)
         done.add(mid)
+        n_this_run += 1
         log(f"  {mid}: {neural[i]['n_cells']} cells encoded "
             f"({time.time() - t0:.1f}s)")
     return len(done) >= len(cohort)

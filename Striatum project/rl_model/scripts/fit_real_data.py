@@ -102,13 +102,19 @@ def fit_one(mouse, cfg, n_restarts=1, maxiter=None):
 
     licks_p, logv_p, mask_p = pad(licks, T), pad(logv, T), pad(mask, T)
     fit_mask = mask_p.copy()
-    fit_mask[test_idx, :] = 0.0                     # exclude test trials from the fit
+    fit_mask[test_idx, :] = 0.0                     # exclude test trials from the LIKELIHOOD
+
+    # Learning, however, must run on every trial the mouse actually experienced —
+    # held-out test trials still drive teacher-forced within-session learning, so
+    # the agent's trajectory at a held-out trial is the one the mouse had.  Hence
+    # learn_mask = full validity mask (test trials kept; only padding excluded).
+    learn_mask = mask_p
 
     # Long sessions get fewer optimiser iterations so each fit stays inside the
     # shell time slice; short sessions use the full count.
     mi = maxiter if maxiter is not None else (250 if nt > 200 else 400)
-    res = fit_mouse(licks_p, logv_p, mask=fit_mask, cfg=cfg, n_restarts=n_restarts,
-                    seed=int(mouse["mouse"][1:]), maxiter=mi)
+    res = fit_mouse(licks_p, logv_p, mask=fit_mask, learn_mask=learn_mask, cfg=cfg,
+                    n_restarts=n_restarts, seed=int(mouse["mouse"][1:]), maxiter=mi)
     u_fit = res["u_fit"]
 
     lat = session_latents(jnp.asarray(u_fit), licks_p, logv_p, mask=mask_p, cfg=cfg)
