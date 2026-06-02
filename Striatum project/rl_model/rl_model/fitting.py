@@ -47,13 +47,20 @@ def _objective(licks, logv, mask, learn_mask, cfg, prior_sd):
 
 def fit_mouse(licks, logv, mask=None, learn_mask=None, cfg: TaskConfig | None = None,
               n_restarts: int = 6, seed: int = 0, prior_sd: float | None = 4.0,
-              maxiter: int = 400):
+              maxiter: int = 400, fixed: dict | None = None):
     """Fit one mouse's session.  `licks`/`logv`/`mask` are (n_trials, n_bins).
 
     `mask` (1 = valid bin, 0 = missing behavioural data) gates the likelihood and
     defaults to all-valid.  `learn_mask` gates the learning updates and defaults
     to `mask`; pass a wider `learn_mask` to keep held-out CV trials driving
     teacher-forced learning while excluding them from the fitting objective.
+
+    `fixed` pins parameters during optimisation: a dict {param_name:
+    unconstrained_value}.  Used to fit nested (reduced) models for the
+    model-comparison ladder — e.g. fixing `eta_w`/`eta_a` to the lower bound
+    switches off critic / actor learning.  Pinned parameters are held at their
+    value (equal box bounds) and are not perturbed across restarts.
+
     Returns a dict with the fitted unconstrained vector, the natural-space
     parameter dict, the negative log-likelihood, and per-restart diagnostics.
     """
@@ -68,15 +75,28 @@ def fit_mouse(licks, logv, mask=None, learn_mask=None, cfg: TaskConfig | None = 
         val, grad = vg(jnp.asarray(u_np))
         return float(val), np.asarray(grad, dtype=np.float64)
 
-    base = np.asarray(default_unconstrained(), dtype=np.float64)
+    base = np.array(default_unconstrained(), dtype=np.float64)   # writable copy
     rng = np.random.default_rng(seed)
     bounds = [(-_BOUND, _BOUND)] * N_PARAMS
+
+    # Pin requested parameters: clamp the box bound to a point and seed the start
+    # there.  L-BFGS-B holds equal-bound coordinates fixed.
+    fixed_idx = {}
+    if fixed:
+        for name, val in fixed.items():
+            i = PARAM_NAMES.index(name)
+            v = float(np.clip(val, -_BOUND, _BOUND))
+            fixed_idx[i] = v
+            bounds[i] = (v, v)
+            base[i] = v
 
     best = None
     nlls = []
     for r in range(n_restarts):
         u0 = base if r == 0 else base + 0.5 * rng.standard_normal(N_PARAMS)
         u0 = np.clip(u0, -_BOUND, _BOUND)
+        for i, v in fixed_idx.items():
+            u0[i] = v                                    # never perturb pinned params
         res = minimize(scipy_obj, u0, jac=True, method="L-BFGS-B",
                        bounds=bounds, options=dict(maxiter=maxiter, ftol=1e-10))
         nlls.append(float(res.fun))

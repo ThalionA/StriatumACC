@@ -140,6 +140,23 @@ def test_learn_mask_decouples_learning_from_scoring():
     assert np.max(np.abs(np.asarray(drop["value"])[11:] - vb[11:])) > 1e-4
 
 
+def test_fit_mouse_pins_fixed_params():
+    """`fixed` clamps a parameter through the optimisation (the mechanism the
+    model-comparison ladder uses to switch off a learning channel)."""
+    from rl_model.fitting import _BOUND
+    u = sample_params(seed=3, jitter=0.3)
+    out = simulate_session(u, jax.random.PRNGKey(8), 50, CFG)
+    licks, logv = out["lick"], out["logv"]
+    res = fit_mouse(licks, logv, cfg=CFG, n_restarts=1, maxiter=80,
+                    fixed={"eta_w": -_BOUND})
+    # eta_w pinned to sigmoid(-_BOUND) -> critic learning effectively off
+    assert res["params"]["eta_w"] < 1e-4
+    assert np.isfinite(res["nll"])
+    # a free parameter is still optimised (not left pinned)
+    free = fit_mouse(licks, logv, cfg=CFG, n_restarts=1, maxiter=80)
+    assert free["params"]["eta_w"] > res["params"]["eta_w"]
+
+
 def test_true_params_beat_wrong_params():
     """The data-generating parameters score higher likelihood than wrong ones."""
     u_true = sample_params(seed=5, jitter=0.3)
