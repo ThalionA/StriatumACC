@@ -291,10 +291,22 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
      `neural_encoding.spatial_demean_var_ratio` to quantify/flag this.
   Hygiene: added nothing to git history beyond this branch; fixed all `ruff`
   findings; recorded dependencies (new `pyproject.toml`); clarified the
-  time-budget guard in `run_neural_encoding.py`; doc-drift fixes. Recovery re-run
-  as **v7**. **Open:** real refit (`real_fits_v6`) + per-epoch re-validation +
-  encoding re-run need the `.mat` (not in this container) — the velocity-channel
-  and `kappa_v` claims above are pending that refit.
+  time-budget guard in `run_neural_encoding.py`; doc-drift fixes.
+  **Recovery v7** (12 synthetic mice, 120 trials, `n_restarts=1`): all
+  value/policy params recover (`eta_w` 0.99, `gamma` 0.98, `beta` 0.94, `theta`
+  0.95, `lambda_max` 0.97, `v_base`/`v_slope`/`log_sigma_v` 0.94–1.00, `w_init`
+  0.89, `eta_a` 0.89, `rho` 0.74) and **all exported latents recover** (value
+  0.996, RPE 0.994, lick_rate 0.999, v_mean 0.999, precision 0.938) — the
+  correctness fixes did not degrade recovery. `kappa_v` is still weak (0.24, was
+  "unidentified" in v6): the corrected gradient makes the velocity actor *use*
+  the precision pathway, but `kappa_v`'s behavioural footprint stays too small to
+  identify in synthetic recovery — it remains a **drop candidate**.  The richer
+  velocity gradient also raised per-mouse fit time (~12s → ~115s; `jax.grad`
+  inside the scan was first replaced by `jax.jvp`, identical values, to avoid a
+  reverse-over-reverse blow-up — but the L-BFGS eval count still dominates).
+  **Open:** real refit (`real_fits_v6`) + per-epoch re-validation + encoding
+  re-run need the `.mat` (not in this container) — the velocity-channel and
+  `kappa_v`-on-real-data claims are pending that refit.
 
 - **2026-05-24 (velocity v3 — real fit + validation)** — Refitted all 16 mice
   with the graded-reward + deterministic-velocity-actor model (`real_fits_v5`)
