@@ -272,7 +272,10 @@ def _run_session(u, licks_obs, logv_obs, score_mask, learn_mask, keys, generate,
                                 jnp.dot(w_crit, belief_vector(mu_next, sig_next_, centres)))
             return (r_ - cost_) + p["gamma"] * V_next_ - V_t
 
-        g_vel = jax.grad(_expected_advantage)(logv)
+        # Forward-mode (jvp with tangent 1.0) gives d(advantage)/d(logv) exactly,
+        # and composes as reverse-over-forward under the outer fitting AD — far
+        # cheaper than the reverse-over-reverse a nested jax.grad would force.
+        g_vel = jax.jvp(_expected_advantage, (logv,), (jnp.ones_like(logv),))[1]
         w_vel_new = w_vel + p["eta_a"] * g_vel * b_t * valid_learn
 
         carry_new = (mu_next, sig_next, w_crit_new, w_lick_new, w_vel_new,
