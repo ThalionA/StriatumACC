@@ -71,6 +71,34 @@ def _demean_bin(M, bin_of_row, n_bins):
     return out.reshape(M2.shape)
 
 
+def spatial_demean_var_ratio(latent, mask):
+    """Fraction of a latent's variance that *survives* per-bin (spatial) demeaning.
+
+    The 'beh_spatial' model removes each spatial bin's across-trial mean, crediting
+    a latent only for trial-by-trial modulation beyond stationary spatial tuning.
+    A latent that is (near-)stationary across trials — e.g. `precision`, whose
+    Kalman filter converges within ~1 trial — keeps almost none of its variance
+    after this demeaning, so its unique dR2 is structurally ~0 there *regardless
+    of biology*.  This returns that retained-variance fraction so the analysis can
+    flag latents that cannot be meaningfully tested under 'beh_spatial' (rule of
+    thumb: ratio < ~0.2 means report that latent under the 'beh' model instead).
+    """
+    L = np.asarray(latent, float)
+    T, B = L.shape
+    sel = (np.asarray(mask) > 0).ravel()
+    bin_of = np.tile(np.arange(B), T)[sel]
+    flat = L.reshape(-1)[sel]
+    total = float(np.var(flat))
+    if total < 1e-12:
+        return 0.0
+    resid = flat.copy()
+    for b in range(B):
+        m = bin_of == b
+        if m.any():
+            resid[m] = flat[m] - flat[m].mean()
+    return float(np.var(resid) / total)
+
+
 def _cv_r2(X, Y, fold_of_row, n_folds, lam):
     """Trial-wise cross-validated R2, vectorised over the columns of Y."""
     pred = np.empty_like(Y)

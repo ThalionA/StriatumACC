@@ -263,6 +263,88 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
 
 ## Edit log
 
+- **2026-06-02 (code review — three correctness fixes + hygiene)** — Acted on a
+  thorough review of the model/fitting code.
+  1. **CV mask correctness.** The single validity mask gated *both* the
+     likelihood and the learning updates, so excluding a held-out trial from the
+     fitting objective silently deleted its teacher-forced learning too —
+     contradicting `fit_real_data.py`'s own docstring. Split into `score_mask`
+     (likelihood) and `learn_mask` (updates) in `agent.py`/`fitting.py`;
+     `fit_real_data.py` now fits with `learn_mask` = full validity so held-out
+     trials still drive within-session learning. New TDD test
+     `test_learn_mask_decouples_learning_from_scoring` pins this. Single-mask
+     callers (synthetic, latents export, recovery) are unchanged (`learn_mask`
+     defaults to `mask`).
+  2. **Velocity actor gradient.** The hand-derived `g_vel` omitted the
+     `gamma*V'` pathway, i.e. the `Q_eff = Q*(1+kappa_v*v)` speed/accuracy
+     coupling — *exactly* the term `kappa_v` was introduced to create (verified:
+     omitted term ~16% of the gradient in-RZ, ~0 elsewhere at the default
+     `kappa_v`). Replaced with the exact `jax.grad` of the expected per-bin
+     advantage, which folds the precision pathway back in. Candidate explanation
+     for the previously unidentified `kappa_v` and weak velocity channel — to be
+     re-checked against recovery v7 and a real refit.
+  3. **`precision` encoding caveat.** `precision` keeps only ~6% of its variance
+     after per-bin demeaning (the Kalman filter converges within ~1 trial), so
+     its unique dR2 under the `beh_spatial` model is structurally ~0 regardless
+     of biology. `plot_encoding_detail.py` now reports `precision` under the
+     `beh` model (value/RPE stay `beh_spatial`); added
+     `neural_encoding.spatial_demean_var_ratio` to quantify/flag this.
+  Hygiene: added nothing to git history beyond this branch; fixed all `ruff`
+  findings; recorded dependencies (new `pyproject.toml`); clarified the
+  time-budget guard in `run_neural_encoding.py`; doc-drift fixes.
+  **Recovery v7** (12 synthetic mice, 120 trials, `n_restarts=1`): all
+  value/policy params recover (`eta_w` 0.99, `gamma` 0.98, `beta` 0.94, `theta`
+  0.95, `lambda_max` 0.97, `v_base`/`v_slope`/`log_sigma_v` 0.94–1.00, `w_init`
+  0.89, `eta_a` 0.89, `rho` 0.74) and **all exported latents recover** (value
+  0.996, RPE 0.994, lick_rate 0.999, v_mean 0.999, precision 0.938) — the
+  correctness fixes did not degrade recovery. `kappa_v` is still weak (0.24, was
+  "unidentified" in v6): the corrected gradient makes the velocity actor *use*
+  the precision pathway, but `kappa_v`'s behavioural footprint stays too small to
+  identify in synthetic recovery — it remains a **drop candidate**.
+  **Performance note / correction:** an earlier note here claimed the richer
+  velocity gradient caused a ~9x fit slowdown (12s → 115s). That was a faulty
+  comparison — the 12s figure came from an *older, simpler* model in a stale
+  `recovery.log`, not a regression. Measured at matched settings, the original
+  `jax.grad`, a `jax.jvp` variant, and the final closed-form analytic gradient
+  are all ~0.25s/eval (~115s/mouse at 120 trials, maxiter 400) and return
+  byte-identical values — gradient method does not drive fit time (the L-BFGS
+  eval count does). The velocity gradient is now an explicit closed form
+  (`agent._vel_logv_grad`), pinned to `jax.grad(_vel_advantage)` by
+  `test_velocity_grad_matches_autodiff`; it is preferred over autodiff-in-scan
+  because it keeps the reverse-mode tape from growing through the velocity
+  sub-computation on the long padded real sessions (up to 512 trials).
+  **Robustness (#6):** real fits now use `N_RESTARTS = 4` (was 1) — a single
+  start occasionally trapped a real mouse in a bad basin (M13); the synthetic
+  recovery keeps `n_restarts=1` (restart-1 reliably wins there).
+  **CV scheme (#4):** added a **forward / blocked** CV (`RLMODEL_CV=forward`:
+  hold out the trailing `FORWARD_FRAC=0.25` of trials, fit the earlier ones,
+  learning still teacher-forced through all) as a genuine learning-curve
+  generalisation metric, alongside the existing interleaved scheme (which barely
+  tests learning — adjacent trials are correlated). Each scheme writes its own
+  `real_fits_v6_{mode}` dir; the per-epoch validation stays the headline
+  learning check. The real fits are bumped to **v6** (CV-mask split + closed-form
+  velocity gradient); `plot_real_data.py` / `plot_epoch_validation.py` now read
+  `real_fits_v6_interleaved` (override with `RLMODEL_REALDIR`).
+  **Model-comparison ladder (#5):** `scripts/run_model_ladder.py` fits the full
+  two-timescale actor-critic and three nested reduced models — `no_value_learning`
+  (`eta_w` off → critic frozen at flat `w_init`), `no_actors` (`eta_a` off → lick/
+  velocity are pure critic read-outs, the redesign's core control channels
+  removed), and `fixed_agent` (both off) — and compares their forward-CV held-out
+  log-likelihood; a component earns its place if `full − reduced > 0`.  Reduced
+  models are fit by pinning the relevant rate via the new `fit_mouse(fixed=...)`.
+  **Synthetic validation** (3 full-model mice, forward CV) confirms the metric:
+  full is best for 3/3 mice on every comparison, with total held-out LL/bin
+  full −1.260, no_actors −1.265 (Δ +0.005), no_value_learning −1.318 (Δ +0.058),
+  fixed_agent −1.553 (Δ +0.293) — removing learning never helps, removing all of
+  it hurts most.  The small `no_actors` margin even on actor-generated data
+  foreshadows a modest actor held-out gain on real data (the real ladder is the
+  test).
+  **Open:** real ladder (`run_model_ladder.py` on the `.mat`) + real refit
+  (`real_fits_v6_{interleaved,forward}`) + per-epoch
+  re-validation + encoding re-run need the `.mat` (not in this container) — the
+  velocity-channel, `kappa_v`-on-real-data, and forward-CV claims are pending
+  that refit.
+
 - **2026-05-24 (velocity v3 — real fit + validation)** — Refitted all 16 mice
   with the graded-reward + deterministic-velocity-actor model (`real_fits_v5`)
   and re-ran the per-epoch validation. **Lick channel much improved**: held-out

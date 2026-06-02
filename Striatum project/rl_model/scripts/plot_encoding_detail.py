@@ -33,7 +33,16 @@ ENCDIR = os.path.join(RESDIR, "encoding_v6")
 MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data5cm.mat")
 LATENTS_NPZ = os.path.join(RESDIR, "rl_latents.npz")
 ALPHA = 0.05
-MODEL = "beh_spatial"                       # conservative model — headline
+# Per-latent model choice for the headline statistics.  value/RPE carry genuine
+# trial-by-trial variation, so they are reported under the conservative model
+# that controls behaviour AND stationary spatial tuning ('beh_spatial').
+# precision is near-stationary across trials (the Kalman filter converges within
+# ~1 trial; empirically only ~6% of its variance survives per-bin demeaning — see
+# neural_encoding.spatial_demean_var_ratio), so its unique dR2 under 'beh_spatial'
+# is structurally ~0 regardless of biology.  It is therefore reported under the
+# behaviour-controlled model ('beh'), which retains its spatial-profile variance,
+# and must be read with that caveat (it is NOT the spatial-controlled test).
+MODEL_BY_LATENT = {"value": "beh_spatial", "rpe": "beh_spatial", "precision": "beh"}
 PLOT_AREAS = ("acc", "dms", "dls", "v1", "ca1", "dg")
 COLOR = {"value": "#3457a6", "rpe": "#b03030", "precision": "#d9a300"}
 RZ0, RZ1 = 25, 34                           # RZ bin slice
@@ -59,9 +68,10 @@ def load_results():
         for c in range(len(d["area"])):
             r = dict(mouse=mid, cell=c, area=str(d["area"][c]))
             for k in LATENTS:
-                r[f"dR2_{k}"] = float(d[f"dR2_{MODEL}_{k}"][c])
-                r[f"p_{k}"] = float(d[f"pval_{MODEL}_{k}"][c])
-                r[f"pbin_{k}"] = float(d[f"pvalbin_{MODEL}_{k}"][c])
+                mdl = MODEL_BY_LATENT[k]
+                r[f"dR2_{k}"] = float(d[f"dR2_{mdl}_{k}"][c])
+                r[f"p_{k}"] = float(d[f"pval_{mdl}_{k}"][c])
+                r[f"pbin_{k}"] = float(d[f"pvalbin_{mdl}_{k}"][c])
             recs.append(r)
     return recs
 
@@ -115,10 +125,11 @@ def stats_figure(recs):
     ax.set_xticks(xpos)
     ax.set_xticklabels([a.upper() for a in areas])
     ax.set_ylabel("% neurons encoding (significant unique ΔR²)")
-    ax.set_title("Per-area encoding of RL latents — conservative model "
-                 "(behaviour + drift + spatial controlled)\n"
+    ax.set_title("Per-area encoding of RL latents\n"
+                 "value/RPE: behaviour+drift+spatial controlled;  "
+                 "precision: behaviour+drift controlled (near-stationary — see note)\n"
                  "error bars: Wilson 95% CI;  * binomial test vs chance p<0.05",
-                 fontsize=11)
+                 fontsize=10)
     ax.legend(fontsize=9)
     fig.tight_layout()
     fig.savefig(os.path.join(FIGDIR, "fig_encoding_stats.png"), dpi=140)

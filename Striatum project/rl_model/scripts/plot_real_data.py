@@ -33,7 +33,7 @@ from rl_model.io_real import load_real_cohort                                  #
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIGDIR = os.path.join(HERE, "figures")
 RESDIR = os.path.join(HERE, "results")
-REALDIR = os.path.join(RESDIR, "real_fits_v5")   # v5: graded reward + deterministic velocity actor
+REALDIR = os.path.join(RESDIR, os.environ.get("RLMODEL_REALDIR", "real_fits_v6_interleaved"))
 MAT = os.path.join(HERE, "..", "processed_data", "preprocessed_data5cm.mat")
 
 VZ = VISUAL_LANDMARK_AU / BIN_SIZE_AU
@@ -212,7 +212,9 @@ def _example_figure(mid, cohort, fits, cfg):
           np.maximum(m["mask"][:, rzw].sum(1), 1)
     pred = np.asarray(ft["lat_lick_rate"])[:, rzw].mean(1)
     k = max(nt // 25, 1)
-    sm = lambda a: np.convolve(a, np.ones(k) / k, mode="same")
+
+    def sm(a):
+        return np.convolve(a, np.ones(k) / k, mode="same")
     ax.plot(sm(obs), np.arange(nt), c="k", lw=2, label="observed")
     ax.plot(sm(pred), np.arange(nt), c="#b03030", lw=2, ls="--", label="model")
     ax.invert_yaxis()

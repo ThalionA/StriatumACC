@@ -13,10 +13,10 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rl_model.config import N_PARAMS, TaskConfig
+from rl_model.config import N_PARAMS, BIN_CENTRES_AU, TaskConfig
 from rl_model.agent import (
     default_unconstrained, session_latents, session_loglik, simulate_session,
-    to_constrained, to_unconstrained,
+    to_constrained, to_unconstrained, _vel_advantage, _vel_logv_grad,
 )
 from rl_model.synthetic import make_cohort, sample_params
 from rl_model.fitting import fit_mouse
@@ -83,6 +83,78 @@ def test_mask_zeroes_likelihood_contribution():
     # masked-everything -> exactly zero
     assert abs(float(session_loglik(u, licks, logv,
                                     mask=np.zeros((30, CFG.n_bins)), cfg=CFG))) < 1e-6
+
+
+def test_velocity_grad_matches_autodiff():
+    """The analytic velocity-actor gradient must equal jax.grad of the expected
+    advantage, across random but physiological states (the speed/accuracy term
+    through kappa_v included)."""
+    centres = jnp.asarray(BIN_CENTRES_AU)
+    rng = np.random.default_rng(0)
+    for _ in range(25):
+        logv = float(rng.uniform(np.log(3.0), np.log(60.0)))      # 3..60 cm/s
+        lam_rate = float(rng.uniform(0.5, 12.0))
+        cum_rz = float(rng.uniform(0.0, 15.0))
+        rz = float(rng.integers(0, 2))                             # in/out of RZ
+        sig_post = float(rng.uniform(2.0, 60.0))
+        mu_next = float(rng.uniform(0.0, 200.0))
+        w_crit = jnp.asarray(rng.uniform(0.0, 1.0, centres.size))
+        last = bool(rng.integers(0, 2))
+        gamma = float(rng.uniform(0.5, 0.99))
+        Q = float(rng.uniform(0.1, 2.0))
+        kappa_v = float(rng.uniform(0.0, 0.2))
+        rho = float(rng.uniform(0.0, 0.5))
+        args = (lam_rate, cum_rz, rz, sig_post, mu_next, w_crit, last,
+                gamma, Q, kappa_v, rho, 1.0, centres)
+        analytic = float(_vel_logv_grad(jnp.asarray(logv), *args))
+        auto = float(jax.grad(lambda x: _vel_advantage(x, *args))(jnp.asarray(logv)))
+        assert np.isclose(analytic, auto, rtol=1e-5, atol=1e-7), \
+            f"analytic {analytic} != autodiff {auto}"
+
+
+def test_learn_mask_decouples_learning_from_scoring():
+    """A trial dropped from the SCORE mask must leave the likelihood there at
+    zero, yet — if kept in the LEARN mask — must still drive within-session
+    learning, so the later value trajectory is unchanged.  Dropping it from the
+    learn mask too must instead perturb the later trajectory.  (CV correctness:
+    held-out trials still happened to the mouse.)"""
+    u = default_unconstrained()
+    out = simulate_session(u, jax.random.PRNGKey(11), 40, CFG)
+    licks, logv = out["lick"], out["logv"]
+    full = np.ones((40, CFG.n_bins))
+    score = full.copy()
+    score[10, :] = 0.0                                   # hold trial 10 out of scoring
+
+    base = session_latents(u, licks, logv, mask=full, cfg=CFG)
+    keep = session_latents(u, licks, logv, mask=score, learn_mask=full, cfg=CFG)
+    drop = session_latents(u, licks, logv, mask=score, learn_mask=score, cfg=CFG)
+
+    # held-out trial contributes nothing to the likelihood in both variants
+    assert abs(float(np.asarray(keep["loglik"])[10].sum())) < 1e-9
+    assert abs(float(np.asarray(drop["loglik"])[10].sum())) < 1e-9
+
+    vb = np.asarray(base["value"])
+    # learning kept -> value trajectory is identical to the all-valid baseline
+    assert np.allclose(np.asarray(keep["value"]), vb, atol=1e-8)
+    # learning interrupted -> later-trial value trajectory is perturbed
+    assert np.max(np.abs(np.asarray(drop["value"])[11:] - vb[11:])) > 1e-4
+
+
+def test_fit_mouse_pins_fixed_params():
+    """`fixed` clamps a parameter through the optimisation (the mechanism the
+    model-comparison ladder uses to switch off a learning channel)."""
+    from rl_model.fitting import _BOUND
+    u = sample_params(seed=3, jitter=0.3)
+    out = simulate_session(u, jax.random.PRNGKey(8), 50, CFG)
+    licks, logv = out["lick"], out["logv"]
+    res = fit_mouse(licks, logv, cfg=CFG, n_restarts=1, maxiter=80,
+                    fixed={"eta_w": -_BOUND})
+    # eta_w pinned to sigmoid(-_BOUND) -> critic learning effectively off
+    assert res["params"]["eta_w"] < 1e-4
+    assert np.isfinite(res["nll"])
+    # a free parameter is still optimised (not left pinned)
+    free = fit_mouse(licks, logv, cfg=CFG, n_restarts=1, maxiter=80)
+    assert free["params"]["eta_w"] > res["params"]["eta_w"]
 
 
 def test_true_params_beat_wrong_params():

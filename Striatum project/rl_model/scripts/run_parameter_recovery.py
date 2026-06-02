@@ -31,7 +31,6 @@ import sys
 import time
 
 import numpy as np
-import jax
 import jax.numpy as jnp
 import matplotlib
 matplotlib.use("Agg")
@@ -40,7 +39,7 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rl_model.config import (  # noqa: E402
-    PARAM_NAMES, RZ_MASK, VISUAL_LANDMARK_AU, REWARD_START_AU,
+    PARAM_NAMES, VISUAL_LANDMARK_AU, REWARD_START_AU,
     REWARD_END_AU, BIN_SIZE_AU, TaskConfig,
 )
 from rl_model.agent import session_latents, to_constrained  # noqa: E402
@@ -50,9 +49,9 @@ from rl_model.fitting import fit_mouse  # noqa: E402
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIGDIR = os.path.join(HERE, "figures")
 RESDIR = os.path.join(HERE, "results")
-FITSDIR = os.path.join(RESDIR, "fits_v6")              # v6: graded reward + deterministic velocity actor
-RESULTS_NPZ = os.path.join(RESDIR, "recovery_v6.npz")
-DONE_MARK = os.path.join(RESDIR, "DONE_v6")
+FITSDIR = os.path.join(RESDIR, "fits_v7")              # v7: velocity actor gradient via autodiff (incl. kappa_v/precision pathway); CV learn/score mask split
+RESULTS_NPZ = os.path.join(RESDIR, "recovery_v7.npz")
+DONE_MARK = os.path.join(RESDIR, "DONE_v7")
 for d in (FIGDIR, RESDIR, FITSDIR):
     os.makedirs(d, exist_ok=True)
 
