@@ -325,7 +325,22 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
   learning check. The real fits are bumped to **v6** (CV-mask split + closed-form
   velocity gradient); `plot_real_data.py` / `plot_epoch_validation.py` now read
   `real_fits_v6_interleaved` (override with `RLMODEL_REALDIR`).
-  **Open:** real refit (`real_fits_v6_{interleaved,forward}`) + per-epoch
+  **Model-comparison ladder (#5):** `scripts/run_model_ladder.py` fits the full
+  two-timescale actor-critic and three nested reduced models — `no_value_learning`
+  (`eta_w` off → critic frozen at flat `w_init`), `no_actors` (`eta_a` off → lick/
+  velocity are pure critic read-outs, the redesign's core control channels
+  removed), and `fixed_agent` (both off) — and compares their forward-CV held-out
+  log-likelihood; a component earns its place if `full − reduced > 0`.  Reduced
+  models are fit by pinning the relevant rate via the new `fit_mouse(fixed=...)`.
+  **Synthetic validation** (3 full-model mice, forward CV) confirms the metric:
+  full is best for 3/3 mice on every comparison, with total held-out LL/bin
+  full −1.260, no_actors −1.265 (Δ +0.005), no_value_learning −1.318 (Δ +0.058),
+  fixed_agent −1.553 (Δ +0.293) — removing learning never helps, removing all of
+  it hurts most.  The small `no_actors` margin even on actor-generated data
+  foreshadows a modest actor held-out gain on real data (the real ladder is the
+  test).
+  **Open:** real ladder (`run_model_ladder.py` on the `.mat`) + real refit
+  (`real_fits_v6_{interleaved,forward}`) + per-epoch
   re-validation + encoding re-run need the `.mat` (not in this container) — the
   velocity-channel, `kappa_v`-on-real-data, and forward-CV claims are pending
   that refit.
