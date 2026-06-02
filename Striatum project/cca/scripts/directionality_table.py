@@ -5,7 +5,8 @@ read-out honestly at the animal level (the repeated-measures sampling), as a
 companion to the per-dimension view on the Stage-2 IFI figures:
 
   * per epoch -- the per-animal mean IFI(|lag| <= 10 bins) over each animal's
-    significant dims, tested against 0 (one-sample Wilcoxon, n = animals);
+    significant dims, tested against 0 (one-sample t-test, n = animals;
+    signed-rank cannot reach significance below n=6);
   * across epochs -- the epoch effect on per-animal IFI by repeated-measures
     ANOVA (n = animals) + Holm-corrected paired-t post-hoc + a per-animal
     linear trend over the epoch index;
@@ -50,17 +51,6 @@ VARIANT_PKL = {"plain": "stage2_committed_circshift.pkl",
                "partial": "stage2_committed_circshift_partial.pkl"}
 
 
-def _wilcoxon_vs0(v):
-    """One-sample Wilcoxon of per-animal IFI vs 0 (n = animals)."""
-    v = v[np.isfinite(v)]
-    if v.size < 6 or not np.any(v != 0):
-        return np.nan
-    try:
-        return float(stats.wilcoxon(v).pvalue)
-    except ValueError:
-        return np.nan
-
-
 def _peak_lags(learners, epoch):
     """Significant-dim peak lags (bins) pooled over a pair's learner animals."""
     out = []
@@ -83,8 +73,8 @@ def _per_animal_trend(mat):
 
 
 COLS = ["pair", "n_animals",
-        "ifi_naive", "p_naive_vs0", "ifi_inter", "p_inter_vs0",
-        "ifi_expert", "p_expert_vs0",
+        "ifi_naive", "p_naive_vs0_ttest", "ifi_inter", "p_inter_vs0_ttest",
+        "ifi_expert", "p_expert_vs0_ttest",
         "rm_anova_F", "rm_anova_p", "holm_ni_p", "holm_ie_p", "holm_ne_p",
         "trend_slope", "trend_p",
         "peak_lag_mean_bins", "peak_lag_median_bins",
@@ -105,7 +95,8 @@ def build_rows(results, bin_cm):
         rm = epoch_stats.rm_anova_posthoc(mat)
         slope, slope_p = _per_animal_trend(mat)
         per_epoch_vs0 = [(float(np.mean(mat[:, i])) if mat.shape[0] else np.nan,
-                          _wilcoxon_vs0(mat[:, i]) if mat.shape[0] else np.nan)
+                          epoch_stats.ttest_vs0(mat[:, i]) if mat.shape[0]
+                          else np.nan)
                          for i in range(3)]
         peaks = np.concatenate([_peak_lags(learners, e) for e in EPOCHS]) \
             if learners else np.array([])

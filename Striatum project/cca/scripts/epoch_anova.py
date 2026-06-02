@@ -139,6 +139,51 @@ def write_csv(results, variant):
     print(f"saved {path}")
 
 
+# --- per-epoch difference from 0 (both samplings) ----------------------------
+VS0_COLS = ["pair", "metric", "epoch",
+            "n_dims", "dim_mean", "dim_vs0_p_wilcoxon",
+            "n_animals", "animal_mean", "animal_vs0_p_ttest"]
+
+
+def vs0_rows(results):
+    """Long-format per-pair x metric x epoch difference-from-0 table.
+
+    Per-dim sampling (n = significant dims, pooled over animals): mean +
+    two-sided Wilcoxon vs 0. Per-animal sampling (n = animals): mean of the
+    per-animal means + two-sided one-sample t vs 0.
+    """
+    rows = []
+    for area_x, area_y in config.PAIRS:
+        learners = learner_pairs(results, area_x, area_y)
+        for metric in METRICS:
+            groups = per_dim_groups(learners, metric)        # 3 arrays
+            mat = per_animal_matrix(learners, metric)         # (nA, 3)
+            for i, epoch in enumerate(EPOCHS):
+                g = groups[i]
+                col = mat[:, i] if mat.shape[0] else np.array([])
+                rows.append([
+                    f"{area_x}-{area_y}", metric, epoch,
+                    g.size,
+                    float(np.mean(g)) if g.size else np.nan,
+                    epoch_stats.wilcoxon_vs0(g),
+                    int(mat.shape[0]),
+                    float(np.mean(col)) if col.size else np.nan,
+                    epoch_stats.ttest_vs0(col)])
+    return rows
+
+
+def write_vs0_csv(results, variant):
+    rows = vs0_rows(results)
+    config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    path = config.FIGURES_DIR / f"epoch_vs0_{variant}.csv"
+    with open(path, "w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(VS0_COLS)
+        for r in rows:
+            wr.writerow([_round(v) for v in r])
+    print(f"saved {path}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--variant", choices=("plain", "partial"), default="partial")
@@ -149,6 +194,7 @@ def main():
     with open(path, "rb") as fh:
         results = pickle.load(fh)["results"]
     write_csv(results, variant)
+    write_vs0_csv(results, variant)
     print("epoch-ANOVA table done.")
 
 

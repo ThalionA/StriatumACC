@@ -127,3 +127,32 @@ def test_linear_trend_flat_is_not_significant():
 def test_linear_trend_degenerate_is_nan():
     slope, p = epoch_stats.linear_trend(np.array([1.0]), np.array([3.0]))
     assert np.isnan(slope) and np.isnan(p)
+
+
+# ---------------------------------------------------------------------------
+# one-sample vs-0 tests
+# ---------------------------------------------------------------------------
+def test_wilcoxon_vs0_detects_positive_shift():
+    rng = np.random.default_rng(7)
+    v = 1.0 + 0.2 * rng.standard_normal(20)        # clearly > 0
+    assert epoch_stats.wilcoxon_vs0(v) < 1e-3
+
+
+def test_wilcoxon_vs0_requires_min_n():
+    assert np.isnan(epoch_stats.wilcoxon_vs0(np.ones(5)))       # n < 6
+    assert not np.isnan(epoch_stats.wilcoxon_vs0(np.arange(1, 8.0)))
+
+
+def test_wilcoxon_vs0_all_zero_is_nan():
+    assert np.isnan(epoch_stats.wilcoxon_vs0(np.zeros(10)))
+
+
+def test_ttest_vs0_detects_positive_and_null():
+    rng = np.random.default_rng(8)
+    assert epoch_stats.ttest_vs0(0.5 + 0.1 * rng.standard_normal(7)) < 0.01
+    assert epoch_stats.ttest_vs0(rng.standard_normal(30)) > 0.05   # mean ~0
+
+
+def test_ttest_vs0_degenerate_is_nan():
+    assert np.isnan(epoch_stats.ttest_vs0(np.array([3.0])))        # n < 2
+    assert np.isnan(epoch_stats.ttest_vs0(np.full(5, 2.0)))        # no variance

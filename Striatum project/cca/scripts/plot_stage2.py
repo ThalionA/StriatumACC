@@ -81,15 +81,7 @@ def per_epoch_pooled(rs, kind, window=10):
 
 
 # --- statistics --------------------------------------------------------------
-def _wilcoxon_vs0(v):
-    """One-sample Wilcoxon vs 0; NaN if too few non-zero values."""
-    v = v[np.isfinite(v)]
-    if v.size < 6 or not np.any(v != 0):
-        return np.nan
-    try:
-        return stats.wilcoxon(v).pvalue
-    except ValueError:
-        return np.nan
+_wilcoxon_vs0 = epoch_stats.wilcoxon_vs0    # per-dim vs-0 star (n = dims)
 
 
 def _paired(a, b):

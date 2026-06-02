@@ -91,6 +91,37 @@ def rm_anova_posthoc(data: np.ndarray) -> dict:
     return {"n": int(n), "F": float(f), "p": float(p), "posthoc": posthoc}
 
 
+def wilcoxon_vs0(values, min_n: int = 6) -> float:
+    """Two-sided one-sample Wilcoxon signed-rank p vs 0 (non-parametric).
+
+    For the per-dimension sampling (n = significant dims). NaN when fewer than
+    ``min_n`` finite values or all values are zero (signed-rank is undefined
+    below n=6 anyway -- its smallest two-sided p there is 0.0625).
+    """
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    if v.size < min_n or not np.any(v != 0):
+        return np.nan
+    try:
+        return float(stats.wilcoxon(v).pvalue)
+    except ValueError:
+        return np.nan
+
+
+def ttest_vs0(values, min_n: int = 2) -> float:
+    """Two-sided one-sample t-test p vs 0 (parametric).
+
+    For the per-animal sampling (n = animals, typically 4-7), where the
+    signed-rank test cannot reach significance; consistent with the parametric
+    RM-ANOVA framing. NaN when fewer than ``min_n`` finite values or no variance.
+    """
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    if v.size < min_n or np.ptp(v) == 0:
+        return np.nan
+    return float(stats.ttest_1samp(v, 0.0).pvalue)
+
+
 def linear_trend(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     """Least-squares slope of ``y`` on ``x`` and its two-sided p-value.
 
