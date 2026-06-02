@@ -13,10 +13,10 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rl_model.config import N_PARAMS, TaskConfig
+from rl_model.config import N_PARAMS, BIN_CENTRES_AU, TaskConfig
 from rl_model.agent import (
     default_unconstrained, session_latents, session_loglik, simulate_session,
-    to_constrained, to_unconstrained,
+    to_constrained, to_unconstrained, _vel_advantage, _vel_logv_grad,
 )
 from rl_model.synthetic import make_cohort, sample_params
 from rl_model.fitting import fit_mouse
@@ -83,6 +83,33 @@ def test_mask_zeroes_likelihood_contribution():
     # masked-everything -> exactly zero
     assert abs(float(session_loglik(u, licks, logv,
                                     mask=np.zeros((30, CFG.n_bins)), cfg=CFG))) < 1e-6
+
+
+def test_velocity_grad_matches_autodiff():
+    """The analytic velocity-actor gradient must equal jax.grad of the expected
+    advantage, across random but physiological states (the speed/accuracy term
+    through kappa_v included)."""
+    centres = jnp.asarray(BIN_CENTRES_AU)
+    rng = np.random.default_rng(0)
+    for _ in range(25):
+        logv = float(rng.uniform(np.log(3.0), np.log(60.0)))      # 3..60 cm/s
+        lam_rate = float(rng.uniform(0.5, 12.0))
+        cum_rz = float(rng.uniform(0.0, 15.0))
+        rz = float(rng.integers(0, 2))                             # in/out of RZ
+        sig_post = float(rng.uniform(2.0, 60.0))
+        mu_next = float(rng.uniform(0.0, 200.0))
+        w_crit = jnp.asarray(rng.uniform(0.0, 1.0, centres.size))
+        last = bool(rng.integers(0, 2))
+        gamma = float(rng.uniform(0.5, 0.99))
+        Q = float(rng.uniform(0.1, 2.0))
+        kappa_v = float(rng.uniform(0.0, 0.2))
+        rho = float(rng.uniform(0.0, 0.5))
+        args = (lam_rate, cum_rz, rz, sig_post, mu_next, w_crit, last,
+                gamma, Q, kappa_v, rho, 1.0, centres)
+        analytic = float(_vel_logv_grad(jnp.asarray(logv), *args))
+        auto = float(jax.grad(lambda x: _vel_advantage(x, *args))(jnp.asarray(logv)))
+        assert np.isclose(analytic, auto, rtol=1e-5, atol=1e-7), \
+            f"analytic {analytic} != autodiff {auto}"
 
 
 def test_learn_mask_decouples_learning_from_scoring():

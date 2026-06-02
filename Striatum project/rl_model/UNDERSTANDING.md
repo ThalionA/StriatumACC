@@ -300,10 +300,19 @@ expected reward-rate `ρ`). Written aligned to `spatial_binned_fr`.
   correctness fixes did not degrade recovery. `kappa_v` is still weak (0.24, was
   "unidentified" in v6): the corrected gradient makes the velocity actor *use*
   the precision pathway, but `kappa_v`'s behavioural footprint stays too small to
-  identify in synthetic recovery — it remains a **drop candidate**.  The richer
-  velocity gradient also raised per-mouse fit time (~12s → ~115s; `jax.grad`
-  inside the scan was first replaced by `jax.jvp`, identical values, to avoid a
-  reverse-over-reverse blow-up — but the L-BFGS eval count still dominates).
+  identify in synthetic recovery — it remains a **drop candidate**.
+  **Performance note / correction:** an earlier note here claimed the richer
+  velocity gradient caused a ~9x fit slowdown (12s → 115s). That was a faulty
+  comparison — the 12s figure came from an *older, simpler* model in a stale
+  `recovery.log`, not a regression. Measured at matched settings, the original
+  `jax.grad`, a `jax.jvp` variant, and the final closed-form analytic gradient
+  are all ~0.25s/eval (~115s/mouse at 120 trials, maxiter 400) and return
+  byte-identical values — gradient method does not drive fit time (the L-BFGS
+  eval count does). The velocity gradient is now an explicit closed form
+  (`agent._vel_logv_grad`), pinned to `jax.grad(_vel_advantage)` by
+  `test_velocity_grad_matches_autodiff`; it is preferred over autodiff-in-scan
+  because it keeps the reverse-mode tape from growing through the velocity
+  sub-computation on the long padded real sessions (up to 512 trials).
   **Open:** real refit (`real_fits_v6`) + per-epoch re-validation + encoding
   re-run need the `.mat` (not in this container) — the velocity-channel and
   `kappa_v`-on-real-data claims are pending that refit.

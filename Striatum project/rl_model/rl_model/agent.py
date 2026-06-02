@@ -159,6 +159,54 @@ def belief_vector(mu, sigma, centres):
 
 
 # --------------------------------------------------------------------------
+# Velocity actor: the expected per-bin advantage as a function of log-velocity,
+# and its exact analytic derivative.  The actor ascends this gradient.  The lick
+# count entering the reward/cost terms is the policy's *expected* count
+# (mu_lick = rate*dt), so the gradient captures, in one expression, the
+# time/lick cost saved by running faster, the graded reward lost by emitting
+# fewer RZ licks, AND the speed/accuracy coupling through Q_eff = Q*(1+kappa_v*v)
+# feeding the bootstrapped gamma*V'.  The analytic form is used in the hot loop
+# (autodiff inside the per-bin scan would force the outer fit into an expensive
+# reverse-over-reverse); `test_velocity_grad_matches_autodiff` pins it to
+# `jax.grad(_vel_advantage)` so the hand-derivation cannot silently drift.
+# (Constant-in-logv terms such as -V_t are dropped: they do not affect d/dlogv.)
+# --------------------------------------------------------------------------
+def _vel_advantage(logv, lam_rate, cum_rz, rz, sig_post, mu_next, w_crit, last,
+                   gamma, Q, kappa_v, rho, reward_magnitude, centres):
+    """Expected per-bin actor advantage (sans the logv-independent -V_t)."""
+    v = jnp.exp(logv)
+    dt = BIN_SIZE_CM / jnp.clip(v, 1e-3, 1e4)
+    mu_lick = lam_rate * dt
+    cum_new = cum_rz + mu_lick * rz
+    r = reward_magnitude * (jnp.exp(-cum_rz / K_REWARD) - jnp.exp(-cum_new / K_REWARD))
+    cost = C_LICK * mu_lick + rho * dt
+    sig_next = sig_post + Q * (1.0 + kappa_v * v) * BIN_SIZE_AU
+    V_next = jnp.where(last, 0.0, jnp.dot(w_crit, belief_vector(mu_next, sig_next, centres)))
+    return (r - cost) + gamma * V_next
+
+
+def _vel_logv_grad(logv, lam_rate, cum_rz, rz, sig_post, mu_next, w_crit, last,
+                   gamma, Q, kappa_v, rho, reward_magnitude, centres):
+    """Analytic d(_vel_advantage)/d(logv).  Valid where the velocity clip and the
+    belief-variance floor are inactive (always so for physiological v / sigma)."""
+    v = jnp.exp(logv)
+    dt = BIN_SIZE_CM / jnp.clip(v, 1e-3, 1e4)
+    mu_lick = lam_rate * dt
+    cum_new = cum_rz + mu_lick * rz
+    # reward + cost terms: d(dt)/dlogv = -dt, d(mu_lick)/dlogv = -mu_lick
+    g = (rho * dt + C_LICK * mu_lick
+         - rz * (reward_magnitude / K_REWARD) * mu_lick * jnp.exp(-cum_new / K_REWARD))
+    # value-bootstrap term: only sig_next depends on v (the kappa_v coupling).
+    # dV_next/dsig = Cov_b(w_crit, a) with a_i = dz_i/dsig; dsig/dlogv = Q*kappa_v*dx*v.
+    sig_next = sig_post + Q * (1.0 + kappa_v * v) * BIN_SIZE_AU
+    b = belief_vector(mu_next, sig_next, centres)
+    a = 0.5 * (centres - mu_next) ** 2 / jnp.maximum(sig_next, 1e-3) ** 2
+    dV_dsig = jnp.dot(w_crit * b, a) - jnp.dot(b, a) * jnp.dot(w_crit, b)
+    dsig_dlogv = Q * kappa_v * BIN_SIZE_AU * v
+    return g + jnp.where(last, 0.0, gamma * dV_dsig * dsig_dlogv)
+
+
+# --------------------------------------------------------------------------
 # Core session run.  `generate` is static: when True the agent samples its own
 # actions (simulation); when False it scores observed actions (likelihood).
 # Geometry is taken from module constants so array shapes stay static.
@@ -249,33 +297,14 @@ def _run_session(u, licks_obs, logv_obs, score_mask, learn_mask, keys, generate,
         #     self-limits once licking stops (lick -> 0). ---
         w_lick_new = w_lick + p["eta_a"] * delta_actor * lick * b_t * valid_learn
 
-        # --- slow velocity actor: deterministic gradient ascent on the EXPECTED
-        #     per-bin advantage w.r.t. the log-velocity policy mean.  g_vel is the
-        #     exact autodiff gradient of the advantage in which the lick count is
-        #     the policy's expected count (mu_lick = rate*dt), so it captures, in
-        #     one term, the time/lick cost saved by running faster (g_vel > 0 in
-        #     the corridor), the graded reward lost by emitting fewer RZ licks
-        #     (g_vel < 0 in the RZ), AND the speed/accuracy coupling through
-        #     Q_eff = Q*(1+kappa_v*v) feeding the bootstrapped gamma*V' — the
-        #     perceptual-precision pathway that motivates kappa_v.  Deterministic
-        #     because the stochastic policy gradient is too weak. ---
-        def _expected_advantage(logv_):
-            v_ = jnp.exp(logv_)
-            dt_ = BIN_SIZE_CM / jnp.clip(v_, 1e-3, 1e4)
-            mu_lick_ = lam_rate * dt_                       # policy's expected count
-            cum_new_ = cum_rz + mu_lick_ * rz
-            r_ = reward_magnitude * (jnp.exp(-cum_rz / K_REWARD)
-                                     - jnp.exp(-cum_new_ / K_REWARD))
-            cost_ = C_LICK * mu_lick_ + p["rho"] * dt_
-            sig_next_ = sig_post + p["Q"] * (1.0 + p["kappa_v"] * v_) * BIN_SIZE_AU
-            V_next_ = jnp.where(last, 0.0,
-                                jnp.dot(w_crit, belief_vector(mu_next, sig_next_, centres)))
-            return (r_ - cost_) + p["gamma"] * V_next_ - V_t
-
-        # Forward-mode (jvp with tangent 1.0) gives d(advantage)/d(logv) exactly,
-        # and composes as reverse-over-forward under the outer fitting AD — far
-        # cheaper than the reverse-over-reverse a nested jax.grad would force.
-        g_vel = jax.jvp(_expected_advantage, (logv,), (jnp.ones_like(logv),))[1]
+        # --- slow velocity actor: deterministic gradient ascent on the expected
+        #     per-bin advantage w.r.t. the log-velocity policy mean.  Faster means
+        #     less time/lick cost (g_vel > 0 in the corridor) but fewer RZ licks
+        #     and a wider, blurrier belief (g_vel < 0 in the RZ).  The analytic
+        #     gradient (see _vel_logv_grad) keeps this cheap inside the scan. ---
+        g_vel = _vel_logv_grad(logv, lam_rate, cum_rz, rz, sig_post, mu_next,
+                               w_crit, last, p["gamma"], p["Q"], p["kappa_v"],
+                               p["rho"], reward_magnitude, centres)
         w_vel_new = w_vel + p["eta_a"] * g_vel * b_t * valid_learn
 
         carry_new = (mu_next, sig_next, w_crit_new, w_lick_new, w_vel_new,
