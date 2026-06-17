@@ -7,6 +7,64 @@ contrast; fresh tom_cca-style port; plus an engaged-vs-disengaged contrast).
 
 ---
 
+## 2026-06-17 — Stage 2: epoch analysis driver (WORKING; full run in progress)
+
+`runner.py` (build_present, fit_window, cross_window) + `scripts/run_epochs.py`
+wire data→numeric: per (learner, pair, epoch) pull running in-corridor bins, build
+the partial-out Z from the animal's other areas, call `subspace_window.window_subspace`
+→ held-out CC, n_sig, MI, IFI, Gini + cross-epoch rotation/Jaccard. Writes
+epoch_metrics/dims/weights/cross CSVs. 4 runner tests; full suite 165 green.
+**Committed d12aa51** (Stages 0-2 code). cca/ untouched.
+
+**Bin-width decision (evidence-based).** Smoke on 2 learners × striatal triangle:
+- **10 ms is too sparse per-cell** — several cc1 go negative (e.g. A2 DMS-ACC
+  naive cc1=-0.17, n_sig=6) because k=20 PCs on ~10 trials' autocorrelated bins
+  overfit, exposed by honest whole-trial CV (per-dim held-out CC swings +-0.6).
+- **25 ms is clean** — cc1 positive/stable; **DMS-DLS peaks at intermediate**
+  (0.15→0.40→0.10) reproducing the spatial pipeline's bulge; IFI ~0 (also matches
+  the spatial nulls).
+→ `run_epochs` default now **25 ms (magnitude reference, = report/Tom)**; 10 ms is
+the fine/directionality view. `--max-lag 0` auto-scales the IFI window to +-50 ms.
+
+**Caveat (carried).** `n_sig` still inflates in occasional cells (circshift null is
+permissive — the spatial pipeline saw ~2.6x vs trial-perm; overfit subdominant dims
+slip past). Mitigation = the report's: **animal is the inferential unit, lead with
+cc1**, n_sig secondary. Run `/stats-rigor` before any claim.
+
+**Full 25 ms cohort run DONE** → epoch_metrics.csv (125 cells, 11 learners;
+animals 3,15 skipped — too few run-trials for disjoint epochs).
+
+**Cohort findings (preview — in-driver Wilcoxon; formal stats = analyze_epochs next):**
+- Held-out cc1, striatal triangle (n=7–9): **DMS-DLS 0.25/0.30/0.19**,
+  **DMS-ACC 0.17/0.19/0.19**, **DLS-ACC 0.22/0.13/0.30** (naive/int/expert).
+  Magnitudes match the *spatial* pipeline (~0.1–0.34). **No significant epoch
+  change** for any pair (all paired Wilcoxon n.s.; n=7→p-floor 0.016).
+- **The n=2 smoke's "DMS-DLS intermediate peak" did NOT survive the cohort** —
+  per-animal it's inconsistent (A1 peaks intermediate, A10 monotonic up, A5
+  monotonic down). Good reminder: animal is the unit; n=2 is noise.
+- IFI ≈ 0 (±0.05), no epoch trend. Gini_x ~flat (0.4–0.5) — **no de-sparsification**
+  (unlike Tom's HC pairs; consistent with the striatal spatial result). n_sig
+  sensible at cohort level (1–3; the smoke's n_sig=12 was a per-cell outlier).
+- V1/CA1/DG pairs n=1–3 → anecdotal only.
+→ **Temporal method reproduces the spatial striatum headline**: communication
+real but modest, no strength change, no directionality across learning. Strong
+cross-method consistency. (Run `/stats-rigor` + analyze_epochs before any writeup;
+small-n "n.s." = power floor, not absence.)
+
+**Next (Stage 2 finish + Stage 3-4):**
+1. `analyze_epochs.py` — per-pair contrasts: per-animal Wilcoxon + paired t + LMM
+   (paired_stats/mixed_effects); dims-as-n reported-not-inferential; figures.
+2. `run_engagement.py` — **engaged vs disengaged** (Theo's add). Design TBD:
+   z-score over a *shared session* running reference (avoid scale confound); relax
+   `temporal_max_trial_ms` for the disengaged period (dawdling traversals are the
+   data) but report running-bin coverage; pair engaged vs disengaged per animal.
+3. Stage 3: `run_trajectory` (sliding window, 25 ms, 3 learning axes) +
+   `run_ifi_windows` (held-out segment-aware IFI sweep, 10 ms, +-250 ms).
+4. Stage 4: `run_transition` (Task-vs-Control, between-cohort; needs control 2.5 cm
+   regen), `run_early_trials`, `run_kcca`; then RESULTS.md writeup.
+
+---
+
 ## 2026-06-17 — Stage 1: numeric layer ported (DONE, on branch)
 
 `cp`'d 15 data-agnostic numeric modules from `tom_cca` **verbatim** (relative

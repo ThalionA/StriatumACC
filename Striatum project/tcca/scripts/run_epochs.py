@@ -34,10 +34,12 @@ TRANSITIONS = [("naive", "intermediate"), ("intermediate", "expert"),
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--group", default="task", choices=["task", "control"])
-    p.add_argument("--bin-ms", type=int, default=10)
+    p.add_argument("--bin-ms", type=int, default=25,
+                   help="25 = magnitude reference (report/Tom default); "
+                        "10 = fine/directionality view (noisier per-cell cc1)")
     p.add_argument("--smooth-ms", type=float, default=2.5)
-    p.add_argument("--max-lag", type=int, default=5,
-                   help="IFI lag half-width in bins (+/-50 ms headline at 10 ms = 5)")
+    p.add_argument("--max-lag", type=int, default=0,
+                   help="IFI lag half-width in bins; 0 = auto (+/-50 ms headline)")
     p.add_argument("--include-fs", action="store_true")
     p.add_argument("--pairs", default="", help="comma list A-B,C-D to restrict pairs")
     p.add_argument("--limit", type=int, default=0, help="cap number of learners (smoke)")
@@ -53,6 +55,8 @@ def main():
     suffix = ("_fsincl" if args.include_fs else "") + args.tag
     pairs = ([tuple(p.split("-")) for p in args.pairs.split(",")]
              if args.pairs else list(config.PAIRS))
+    # IFI integration half-width: report headline is +/-50 ms, so scale to bins.
+    max_lag = args.max_lag or max(2, round(50 / args.bin_ms))
 
     animals = dataio.load_animals(group=args.group)
     entries, _ = dataio.classify_cohort(animals, cfg)
@@ -60,7 +64,7 @@ def main():
     if args.limit:
         learners = learners[: args.limit]
     print(f"{args.group} | bin={args.bin_ms}ms sigma={args.smooth_ms} K={K} "
-          f"max_lag={args.max_lag} shuffles={config.SURROGATE_SHUFFLES} "
+          f"max_lag={max_lag} shuffles={config.SURROGATE_SHUFFLES} "
           f"FS={'incl' if args.include_fs else 'excl'} | {len(learners)} learners\n")
 
     metrics, dims, weights, cross = [], [], [], []
@@ -86,7 +90,7 @@ def main():
                 pos = pos[(pos >= 0) & (pos < uniq.size)]
                 ws = runner.fit_window(
                     present, trial_ids, ax, ay, uniq[pos], cfg,
-                    k=K, max_lag=args.max_lag, n_shuffles=config.SURROGATE_SHUFFLES,
+                    k=K, max_lag=max_lag, n_shuffles=config.SURROGATE_SHUFFLES,
                     n_folds=cfg.n_folds, min_cell_bins=MIN_CELL_BINS)
                 if ws is None:
                     continue
