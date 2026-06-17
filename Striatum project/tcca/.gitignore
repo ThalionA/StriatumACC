@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# generated outputs are regeneratable from the drivers
+results/*.csv
+results/*.pkl
+figures/*.png
+figures/*.svg
