@@ -1,5 +1,29 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-07-13 — LFP audit validation hardened
+
+Rechecked the complete LFP package and corrected two figure/code errors: state
+histograms now exclude periodic events, and LF diagnostics report the unscaled
+difference ratio against a white-noise reference. Raw event peaks reproduce the
+documented VR-sync offsets, but common-median referencing disproved the blanket
+peak claim: it removes 4.54 dB of 614's ~154 Hz peak, not the persistent ~74 Hz
+peak. Learning outputs are quarantined; 57 tests and figure-source caches now
+enforce the current integrity claims. Exact LFP↔VR alignment remains the blocker.
+
+## 2026-07-12 — LFP integrity audit (current gate)
+
+The four `RawData/LFP/voltage_data_384ch*.mat` exports were re-audited from every
+stored value after an absolute-unit threshold produced a false “99% empty” diagnosis.
+Voltage is continuous throughout behaviour; zeros are terminal padding only. However,
+the exports are broadband-dominated, contain deterministic 60 s/5 s high-amplitude
+events, and 614/727/731 have narrow ~75 and ~151 Hz contamination (the former invalidates
+the planned 30–80 Hz low-gamma band). 1212 is qualitatively different and must remain
+separate. Common-median referencing removes much of 614's ~154 Hz peak but not the
+~74 Hz peak or either peak in 727/731. Exact source band, gain, filtering/resampling and voltage↔VR offset are absent
+from repository provenance. Downstream learning/position/CCA analyses are therefore
+gated. Full evidence and corrected figures: `Striatum project/lfp/NOTES.md` and
+`Striatum project/lfp/figures/sanity_audit_overview_v2.{png,svg}`.
+
 _Audit completed 2026-05-07. Covers all `.m` files in active code paths, the `Preprocessing/` directory, root-level utilities, the entire `Striatum project/Legacy/` folder, and the three Python CEBRA scripts._
 
 ## Update log
@@ -146,6 +170,31 @@ Stale generated files that need to be rerun against the V1-extended scripts:
 Control data: `preprocessed_data_control.mat` and `preprocessed_data_control2.mat` predate the `fr_threshold = 0.02` alignment. Strictly speaking they should be regenerated for parity, but it's not blocking V1 work since control mice don't have V1 probes anyway.
 
 Remaining priority list items unchanged below.
+
+---
+
+## Lab meeting log
+
+**2026-05-25 — striatum project (with Mme.).** Next meeting: **2026-06-04, 09:30** (← tomorrow as of this entry).
+
+Raw points as recorded:
+
+- Still decoding in disengaged?
+- Subspace comm with decreasing units only.
+- Try to extend to temporal bins. → Able to see finer changes in first 3 trials.
+- See how temporal chunks are dealt with in Buzsáki paper. → velocity threshold (?).
+
+Interpretation, mapped to the codebase (action items tracked as block **M** in §6).
+
+> **Implementation target for the CCA items is the Python `striatum_cca` package** (`Striatum project/cca/src/striatum_cca/`), per the methods contract `~/Documents/ResearchVault/Methods/CCA_HH_Adapted.md` §6. The MATLAB `CCA_striatum_spatial_v3.m` is the retired v5 instantiation — *sequestered, do not extend.* The vault meeting note is `Projects/Striatum/Meetings/2026-05-25-Striatum-Meeting.md`; tasks live in `Striatum-Tasks.md`.
+
+1. **Decoding in the disengaged state.** The pipeline currently *removes* disengaged data: `dataio.py` truncates the trial axis at `change_point_mean` and the temporal path excludes over-long traversals (`config.temporal_max_trial_ms`); per CCA_HH_Adapted §1.3 (departure #1) there is deliberately **no engagement filter** because epochs already partition by state. The question is the complement: is position still decodable, and is the inter-area subspace still aligned, *during* disengagement? Plan: split trials engaged/disengaged from `change_point_mean`, then run the position decoder and area-pair CCA on the disengaged segment and compare held-out accuracy / canonical correlations against engaged. Retained signal ⇒ state-independent code; collapse ⇒ it tracks engagement. *Quickest first answer: stop excluding the disengaged tail and decode it separately.*
+
+2. **Communication subspace restricted to Decreaser units.** The modulation classifier in `SpatioTemporalActivityEvolution.m` (line ~293) labels each neuron Increaser (1) / Decreaser (2) / Maintainer (3) on a held-out trial half. The ask is to recompute the inter-area communication subspace using **only Decreaser units** (`modulation_class == 2`) on each side of the area pair — do the units that *lose* activity with learning carry the cross-area communication? Plan: export `modulation_class` as a per-unit label, add a unit-subset filter to the `striatum_cca` loader (`dataio.py`/`config.py`), and contrast Decreasers-only vs all-units vs Increasers-only. Watch the unit-count floor — Decreasers-only may leave too few units in some area×animal cells for a stable `canoncorr`; log/skip cells below a minimum.
+
+3. **Temporal binning (vs spatial).** Most analyses bin along the corridor (spatial alignment). **`striatum_cca` already exposes a temporal mode** (`config.bin_mode = "temporal"`, `temporal_bin_ms = 20`, added round 8) that re-bins 1 ms spike counts into time bins from corridor onset with no window/clipping. So this is *run-and-analyse*, not build-from-scratch: run `bin_mode="temporal"` focused on the **first 3 trials** to resolve the fast early-learning changes ("able to see finer changes in first 3 trials"), tuning `temporal_bin_ms`.
+
+4. **Buzsáki temporal-chunking method (literature).** Check how the Buzsáki-lab paper segments time into chunks — the suspicion is a **velocity threshold** gates the chunking (cf. `simulatePOMDP_striatum.m:19`, `v_lick = 10 cm/s` "velocity when licking/engaged"). Find the paper (queued in vault `papers_to_read.md`), read its segmentation method, and write the recipe into `~/Documents/ResearchVault/Methods/` so the temporal-bin work in item 3 can adopt it. Resolve the "(?)" on whether velocity is the actual gating variable.
 
 ---
 
@@ -354,6 +403,15 @@ What needs to change before the CEBRA path produces a publishable result:
 ## 6 · Prioritised task list
 
 Ordered roughly by `(scientific risk × user-facing impact) / effort`. **High-priority items first.**
+
+### M — lab-meeting follow-ups (from 2026-05-25; next meeting 2026-06-04 09:30)
+
+See the Lab meeting log above for full context. These are scientific directions, not bug fixes. **CCA work goes in the Python `striatum_cca` package** (`Striatum project/cca/src/striatum_cca/`); the MATLAB `CCA_striatum_spatial_v3.m` is legacy-sequestered (`Methods/CCA_HH_Adapted.md` §6) — do not extend it.
+
+- **M1. Decoding in the disengaged state.** Split trials into engaged/disengaged via `change_point_mean`, then run position decoding + area-pair CCA on the disengaged segment and compare held-out accuracy / canonical correlations against engaged. The pipeline currently *removes* disengaged data (`dataio.py` truncation; temporal path drops over-long traversals via `temporal_max_trial_ms`). *Quickest first answer: stop excluding the disengaged tail and decode it separately.*
+- **M2. Communication subspace, Decreaser units only.** Export `modulation_class` (from `SpatioTemporalActivityEvolution.m`, line ~293) as a per-unit label; add a unit-subset filter to the `striatum_cca` loader (`dataio.py`/`config.py`); run Decreasers-only (`==2`) vs all-units vs Increasers-only. Log/skip area×animal cells with too few units for a stable `canoncorr`.
+- **M3. Temporal-bin run (first 3 trials).** *Already implemented* — set `config.bin_mode = "temporal"` (round 8; `temporal_bin_ms`, `temporal_max_trial_ms`) and run focused on the first 3 trials to resolve finer learning dynamics. Tune `temporal_bin_ms`; this is run-and-analyse, not build.
+- **M4. Buzsáki temporal-chunking method (lit review).** Find the Buzsáki paper (queued in vault `papers_to_read.md`), read its time-chunk segmentation (likely a velocity threshold — cf. `simulatePOMDP_striatum.m:19`), and write the recipe to `~/Documents/ResearchVault/Methods/`. Feeds M3.
 
 ### P0 — fix today
 

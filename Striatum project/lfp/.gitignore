@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# generated outputs are regeneratable from the drivers; LFP outputs are large
+# (per-band memmaps, drop-in .mat) and must never be committed as data.
+results/*.csv
+results/*.pkl
+results/*.npz
+results/*.npy
+results/*.mat
+results/*.dat
+results/**/*.csv
+results/**/*.pkl
+results/**/*.npz
+results/**/*.npy
+results/**/*.mat
+results/**/*.dat
+figures/*.png
+figures/*.svg
+figures/**/*.png
+figures/**/*.svg
