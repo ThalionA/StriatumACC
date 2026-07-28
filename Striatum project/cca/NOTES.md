@@ -706,3 +706,66 @@ trajectory figures removed. `epoch_stats_<variant>.csv` remains the full
 record and the only home for the per-animal repeated-measures ANOVA.
 
 114 tests; ruff clean.
+
+
+## 2026-06-11 — round 17 (Arm A: running-state temporal CCA, ported from Tom)
+
+Ported Tom's new **Arm A** (running-state full-traversal temporal CCA) onto the
+striatum corridor data. Tom built two temporal arms (`TomLearning/cca`,
+`UNDERSTANDING_temporal.md`) and explicitly deferred the striatum port; this is
+that port. **Arm A only** and **50 ms bins** (user decisions); Arm B
+(landmark-centred) is *not* ported — it needs Tom's six repeating visual-landmark
+IDs, whereas the striatum task has a single fixed landmark + reward zone.
+Worked on `main` (no feature branch) and `min_units = 5` (both user-set).
+
+What Arm A does: rebin each corridor traversal to 50 ms, mask bins where running
+speed < 2 cm/s, morphologically clean the mask (close <=100 ms gaps, drop
+<750 ms runs), cut each traversal into contiguous running segments, pool
+within-segment lag-L bin pairs across an epoch, refit signal-only CCA at every
+lag in +/-500 ms (+/-10 bins), and read out the Information Flow Index against a
+**per-segment circshift null**. Held-out CC is leave-one-trial-out (the
+traversal is the exchangeable unit).
+
+`tom_cca` is a near-verbatim fork of `striatum_cca` (identical `core`/`lagged`
+public API), so the lag machinery dropped in cleanly:
+
+- `segments.py`, `lagged_temporal.py` — **verbatim ports** (depend only on
+  `core.cca_fit/cca_score` and `lagged.information_flow_index/ifi_by_window`,
+  all already present).
+- `config.py` — new `bin_mode="temporal_runstate"` + `lag_ms`,
+  `velocity_thresh_cm_s`, `min_gap_close_ms`, `min_run_extra_ms`,
+  `temporal_circshift_min_bins`, `AU_TO_CM`, and helpers `lag_bins` /
+  `min_run_bins` / `min_gap_close_bins`.
+- `dataio.py` — **the only genuinely new logic.** The striatum has no velocity
+  channel and stores corridor data per-traversal, so speed is *derived* from
+  `corridorData.trial_position` (a.u. -> cm via `AU_TO_CM`) over
+  `corridorData.trial_times` (ms). **Gotcha:** `trial_times` must be re-zeroed
+  to its first sample before interpolating onto the 50 ms bin-centre grid — the
+  corridor-period times are *not* zeroed to 0 (they start at corridor onset),
+  while the 1 ms spike columns are 0-based; `spatial_binning.m` does the same
+  re-zeroing. `build_runstate_streams` concatenates the per-trial 50 ms bins
+  into one global timeline with a `trial_idx` channel so `find_segments` never
+  crosses a traversal boundary; over-long (disengaged) traversals contribute no
+  bins but still consume their trial index so epoch membership stays aligned.
+- `pipeline.prepare_pair_temporal` / `analysis.analyse_pair_temporal` —
+  ported; signal-only, per-epoch PCA on the retained running bins, scores
+  projected onto the full timeline so segment starts/stops index unchanged.
+- `sweep._temporal_runstate` (11 k-rule configs, committed `temp50_samp15`);
+  `scripts/run_temporal_runstate.py` (committed / `--sweep` / `--smoke`,
+  resumable; smoke prints the velocity sanity report).
+- New tests: `test_segments.py`, `test_lagged_temporal.py` (ported), and
+  `test_velocity.py` (striatum-specific velocity + stream assembly on synthetic
+  ground truth). **169 tests; ruff clean.**
+
+Smoke on real data (2 animals): velocity derivation is sound — median running
+speed 19–27 cm/s, and the 2 cm/s gate retains 75–82 % of bins (the mask does
+real work without collapsing to the existing whole-traversal temporal mode).
+Lag scan + null produce finite, varied CC1 / IFI / p-values (e.g. DMS->ACC
+peak CC1 ~0.27–0.38 >> DLS->ACC ~0.03–0.11).
+
+**Open / handed off:** the full cohort + 11-config sweep is a multi-hour native
+job — run `python scripts/run_temporal_runstate.py --sweep`. The committed
+config alone is `run_temporal_runstate.py` (no flags). Not yet done: a saved
+velocity-sanity figure under `figures/`, and plotting/aggregation of Arm A
+results (the existing `plot_stage2`/`aggregate` consume the spatial
+`EpochAnalysis`, not `TemporalEpochAnalysis`).

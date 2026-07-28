@@ -51,6 +51,7 @@ PAIRS: tuple[tuple[str, str], ...] = (
 # N_BINS is only a default for synthetic test fixtures.
 N_BINS = 50
 CORRIDOR_CM = 250.0    # 200 a.u. * 1.25 cm/a.u.
+AU_TO_CM = 1.25        # corridor position scale (CORRIDOR_CM / 200 a.u.)
 
 
 def bin_size_cm(n_bins: int) -> float:
@@ -106,6 +107,13 @@ class Config:
     bin_mode: str = "spatial"
     temporal_bin_ms: int = 20
     temporal_max_trial_ms: int = 60_000
+
+    # --- Temporal running-state gate (continuous trajectory pipeline) --------
+    # Velocity gate for the running-bin mask. Velocity is *derived* from the
+    # corridor position/time streams -- the striatum has no velocity channel
+    # (see dataio.trial_velocity). The trajectory pipeline
+    # (scripts/run_trajectory.py) bins at 25 ms; set temporal_bin_ms=25 there.
+    velocity_thresh_cm_s: float = 2.0     # running-speed gate (cm/s)
 
     # Unit inclusion. min_units committed at 6 in round 8 (was 4); the
     # FS-included vs FS-excluded comparison flips exclude_fast_spiking;

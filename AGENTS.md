@@ -1,6 +1,6 @@
-# CLAUDE.md — Scientific Project Conventions
+# AGENTS.md — Scientific Project Conventions
 
-Instructions for Claude Code when working in this scientific repository. Follow these rules unless the user explicitly overrides them.
+Instructions for Codex when working in this scientific repository. Follow these rules unless the user explicitly overrides them.
 
 ## Workflow rules
 
@@ -125,3 +125,5 @@ Before claiming a result:
 - Reusable helpers (use these, don't reimplement): `find_learning_points.m`, `epoch_indices.m`, `is_v1_safe.m`, `loo_ridge_press.m`, `batch_triu_corr_mean.m`.
 - Deferred: Phase 6 of the refactor (splitting `IntegratedAll_v1` / `SpatioTemporal*` / `ProcessStriatum*` into processing vs plotting).
 - Before trusting any new statistical result, run the global `/stats-rigor` checklist.
+
+## Imported Claude Cowork project instructions

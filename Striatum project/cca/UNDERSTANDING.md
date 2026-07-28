@@ -211,6 +211,22 @@ results saved alongside figures. **Checkpoint: review, then writeup.**
 
 ## 7. Edit log
 
+- **2026-06-11 — v17 (round 17: Arm A running-state temporal CCA, ported from
+  Tom).** Ported Tom's deferred striatum Arm A: `bin_mode="temporal_runstate"`
+  (50 ms bins, +/-500 ms lag, signal-only, FS-excl, `min_units=5`). Velocity is
+  *derived* from `corridorData.trial_position`/`trial_times` (the striatum has
+  no velocity channel); 50 ms bins are masked at 2 cm/s, morphologically
+  cleaned, and cut into trial-bounded running segments for a segment-aware
+  lagged CCA + per-segment circshift null (leave-one-trial-out CV). New modules
+  `segments.py` + `lagged_temporal.py` are verbatim ports (striatum `core`/
+  `lagged` are API-identical to Tom's); the new logic is the velocity/stream
+  builder in `dataio.py` (gotcha: re-zero `trial_times` to corridor onset
+  before interpolating to the 50 ms grid). `pipeline.prepare_pair_temporal` +
+  `analysis.analyse_pair_temporal`, `sweep._temporal_runstate` (committed
+  `temp50_samp15`), `scripts/run_temporal_runstate.py`. Spatial + existing
+  `temporal` paths untouched. Real-data smoke: running speeds 19–27 cm/s, gate
+  retains 75–82 % of bins. 169 tests; ruff clean. Full log in NOTES.md
+  (round 17). Arm B not ported (no repeating landmarks in the striatum task).
 - **2026-05-24 — v16 (round 16: epoch stats onto the CC/IFI figures).** The
   per-significant-dimension one-way ANOVA + Tukey HSD now annotate the
   Stage-2 CC and IFI panel titles directly (`plot_stage2.py`), computed on

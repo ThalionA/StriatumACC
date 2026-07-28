@@ -98,6 +98,24 @@ Plan: `~/.claude/plans/magical-tumbling-owl.md` (approved).
 
 ## Progress
 
+**2026-07-12 — Decoding + cross-area CCA (PROVISIONAL; crosses the README gate deliberately).**
+New `decode.py` (+ `test_decode.py`, 6 tests): `bin_by_position`, group-k-fold `ridge_cv_decode`,
+`residualise_by_group`, split-half `heldout_cca`. Driver `scripts/run_decode_cca.py` (position-binned
+band power per traversal, artefact-masked). Outputs `results/decode_summary.csv`, `cca_summary.csv`,
+`figures/decode_position`, `figures/cca_cross_area`.
+- **Position decoding = ALIGNMENT TEST, and it PASSES.** LFP band power (area×band, ridge, group-CV)
+  decodes corridor position **above chance in 614/727/731** (R² 0.12 / 0.14 / 0.17; MAE 53/46/**20** cm
+  vs ~72 cm uniform-chance; shuffle-p95 ≈ 0). **1212 at chance** (R²≈0; artefact-contaminated). You
+  cannot decode position from mis-timed data ⇒ **the export offset is roughly correct** — this
+  materially eases the timing worry behind the gate (offset ≲ position-bin scale). LFP carries modest
+  position info; all areas contribute similarly (volume conduction).
+- **Cross-area CCA is volume-conduction limited (as predicted).** Held-out cross-area CC1 is high
+  (0.6–0.9, ≫ trial-shuffle ~0.02–0.14) BUT always **below the within-area split-half VC ceiling**
+  (0.88–0.99), and cross-area CC falls with area separation — the signature of shared field, not
+  communication. **No area-specific coupling above the VC ceiling** on this single probe. To assess
+  genuine inter-areal LFP communication you'd need VC-robust referencing (bipolar/CSD) or LFP→spike
+  CCA (which needs the offset). tcca temporal CCA not wired in — VC makes raw LFP–LFP CCA uninformative.
+
 **2026-07-12 — LFP band-power vs learning (PROVISIONAL, provenance-gated).**
 New `learning.py` (+ `test_learning.py`, 8 tests) and `scripts/run_learning_evolution.py`.
 Per corridor traversal: per-area (DMS/DLS/ACC) band power (θ/β/low-γ) via Welch, median over

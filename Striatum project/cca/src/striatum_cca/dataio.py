@@ -312,3 +312,143 @@ def area_tensor(animal: Animal, area: str, cfg):
         return [trial[:, idx] for trial in _corridor_data(animal, cfg)], idx
     n_use = n_usable_trials(animal)
     return animal.spatial_fr[:n_use][:, :, idx], idx
+
+
+# ---------------------------------------------------------------------------
+# Temporal running-state streams (for the continuous trajectory pipeline)
+# ---------------------------------------------------------------------------
+# The striatum has no velocity channel and stores corridor data per-traversal
+# (corridorData.binned_spikes/.trial_position/.trial_times). We (a) derive
+# running speed from the position stream and (b) concatenate the per-trial time
+# bins into one global timeline tagged with a per-bin trial index. The
+# trajectory driver then keeps only running, in-trial bins (v >= threshold) and
+# slides a window over the trial index. Mirrors Tom's `_load_temporal_streams`
+# contract so `run_trajectory.py` ports almost unchanged.
+def trial_velocity(position_au, times_ms, n_bins: int, cfg) -> np.ndarray:
+    """Running speed (cm/s) per time bin, derived from VR position/time.
+
+    ``position_au`` (a.u., VR sample rate) and ``times_ms`` (ms, VR sample
+    rate) are the corridor-period position/time streams. Times are re-zeroed to
+    the corridor onset so they line up with the 1 ms spike-column timeline
+    (exactly as ``spatial_binning.m`` does). Position is interpolated onto the
+    bin-centre times, converted a.u. -> cm (``config.AU_TO_CM``), and
+    differentiated. Returns the unsigned speed ``(n_bins,)``; bins with no
+    usable position record are 0 (and so fail the running gate).
+    """
+    bin_ms = int(cfg.temporal_bin_ms)
+    out = np.zeros(int(n_bins), dtype=float)
+    if n_bins <= 1:
+        return out
+    pos = np.asarray(position_au, dtype=float).ravel()
+    tim = np.asarray(times_ms, dtype=float).ravel()
+    if pos.size < 2 or tim.size != pos.size:
+        return out                      # cannot form a velocity -> all zero
+    t_rel = tim - tim[0]                 # 0-based ms, matches spike columns
+    order = np.argsort(t_rel)            # np.interp needs increasing xp
+    t_rel, pos = t_rel[order], pos[order]
+    centres = bin_ms * np.arange(n_bins) + bin_ms / 2.0
+    pos_cm = np.interp(centres, t_rel, pos) * config.AU_TO_CM
+    return np.abs(np.gradient(pos_cm, bin_ms / 1000.0))
+
+
+@dataclass
+class _TemporalStreams:
+    """Global time-binned streams for one animal, concatenated over usable trials."""
+
+    spikes: np.ndarray         # (n_bins, n_units) float32
+    vel: np.ndarray            # (n_bins,) cm/s
+    trial_idx: np.ndarray      # (n_bins,) float; 0-indexed traversal id
+
+
+def build_temporal_streams(trial_iter, n_units: int, cfg) -> _TemporalStreams:
+    """Assemble the global time-binned streams from a per-trial iterator.
+
+    ``trial_iter`` yields ``(spikes_1ms, position_au, times_ms)`` for each
+    usable trial **in order**; ``spikes_1ms`` is ``(n_1ms, n_units)``. A trial
+    that is malformed, empty, or longer than ``temporal_max_trial_ms``
+    (disengaged) contributes no bins but still consumes its traversal index, so
+    ``trial_idx`` stays aligned with the sliding window (0-indexed over the
+    usable trials). Pure -- no I/O -- so it is unit-testable.
+    """
+    bin_ms = int(cfg.temporal_bin_ms)
+    max_bins = cfg.temporal_max_trial_ms // bin_ms
+    spikes_blocks, vel_blocks, tidx_blocks = [], [], []
+    for t, (arr, pos, tim) in enumerate(trial_iter):
+        arr = np.asarray(arr)
+        if arr.ndim != 2 or arr.shape[1] != n_units:
+            continue                    # malformed; index t still consumed
+        binned = rebin_trial(arr, bin_ms)
+        nb = binned.shape[0]
+        if nb == 0 or nb > max_bins:
+            continue                    # empty or disengaged (over-long)
+        spikes_blocks.append(binned)
+        vel_blocks.append(trial_velocity(pos, tim, nb, cfg))
+        tidx_blocks.append(np.full(nb, t, dtype=float))
+    if spikes_blocks:
+        return _TemporalStreams(
+            spikes=np.concatenate(spikes_blocks, axis=0),
+            vel=np.concatenate(vel_blocks, axis=0),
+            trial_idx=np.concatenate(tidx_blocks, axis=0),
+        )
+    return _TemporalStreams(
+        spikes=np.zeros((0, n_units), dtype=np.float32),
+        vel=np.zeros(0, dtype=float),
+        trial_idx=np.zeros(0, dtype=float),
+    )
+
+
+# One-animal cache (the 1 ms read is many MB); dropped when the next animal or
+# bin width is requested.
+_TEMPORAL_CACHE: dict = {}
+
+
+def _load_temporal_streams(animal: Animal, cfg) -> _TemporalStreams:
+    """Read + bin the corridor streams for ``animal``. Cached per animal."""
+    key = (animal.animal_id, int(cfg.temporal_bin_ms))
+    cached = _TEMPORAL_CACHE.get(key)
+    if cached is not None:
+        return cached
+    _TEMPORAL_CACHE.clear()                       # 1-slot -- bound memory
+    n_use = n_usable_trials(animal)
+    n_units = animal.neurontypes.shape[0]
+
+    def _trials():
+        with h5py.File(animal.corridor_path, "r") as fh:
+            cd = fh[fh["preprocessed_data"]["corridorData"][animal.animal_id - 1, 0]]
+            spk, pos, tim = cd["binned_spikes"], cd["trial_position"], cd["trial_times"]
+            for t in range(n_use):
+                yield (np.asarray(fh[spk[t, 0]]),
+                       np.asarray(fh[pos[t, 0]]).ravel(),
+                       np.asarray(fh[tim[t, 0]]).ravel())
+
+    streams = build_temporal_streams(_trials(), n_units, cfg)
+    _TEMPORAL_CACHE[key] = streams
+    return streams
+
+
+def _zscore_engaged(spikes_area, vel, trial_idx, vel_threshold) -> np.ndarray:
+    """Per-unit z-score using the running+in-trial reference."""
+    ref_mask = ~np.isnan(trial_idx) & (vel >= vel_threshold)
+    if not np.any(ref_mask):
+        return spikes_area
+    ref = spikes_area[ref_mask]
+    sd = ref.std(axis=0)
+    sd = np.where(sd > 0, sd, 1.0)
+    return (spikes_area - ref.mean(axis=0)) / sd
+
+
+def area_running_activity(animal: Animal, area: str, cfg
+                          ) -> tuple[np.ndarray, np.ndarray]:
+    """Per-area time-binned activity, z-scored over running+in-trial bins.
+
+    Returns ``(spikes[:, kept_units], kept_unit_indices)`` on the global
+    timeline. The trajectory driver applies the running mask itself.
+    """
+    streams = _load_temporal_streams(animal, cfg)
+    idx = select_units(animal, area, cfg)
+    spikes_area = streams.spikes[:, idx]
+    if cfg.zscore_units:
+        spikes_area = _zscore_engaged(
+            spikes_area, streams.vel, streams.trial_idx, cfg.velocity_thresh_cm_s,
+        )
+    return spikes_area, idx
