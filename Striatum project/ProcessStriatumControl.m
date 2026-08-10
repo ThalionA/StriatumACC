@@ -8,7 +8,12 @@ visual_zone_start_au = 80;
 reward_zone_start_au = 100;
 reward_zone_end_au = 135;
 corridor_end_au = 200;
-bin_size = 2; 
+% 5 cm bins (4 au) -- decided 2026-08-10, aligned with ProcessStriatumTask
+% (see PREDICTIONS.md); 2.5 cm emission dropped.
+bin_size = 4;
+% Seed: keeps lick-precision shuffles reproducible (aligned with task, which
+% was seeded 2026-05-24; control was never seeded before 2026-08-10).
+rng(42, 'twister');
 
 bin_edges = 0:bin_size:corridor_end_au;
 bin_edges(end) = corridor_end_au + bin_size;
@@ -20,11 +25,24 @@ reward_zone_start_bins = reward_zone_start_au / bin_size;
 reward_zone_end_bins = reward_zone_end_au / bin_size;
 
 % --- Load Data ---
-if exist('preprocessed_data_control.mat', 'file')
-    fprintf('Loading existing preprocessed control data...\n');
+if exist('preprocessed_data_control.mat', 'file') && exist('processed_data/preprocessed_data_control5cm.mat', 'file')
+    fprintf('Loading existing preprocessed control data (cached files present)...\n');
     load('preprocessed_data_control.mat', 'preprocessed_data');
+    assert(size(preprocessed_data(1).spatial_binned_fr_all, 2) == num_bins, ...
+        'cached preprocessed_data_control.mat has %d bins, expected %d - stale 2.5 cm-era cache, delete it and rerun', ...
+        size(preprocessed_data(1).spatial_binned_fr_all, 2), num_bins);
     n_animals = numel(preprocessed_data);
 else
+    % Cohort guard (2026-08-10): clearvars -except all_data keeps whatever
+    % all_data the last script left, so a TASK all_data in the workspace
+    % would be silently processed as control. Verify identity, else reload.
+    if exist('all_data', 'var')
+        ctrl_ids = [407, 513, 515, 817, 1205];
+        if ~all(ismember([all_data.mouseid], ctrl_ids))
+            fprintf('Workspace all_data is not the control cohort - reloading from disk.\n');
+            clear all_data
+        end
+    end
     if ~exist('all_data', 'var')
         load('all_data_control.mat');
     end
@@ -54,6 +72,7 @@ else
     fprintf('Processing data for all control animals...\n');
     
     % PREALLOCATION: Initialize struct array to avoid dynamic growing
+    clear preprocessed_data
     preprocessed_data(n_animals) = struct();
 
     for ianimal = 1:n_animals
@@ -289,7 +308,7 @@ else
     end
 
     % Save the preprocessed control data struct
-    save('preprocessed_data_control2p5cm.mat', 'preprocessed_data', '-v7.3');
+    save('processed_data/preprocessed_data_control5cm.mat', 'preprocessed_data', '-v7.3');
 end
 
 %% Plot area dimensionality

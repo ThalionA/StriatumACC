@@ -20,7 +20,7 @@ Writes figures/directionality_<variant>.csv and a per-pair spaghetti figure
 (per-animal IFI across the three epochs) figures/directionality_<variant>.png.
 
 Run:  python scripts/directionality_table.py [--variant plain|partial]
-                                             [--bin-cm 2.5]
+                                             [--bin-cm 5.0]
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from striatum_cca import aggregate, config, epoch_stats  # noqa: E402
 EPOCHS = config.EPOCH_NAMES
 EPOCH_LABEL = ["naive", "inter", "expert"]
 EPOCH_IDX = np.arange(3, dtype=float)
-IFI_WINDOW = 10
+IFI_WINDOW = 5   # bins; 25 cm at 5 cm bins (halved from 10 with the 2026-08-10 bin switch)
 VARIANT_PKL = {"plain": "stage2_committed_circshift.pkl",
                "partial": "stage2_committed_circshift_partial.pkl"}
 
@@ -159,8 +159,8 @@ def plot_spaghetti(results, variant):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--variant", choices=("plain", "partial"), default="partial")
-    p.add_argument("--bin-cm", type=float, default=2.5,
-                   help="spatial bin width in cm (committed = 2.5)")
+    p.add_argument("--bin-cm", type=float, default=5.0,
+                   help="spatial bin width in cm (committed = 5.0 since 2026-08-10)")
     args = p.parse_args()
     path = config.RESULTS_DIR / VARIANT_PKL[args.variant]
     if not path.exists():

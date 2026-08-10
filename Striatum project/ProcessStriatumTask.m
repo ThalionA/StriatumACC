@@ -12,7 +12,10 @@ visual_zone_start_au = 80;
 reward_zone_start_au = 100;
 reward_zone_end_au = 135;
 corridor_end_au = 200;
-bin_size = 2; 
+% 5 cm bins (4 au) -- decided 2026-08-10 (see PREDICTIONS.md): 5 cm beat
+% 2.5 cm on split-half reliability in 50/50 animal-area pairs with no
+% detectable sub-5cm structure; 2.5 cm emission dropped.
+bin_size = 4;
 bin_edges = 0:bin_size:corridor_end_au;
 bin_edges(end) = corridor_end_au + bin_size;
 bin_centres = bin_edges(1:end-1) + diff(bin_edges)/2;
@@ -22,11 +25,23 @@ reward_zone_start_bins = reward_zone_start_au / bin_size;
 reward_zone_end_bins = reward_zone_end_au / bin_size;
 
 % --- Load Data ---
-if exist('preprocessed_data.mat', 'file')
-    fprintf('Loading existing preprocessed data...\n');
+if exist('preprocessed_data.mat', 'file') && exist('processed_data/preprocessed_data5cm.mat', 'file')
+    fprintf('Loading existing preprocessed data (cached files present)...\n');
     load('preprocessed_data.mat', 'preprocessed_data');
+    assert(size(preprocessed_data(1).spatial_binned_fr_all, 2) == num_bins, ...
+        'cached preprocessed_data.mat has %d bins, expected %d - stale 2.5 cm-era cache, delete it and rerun', ...
+        size(preprocessed_data(1).spatial_binned_fr_all, 2), num_bins);
     n_animals = numel(preprocessed_data);
 else
+    % Cohort guard (2026-08-10): a control all_data left in the workspace
+    % would be silently processed as task. Verify identity, else reload.
+    if exist('all_data', 'var')
+        task_ids = [523, 614, 624, 727, 730, 731, 822, 823, 1105, 1106, 1201, 1206, 1212, 409, 418, 703];
+        if ~all(ismember([all_data.mouseid], task_ids))
+            fprintf('Workspace all_data is not the task cohort - reloading from disk.\n');
+            clear all_data
+        end
+    end
     if ~exist('all_data', 'var')
         load('all_data.mat');
     end
@@ -52,6 +67,7 @@ else
     fprintf('Processing data for all animals...\n');
     
     % PREALLOCATION: Initialize struct array to avoid dynamic growing
+    clear preprocessed_data
     preprocessed_data(n_animals) = struct();
     for ianimal = 1:n_animals
         fprintf('Processing animal %d/%d (ID: %d)...\n', ianimal, n_animals, all_data(ianimal).mouseid);
@@ -351,7 +367,7 @@ else
         fprintf('Done with animal %d\n', ianimal);
     end
     
-    save('preprocessed_data2p5cm.mat', 'preprocessed_data', '-v7.3');
+    save('processed_data/preprocessed_data5cm.mat', 'preprocessed_data', '-v7.3');
 end
 
 %%

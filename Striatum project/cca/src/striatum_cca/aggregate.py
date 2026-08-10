@@ -31,7 +31,7 @@ def sig_dims(epoch_analysis, alpha: float = ALPHA) -> np.ndarray:
     return np.where(epoch_analysis.p_per_dim < alpha)[0]
 
 
-def dim_values(pair_result, epoch: str, metric: str, window: int = 10) -> np.ndarray:
+def dim_values(pair_result, epoch: str, metric: str, window: int = 5) -> np.ndarray:
     """Significant-dim values for one pair x epoch ('cc' or 'ifi')."""
     ea = pair_result.epochs[epoch]
     js = sig_dims(ea)
@@ -43,7 +43,7 @@ def dim_values(pair_result, epoch: str, metric: str, window: int = 10) -> np.nda
 
 
 def per_dim_groups(
-    learners, metric: str, window: int = 10, epochs=config.EPOCH_NAMES
+    learners, metric: str, window: int = 5, epochs=config.EPOCH_NAMES
 ) -> list[np.ndarray]:
     """One finite array of significant-dim values per epoch, pooled over animals
     (the n = dims grouping)."""
@@ -57,7 +57,7 @@ def per_dim_groups(
 
 
 def per_animal_matrix(
-    learners, metric: str, window: int = 10, epochs=config.EPOCH_NAMES
+    learners, metric: str, window: int = 5, epochs=config.EPOCH_NAMES
 ) -> np.ndarray:
     """``(n_complete_animals, n_epochs)`` of each animal's mean over its
     significant dims; rows missing any epoch are dropped (the n = animals

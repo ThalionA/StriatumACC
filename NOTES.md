@@ -1,5 +1,42 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-08-10 — Depth-boundary corrections, control2 rebuild, control-V1, 5 cm standardisation
+
+Cross-checked all depth CSVs against Zihao's readme (INCR volume, his Aug-3
+corrections): fixed task 731 (DMS 0–300 → 500–800; old band was internal
+capsule), control2 1011 (whole striatal row was a copy-paste of 624's),
+1103 (DMS 850–1050, phantom DLS removed), 317 (DLS end 100 → 200). Task id
+507 = session 0705 (Vishal MMDD swap), deliberately excluded. All three
+organised products regenerated post-fix (task 16, control1 5, control2 6).
+
+Control1 now carries V1/CA1/DG via new `OrganiseStriatumDataControlIncV1.m`
+(+ `RawDataControl/Neuropixels_V1_Depth_Data_control.csv` — NB RawDataControl/
+is gitignored, so the corrected control depth CSVs exist only on disk).
+Control2 organiser rebuilt out of Legacy/: it had NO save() and a broken CSV
+path, so `all_data_control2.mat` had never existed; now saves, sessions
+316/317/1011/1103/1107_M1/1107_M2 (string mouseids; VR trial = row 10).
+`PreprocessStriatumControl2` fr_threshold 0.1 → 0.02, moved to root.
+
+Bin size standardised to 5 cm (bin_size_au=4, 50 bins) after a registered,
+scored comparison (PREDICTIONS.md 2026-08-10): 5 cm beat 2.5 cm on split-half
+reliability in 50/50 animal-area pairs, no detectable sub-5cm structure
+anywhere (kernel `bin_comparison_metrics.m`, test passes 10 seeds). 2.5 cm
+emission dropped; `project_cfg.m` re-gridded (max_bin 30, landmarks 20/25) and
+every consumer repointed (tcca/cca/lfp configs, IntegratedAll, Run_TCA now
+reads project_cfg; cca lag knobs halved to preserve cm). Discovered: MI v2 /
+Nonlinear_Epoch_Decoding / CrossSpatialBinDecoding always hardcoded 5 cm
+velocity — 2.5 cm-era velocity outputs were 2× too high; correct as of the
+switch. Knobs re-set: mi_pool_win 3, mi_max_lag 10, epoch max_lag 10.
+Products now saved directly into `processed_data/`. Headless MATLAB works:
+`/Applications/MATLAB_R2026a.app/bin/matlab -batch`.
+
+OPEN: rerun all downstream (CEBRA export→fit, cca stage2/sweep, MI, decoding,
+TCA→SpatioTemporal/ensemble, tcca both groups, IntegratedAll_v1,
+summary_numbers) — /stats-rigor the regenerated cca headline numbers (sample
+budget halved). Stale 2.5 cm results parked (~6 GB cca/results s2p5 pickles,
+cebra_data exports) — delete once reruns land. Control2 624 row unused;
+1107_M2 depths flagged "??" by Zihao — treat its counts as provisional.
+
 ## 2026-07-13 — LFP audit validation hardened
 
 Rechecked the complete LFP package and corrected two figure/code errors: state

@@ -7,7 +7,7 @@ summary all agree on the grid.
 SPATIAL sweep = the FULL Cartesian product of every analysis knob (round 8,
 "do all the combinations"):
 
-    bin width      x  AXIS_BINS      (2.5 cm / 5 cm)
+    bin width      x  AXIS_BINS      (5 cm only since 2026-08-10)
     CCA type       x  AXIS_CCA       (residual / signal)
     fast-spiking   x  AXIS_FS        (excluded / included)
     z-scoring      x  AXIS_Z         (on / off)
@@ -16,7 +16,7 @@ SPATIAL sweep = the FULL Cartesian product of every analysis knob (round 8,
     PC-count rule  x  AXIS_KRULE     (samples 15/25/40, fixed 3/5/10/20/30,
                                       variance 75/85/95 %)
 
-Total = 2*2*2*2*3*2*11 = 1056 configs. Edit the AXIS_* lists below to trim.
+Total = 1*2*2*2*3*2*11 = 528 configs. Edit the AXIS_* lists below to trim.
 
 TEMPORAL sweep = 40 ms and 20 ms (signal CCA, FS-excluded, disengaged
 traversals excluded; 10 ms is computationally intractable here).
@@ -29,7 +29,8 @@ import dataclasses
 from . import config
 
 # --- spatial sweep axes (edit to trim the grid) ------------------------------
-AXIS_BINS = (("s2p5", None, 10), ("s5cm", config.PREPROCESSED_DATA_5CM, 5))
+# 5 cm only since 2026-08-10 (the 2.5 cm product is no longer emitted).
+AXIS_BINS = (("s5cm", None, 5),)
 AXIS_CCA = ((True, "res"), (False, "sig"))
 AXIS_FS = ((True, "fsX"), (False, "fsI"))
 AXIS_Z = ((True, "z1"), (False, "z0"))

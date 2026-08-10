@@ -17,10 +17,10 @@ mov_avg_window      = 10;
 max_trials          = 300;
 trials_per_epoch    = cfg.trials_per_epoch;
 
-cfg.task_data_file     = 'processed_data/preprocessed_data2p5cm.mat';
-cfg.control_data_file  = 'processed_data/preprocessed_data_control2p5cm.mat';
+cfg.task_data_file     = 'processed_data/preprocessed_data5cm.mat';
+cfg.control_data_file  = 'processed_data/preprocessed_data_control5cm.mat';
 
-cfg.bin_size_au        = 2;
+cfg.bin_size_au        = 4;   % 5 cm bins since 2026-08-10 (matches project_cfg)
 n_bins              = cfg.corridor_cm/(cfg.bin_size_au*1.25);
 
 fprintf('Loading task, control 1 (spatial), and control 2 (temporal) data...\n');

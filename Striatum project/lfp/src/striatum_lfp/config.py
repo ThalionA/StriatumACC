@@ -52,7 +52,7 @@ V1_CSV = RAWDATA / "Neuropixels_V1_Depth_Data.csv"
 RAW_MAT: dict[int, Path] = {m: RAWDATA / f"{m}_raw.mat" for m in LFP_MICE}
 # The cohort struct the spike tensor was built from (corridorData, learning point,
 # zscored_lick_errors, ...). Reused wholesale for the LFP drop-in behaviour fields.
-PREPROC_MAT = _PROJECT / "processed_data" / "preprocessed_data2p5cm.mat"
+PREPROC_MAT = _PROJECT / "processed_data" / "preprocessed_data5cm.mat"
 
 PKG_DIR = _PROJECT / "lfp"
 RESULTS_DIR = PKG_DIR / "results"

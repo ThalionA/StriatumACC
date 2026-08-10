@@ -1,6 +1,6 @@
 """Data IO and cohort logic for the striatum *temporal* CCA pipeline.
 
-Loads ``preprocessed_data2p5cm.mat`` (MATLAB v7.3 / HDF5) for the Task or
+Loads ``preprocessed_data5cm.mat`` (MATLAB v7.3 / HDF5) for the Task or
 Control cohort, detects learning points, classifies the cohort, and assembles
 the per-animal **time-binned running-state streams** the report pipeline runs on.
 

@@ -14,7 +14,7 @@ cfg.colors    = mat2cell(cfg.area_colors, ones(size(cfg.area_colors,1),1), 3)';
 % sparse signals.
 cfg.mi_neural_bins   = 2;
 cfg.mi_behav_bins    = 2;
-cfg.mi_pool_win      = 5;  % Number of spatial bins to pool per window
+cfg.mi_pool_win      = 3;  % Number of spatial bins to pool per window (15 cm at 5 cm bins; was 5 x 2.5 cm, re-set 2026-08-10)
 cfg.mi_pool_shift    = 1;  % Shift step for the moving window
 cfg.min_valid_trials = 8;  % Strict minimum N to compute valid discrete probability distributions
 cfg.lp_min_pass      = cfg.lp_min_consecutive;  % alias for legacy code paths below
@@ -276,7 +276,7 @@ end
 
 %% 6. Calculate Cross-Spatial (Lagged) Mutual Information (Neural -> Behavior)
 fprintf('--- Computing Cross-Spatial Mutual Information ---\n');
-cfg.mi_max_lag = 15;
+cfg.mi_max_lag = 10;   % bins; +/-50 cm at 5 cm bins (was 15 x 2.5 cm, re-set 2026-08-10)
 cross_mi_file = 'cross_spatial_mi_results.mat';
 cross_mi_keys = [mi_cache_keys, {'mi_max_lag'}];
 [xmi_ok, xmi_reason] = check_cache(cross_mi_file, cfg, cross_mi_keys);

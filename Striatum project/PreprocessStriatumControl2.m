@@ -16,7 +16,7 @@ else
     end
 
     % Firing rate threshold
-    fr_threshold = 0.1; % Hz
+    fr_threshold = 0.02; % Hz (aligned to task/control1 pipeline 2026-08-10; was 0.1)
     n_animals = numel(all_data);
 
     % Filter neurons based on firing rate

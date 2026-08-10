@@ -286,7 +286,7 @@ fprintf('--- Quantifying Cross-Spatial Matrices ---\n');
 
 % Parameters for summaries
 smooth_sigma = 0.5; % Mild smoothing for heatmaps
-max_lag = 20; % Maximum spatial lag to plot (in bins)
+max_lag = 10; % Maximum spatial lag to plot (in bins; +/-50 cm at 5 cm bins -- same physical span as the old 20 x 2.5 cm, re-set 2026-08-10)
 epoch_names = {'Naive (Trials 1-10)', 'Intermediate (-10 to -1)', 'Expert (+1 to +10)'};
 
 for i_targ = 1:numel(cfg.behav_targets)

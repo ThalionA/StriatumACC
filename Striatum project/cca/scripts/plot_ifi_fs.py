@@ -39,7 +39,7 @@ from striatum_cca import config  # noqa: E402
 EPOCHS = config.EPOCH_NAMES
 EPOCH_LABEL = ["naive", "inter", "expert"]
 ALPHA = 0.05
-WINDOW = 10
+WINDOW = 5   # bins; 25 cm at 5 cm bins (halved from 10 with the 2026-08-10 bin switch)
 FS_COLOUR = {"excl": "tab:blue", "incl": "tab:orange"}
 DX = 0.2
 

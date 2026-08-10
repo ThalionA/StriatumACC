@@ -7,7 +7,7 @@ method contract ``CCA_HH_Adapted``).
 
 The data-level differences from the Tom pipeline are:
 
-* one cohort ``.mat`` (``preprocessed_data2p5cm.mat``) rather than one file per
+* one cohort ``.mat`` (``preprocessed_data5cm.mat``) rather than one file per
   animal; per-traversal ``corridorData.binned_spikes`` (1 ms counts), already
   corridor-only (dark stripped at ``trial_world > 6``);
 * **no velocity channel** -- speed is derived from ``trial_position`` /
@@ -30,13 +30,13 @@ from pathlib import Path
 # --- Paths -------------------------------------------------------------------
 # This file lives at  <Striatum project>/tcca/src/striatum_tcca/config.py
 _PROJECT = Path(__file__).resolve().parents[3]          # ".../Striatum project"
-# Task (cued, learned) corridor -- the primary cohort.
-TASK_DATA = _PROJECT / "processed_data" / "preprocessed_data2p5cm.mat"
+# Task (cued, learned) corridor -- the primary cohort. 5 cm products since
+# 2026-08-10 (2.5 cm emission dropped); tcca reads only the 1 ms corridorData
+# payload, so the spatial bin size of the container is irrelevant here.
+TASK_DATA = _PROJECT / "processed_data" / "preprocessed_data5cm.mat"
 # Control (blank habituation) corridor -- a separate cohort of animals, run
 # through the identical preprocessing path (so the saved struct layout matches).
-# NB: the control 2.5 cm cache may predate the fr_threshold alignment -- check /
-# regenerate before relying on the Task-vs-Control contrast.
-CONTROL_DATA = _PROJECT / "processed_data" / "preprocessed_data_control2p5cm.mat"
+CONTROL_DATA = _PROJECT / "processed_data" / "preprocessed_data_control5cm.mat"
 DATA_BY_GROUP: dict[str, Path] = {"task": TASK_DATA, "control": CONTROL_DATA}
 
 TCCA_DIR = _PROJECT / "tcca"

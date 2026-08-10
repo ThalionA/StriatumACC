@@ -49,7 +49,7 @@ METRICS = {
     "p_naive_vs_expert": "delta-CC -- naive-vs-expert strength p-value",
 }
 # Committed hyperparameter region (round 8). Only fs stays free.
-FOCUS = {"bin": "2.5cm", "cca": "residual", "z": "on",
+FOCUS = {"bin": "5cm", "cca": "residual", "z": "on",
          "min_units": 6, "lp_consec": 7, "k_rule": "samples15"}
 
 RESULT_COLS = ["pair", "fs", "n_dims_naive", "n_dims_expert", "cc_naive",

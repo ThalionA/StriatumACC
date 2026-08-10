@@ -12,10 +12,10 @@ from pathlib import Path
 # --- Paths -------------------------------------------------------------------
 # This file lives at  <Striatum project>/cca/src/striatum_cca/config.py
 _PROJECT = Path(__file__).resolve().parents[3]          # ".../Striatum project"
-# Primary preprocessing: 100-bin (2.5 cm). The pipeline is bin-count-agnostic;
-# the 50-bin (5 cm) file can still be passed explicitly to load_animals().
-PREPROCESSED_DATA = _PROJECT / "processed_data" / "preprocessed_data2p5cm.mat"
-PREPROCESSED_DATA_5CM = _PROJECT / "processed_data" / "preprocessed_data5cm.mat"
+# Primary preprocessing: 50-bin (5 cm) -- the only emitted variant since
+# 2026-08-10 (2.5 cm dropped; see PREDICTIONS.md). The pipeline is
+# bin-count-agnostic (bin count auto-detected in dataio).
+PREPROCESSED_DATA = _PROJECT / "processed_data" / "preprocessed_data5cm.mat"
 CCA_DIR = _PROJECT / "cca"
 RESULTS_DIR = CCA_DIR / "results"
 FIGURES_DIR = CCA_DIR / "figures"
@@ -122,9 +122,10 @@ class Config:
     exclude_fast_spiking: bool = True
 
     # Committed analysis (round 8): residual CCA, FS-excluded, z-scored units,
-    # held-out CC, 2.5 cm bins, min_units 6, LP-criterion 7, samples-per-PC 15
-    # -- the configuration the parameter sweep converged on. The sweep knobs
-    # remain so alternatives can still be run.
+    # held-out CC, min_units 6, LP-criterion 7, samples-per-PC 15 -- the
+    # configuration the parameter sweep converged on. Bins are 5 cm since
+    # 2026-08-10 (was 2.5 cm). The sweep knobs remain so alternatives can
+    # still be run.
     # Residualisation (D2): subtract the per-(bin, unit) trial mean.
     subtract_trial_mean: bool = True
     # Z-score each unit by its std over the entire engaged period, applied to
@@ -149,9 +150,9 @@ class Config:
     cv_seed: int = 0
 
     # Lagged CCA / directionality (D6): refit CCA at each spatial-bin lag.
-    # 10 bins at 2.5 cm = +/-25 cm, matching the +/-5 bins x 5 cm of the
-    # 50-bin preprocessing.
-    max_lag_bins: int = 10
+    # 5 bins at 5 cm = +/-25 cm -- same physical window as the former
+    # 10 bins x 2.5 cm (halved 2026-08-10 with the 5 cm switch).
+    max_lag_bins: int = 5
 
     # Surrogate null (D7): held-out-CC per-dimension permutation test.
     # null_type "circshift" -- per-trial circular shift of the bin axis by
@@ -163,7 +164,7 @@ class Config:
     n_shuffles: int = 250          # round-14 lock-in: raised 200 -> 250
     surrogate_seed: int = 0
     null_type: str = "circshift"
-    circshift_min_bins: int = 15
+    circshift_min_bins: int = 8    # 40 cm at 5 cm bins (~= the old 15 x 2.5 cm = 37.5 cm)
 
     # Parallelism (D11): processes for the cohort run.
     n_jobs: int = 4

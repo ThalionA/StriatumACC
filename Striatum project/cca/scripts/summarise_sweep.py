@@ -42,7 +42,7 @@ from striatum_cca import config, sweep  # noqa: E402
 
 ALPHA = 0.05
 EPOCHS = ("naive", "expert")
-N_WINDOWS = 10
+N_WINDOWS = 5   # = max_lag_bins; 5 cm bins since 2026-08-10 (was 10 at 2.5 cm)
 PAIR_NAMES = [f"{ax}-{ay}" for ax, ay in config.PAIRS]
 IFI_KEYS = [f"ifi_w{w}" for w in range(1, N_WINDOWS + 1)]
 P_IFI_KEYS = [f"p_ifi_w{w}" for w in range(1, N_WINDOWS + 1)]
@@ -82,7 +82,7 @@ def cfg_params(cfg) -> dict:
     if cfg.bin_mode == "temporal":
         binning = f"{cfg.temporal_bin_ms}ms"
     else:
-        binning = "5cm" if cfg.max_lag_bins == 5 else "2.5cm"
+        binning = "5cm"   # spatial data is 5 cm-only since 2026-08-10
     return {
         "bin": binning,
         "cca": "residual" if cfg.subtract_trial_mean else "signal",

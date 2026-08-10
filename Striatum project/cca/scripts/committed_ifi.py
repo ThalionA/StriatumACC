@@ -32,7 +32,7 @@ from striatum_cca import config  # noqa: E402
 
 ALPHA = 0.05
 # config.DEFAULT, FS-excluded -- the committed config's Stage-2 result.
-COMMITTED_TAG = "s2p5_res_fsX_z1_mu06_lp7_samp15"
+COMMITTED_TAG = "s5cm_res_fsX_z1_mu06_lp7_samp15"  # 5 cm since 2026-08-10 (was s2p5_)
 PAIR_NAMES = [f"{ax}-{ay}" for ax, ay in config.PAIRS]
 
 

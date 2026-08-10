@@ -75,7 +75,7 @@ learner_pairs = aggregate.learner_pairs
 sig_dims = aggregate.sig_dims
 
 
-def per_epoch_pooled(rs, kind, window=10):
+def per_epoch_pooled(rs, kind, window=5):
     """The three pooled significant-dim arrays (n = dims) the box plot shows."""
     return aggregate.per_dim_groups(rs, kind, window)
 
@@ -152,7 +152,7 @@ def _star_vs0(ax, per_epoch):
                     fontsize=14, ha="center")
 
 
-def _rm_stats(rs, metric, window=10):
+def _rm_stats(rs, metric, window=5):
     """Per-animal repeated-measures ANOVA of the epoch effect (n = animals).
 
     Each learner animal contributes its mean over the significant dims, per

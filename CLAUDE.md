@@ -116,9 +116,9 @@ Before claiming a result:
 ### Orientation (read this, don't re-explore — distilled 2026-06-11)
 
 - **`NOTES.md` is the canonical state** (repo audit completed 2026-05-07; helper refactor phases 1–5 done). No PROJECT_LOG here yet: append dated session entries to the **top** of `NOTES.md`, newest first.
-- MATLAB is primary (all preprocessing + analyses); Python only for the CEBRA pipeline. Data is `.mat` v7.3 (HDF5). Tests: `tests/` via `run_v5_tests.m`.
+- MATLAB is primary (all preprocessing + analyses); Python for CEBRA plus the `cca/`, `tcca/`, `lfp/`, `rl_model/` subprojects (each with its own tests). Data is `.mat` v7.3 (HDF5). Root MATLAB tests are `test_*.m` run directly (headless: `/Applications/MATLAB_R2026a.app/bin/matlab -batch "test_name"`); there is no `run_v5_tests.m`.
 - **`project_cfg.m` is the single source of truth** for areas, colours, pairs, field maps. Adding an area = edit `RawData/Neuropixels_V1_Depth_Data.csv` + one `project_cfg.m` entry + one-line appends in `IntegratedAll_v1.m` §6/7/9 and `SpatioTemporalActivityEvolution.m`, then rerun `OrganiseStriatumDataIncV1` → `ProcessStriatumTask` → `save_for_cebra` → TCA → downstream (full recipe in `NOTES.md`). CA1/DG added 2026-05-08.
-- `fr_threshold = 0.02 Hz` everywhere (aligned 2026-05-07). The `_control.mat` / `_control2.mat` caches predate the alignment — regenerate before relying on Task/Control parity.
+- `fr_threshold = 0.02 Hz` everywhere (control2 aligned 2026-08-10; all three organised products regenerated post-depth-fix that day). **Spatial bins are 5 cm** (`project_cfg` bin_size_au=4, 50 bins) since 2026-08-10 — the 2.5 cm products are no longer emitted; preprocessed products live in `processed_data/`.
 - Modulation classifier must keep **disjoint train/test halves** (labels: naive 1:2 / expert 21:25; tests: naive 3 / expert 26:30) — the pre-2026-05-07 version was circular.
 - KS-test grids and other test panels use **BH-FDR** (`fdr_correct.m`, `annotate_ks_panels_fdr.m`); significance = p_FDR < 0.05.
 - CCA: report **held-out** CCs; in-sample is biased up. `loo_ridge_press.m` has a known small O(1/n) standardisation leak (full-fit stats), ~0.3–0.5% at n≈200–300 — acceptable, documented.

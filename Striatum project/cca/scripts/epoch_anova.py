@@ -1,7 +1,7 @@
 """Epoch ANOVA table for communication strength (CC) and the IFI.
 
 Writes the full epoch-effect statistics table for the committed analysis. For
-held-out CC and the IFI (|lag| <= 10 bins), per area pair, the epoch effect is
+held-out CC and the IFI (|lag| <= 5 bins = 25 cm), per area pair, the epoch effect is
 tested two ways:
 
   * per significant dimension -- one-way ANOVA (scipy f_oneway) + Tukey HSD
@@ -38,7 +38,7 @@ from striatum_cca import aggregate, config, epoch_stats  # noqa: E402
 EPOCHS = config.EPOCH_NAMES
 EPOCH_IDX = np.arange(3, dtype=float)
 ALPHA = aggregate.ALPHA
-IFI_WINDOW = 10
+IFI_WINDOW = 5   # bins; 25 cm at 5 cm bins (halved from 10 with the 2026-08-10 bin switch)
 METRICS = ("cc", "ifi")
 VARIANT_PKL = {"plain": "stage2_committed_circshift.pkl",
                "partial": "stage2_committed_circshift_partial.pkl"}

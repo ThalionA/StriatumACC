@@ -2,15 +2,14 @@
 clear; clc; close all;
 % rng(0)
 % --- Data Files ---
-% TCA deliberately runs on the 5 cm preprocessing, NOT the 2.5 cm files
-% that project_cfg now points at (2026-05-24). The 2.5 cm spatial binning
-% leaves frequent unsampled-bin NaN gaps; TCA's NaN filter drops any
-% neuron with any NaN, and because a gap is shared across a mouse's
-% neurons it wipes whole mice — including every mouse that carries V1/CA1.
-% At 5 cm the gaps are rare (13/14 mice survive), so V1/CA1 are retained.
+% The whole pipeline is 5 cm since 2026-08-10, so TCA now just follows
+% project_cfg. (Historical note: TCA was ALREADY on 5 cm — the 2.5 cm
+% binning left unsampled-bin NaN gaps that wiped whole mice, including
+% every V1/CA1 carrier, via TCA's any-NaN neuron filter. That NaN problem
+% independently corroborated the 2026-08-10 bin-size decision.)
 proj = project_cfg();
-cfg.task_data_file     = 'processed_data/preprocessed_data5cm.mat';
-cfg.control_data_file  = 'processed_data/preprocessed_data_control5cm.mat';
+cfg.task_data_file     = proj.task_data_file;
+cfg.control_data_file  = proj.control_data_file;
 cfg.control2_data_file = proj.control2_data_file;
 clear proj
 
