@@ -84,6 +84,15 @@ def main():
         for ax, ay in pairs:
             if ax not in present or ay not in present:
                 continue
+            # Recorded per cell so magnitude comparisons are auditable: min_units
+            # is 5 but K is 20, and window_subspace caps each side at
+            # min(k, n_units), so effective dimensionality varies 5-20 across
+            # cells. n_units_z is the partial-out (control) dimensionality.
+            n_units_x = int(present[ax].shape[1])
+            n_units_y = int(present[ay].shape[1])
+            n_units_z = int(sum(present[z].shape[1] for z in present
+                                if z not in (ax, ay)))
+            k_eff = int(min(K, n_units_x, n_units_y))
             ws_by_epoch = {}
             for epoch in config.EPOCH_NAMES:
                 pos = ew[epoch]
@@ -102,6 +111,8 @@ def main():
                 metrics.append({
                     "animal": a.animal_id, "role": e.role, "lp": e.lp,
                     "pair": f"{ax}-{ay}", "epoch": epoch, "n_bins": n_bins,
+                    "n_units_x": n_units_x, "n_units_y": n_units_y,
+                    "n_units_z": n_units_z, "k_eff": k_eff,
                     "cc1": round(cc1, 4), "n_sig": ws.n_sig,
                     "mi_sig": round(ws.mi_sig, 4), "ifi": round(ws.ifi, 4),
                     "optimal_lag": ws.optimal_lag,
@@ -126,7 +137,8 @@ def main():
                 if ea in ws_by_epoch and eb in ws_by_epoch:
                     cw = runner.cross_window(ws_by_epoch[ea][0], ws_by_epoch[eb][0])
                     cross.append({"animal": a.animal_id, "pair": f"{ax}-{ay}",
-                                  "transition": f"{ea}->{eb}", **dataclasses.asdict(cw)})
+                                  "transition": f"{ea}->{eb}", "k_eff": k_eff,
+                                  **dataclasses.asdict(cw)})
         print(f"  animal {a.animal_id}: lp={e.lp} -> {n_rows} cells")
 
     _write(config.RESULTS_DIR / f"epoch_metrics{suffix}.csv", metrics)

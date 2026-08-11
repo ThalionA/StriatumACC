@@ -1,8 +1,14 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-# generated outputs are regeneratable from the drivers
+# generated outputs are regeneratable from the drivers -- EXCEPT the epoch
+# summary tables, which underwrite written claims and were silently lost once
+# (see NOTES.md 2026-07-28). Keep those in git.
 results/*.csv
+!results/epoch_metrics.csv
+!results/epoch_dims.csv
+!results/epoch_weights.csv
+!results/epoch_cross.csv
 results/*.pkl
 figures/*.png
 figures/*.svg

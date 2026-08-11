@@ -7,6 +7,56 @@ contrast; fresh tom_cca-style port; plus an engaged-vs-disengaged contrast).
 
 ---
 
+## 2026-07-28 — Stage 2 cohort rerun: reproduced, + the reorientation question settled
+
+The 2026-06-17 outputs were gitignored and lost. Reran `run_epochs.py --group
+task` (25 ms, unchanged code, 165 tests green) on the same
+`preprocessed_data2p5cm.mat`. Prior registered in `PREDICTIONS.md` first.
+
+**Reproduction is exact.** 125 cells / 11 learners, animals 3 and 15 skipped.
+All nine striatal-triangle cc1 values match to within 0.005; IFI ≈ 0 (sd 0.09),
+Gini_x median 0.42, n_sig median 1 / max 12. Held-out cc1 is deterministic; the
+unseeded circshift null only moves `n_sig`. **Results now committed** (all four
+`epoch_*.csv`) so this cannot silently vanish again.
+
+**NEW — round 8's temporal reorientation does not survive residual+partial CCA.**
+This is what the run existed to settle. Round 8 (`cca/`, sweep tags t20/t40) ran
+the temporal arm with **signal CCA** (`subtract_trial_mean=False`), no
+partialling, in-sample permutation, and reported subspace reorientation in 18/20
+pair-config cells (90%). With residual+partial CCA and held-out whole-trial CV:
+
+- **animal as the unit (n=10): mean rot−floor = +1.92°, median +1.03°,
+  Wilcoxon p=0.38, t p=0.26.** No effect.
+- The positive mean is one animal (A10, +22.4°); drop it and the mean is −0.35°.
+- Per-animal values scatter −10.0° to +22.4° — no consistent sign.
+- **This is a powered null, not a p-floor.** At n=10 the one-sided Wilcoxon
+  p-floor is 0.001; the test could have detected a consistent effect.
+- Side-level (pseudoreplicated) striatal triangle: 78/140 = 56%, p=0.10.
+
+Reading: a large part of round 8's temporal rotation was plausibly **shared
+position/time tuning**, which residual CCA removes. The spatial sweep's
+reorientation finding is untouched by this (it ran the residual/signal factorial
+and survived); it is specifically the *temporal* reorientation claim that does
+not replicate. Aggregation units differ between the two arms (pair-config vs
+sides/animals), so treat 90%→56% as indicative and lean on the animal-level null.
+
+**Two reporting traps found in the 2026-06-17 summary (fix before any writeup):**
+1. **The quoted cc1 values are means on a right-skewed n=7.** Mean vs median:
+   DMS-DLS naive 0.248/0.148, DMS-DLS expert 0.190/0.092, DLS-ACC intermediate
+   **0.134/0.017**. The typical animal in DLS-ACC intermediate has ~zero
+   communication. Lead with medians or plot per-animal points.
+2. **Never pool the above-floor proportion across pairs.** All-pairs gives 61%
+   (p<0.001) purely because eight pairs (CA1-*, DG-*) rest on **one animal each**
+   and score 83–100% by noise. Backing animals: DMS-ACC 10, DMS-DLS 7, DLS-ACC 7,
+   V1-DMS/V1-ACC 3, V1-DLS/CA1-V1 2, the other eight **1**.
+
+**Next:** `analyze_epochs.py` — formalise the above (per-animal Wilcoxon + LMM
+via `paired_stats`/`mixed_effects`), with medians as the headline, per-pair
+animal counts on every panel, and rotation−floor as a per-animal distribution
+rather than a hit-count.
+
+---
+
 ## 2026-06-17 — Stage 2: epoch analysis driver (WORKING; full run in progress)
 
 `runner.py` (build_present, fit_window, cross_window) + `scripts/run_epochs.py`
