@@ -21,6 +21,21 @@ rank/seed/circularity defects unfixed; the RL bridge is half a day from its firs
 Figure 4's *learning framing is refuted by the project's own well-powered nulls* and must pivot to a
 static-architecture + local-refinement story.
 
+> ### ⚠️ 2026-08-11 UPDATE — the "local refinement" half is now refuted too.
+> Everything was regenerated on the clean 5 cm caches and, for the first time, **quantified**
+> (per-animal CSVs now tracked in git). At the animal level: **trial-to-trial stability does not
+> increase** in any area (all p_BH > 0.14; DMS 6 up / 7 down), and **position decoding does not
+> improve more than in control mice** (Task Δ −0.032 p=0.168; Control 1 Δ −0.044 p=0.062;
+> between-group p=0.924), while decoder *certainty falls* (entropy p=0.021). Combined with the
+> TCA control decomposition — where control mice reproduce the same trial-factor "learning" steps,
+> because the tensor's slot axis has a ~20-trial gap at the Naive|Pre-LP boundary — **the paper's
+> entire two-stage narrative (early map stabilisation → later ensemble emergence) is unsupported
+> by the analyses as they stand.** What survives is architecture, not change: reliable spatial
+> coding far above shuffle, decodable position, pair-specific communication subspaces, and
+> task-specific *spatial* structure in the TCA components that controls lack. The manuscript needs
+> reframing around that, or needs the LP-shuffled null + within-epoch decoder to rescue the
+> learning claims — see §7.
+
 ---
 
 ## 1. Figure 1 — behaviour
@@ -76,8 +91,8 @@ Key facts, re-derived today from `preprocessed_data5cm.mat` (Aug 10 13:54):
 | Neuropixels track + Allen Atlas | ⬜ | **Nothing exists** — no histology, no registration, no coordinates. Localisation is depth-interval CSVs alone (edited twice this week). Honest caption or import histology. |
 | Recording examples | 🔧 | Raster material exists (16/16 `*_raw.mat`, 1 ms floor) but no plotting code; `raw_data_bin.m`'s four deps still absent from the repo (Methods-reproducibility hole, not a panel blocker). |
 | Activity evolution across epochs/areas/types | ⬜ | SpatioTemporal machinery is the best MATLAB arm (BH-FDR ×4 sites, de-circularised classifier) but **blocked: `tca_outputs.mat` was deleted** — and zero outcomes were ever recorded. Cell-type panels **still apply striatal criteria to ACC** (the "RS" patch is hollow — no code produces type 5; section :1550 still ungated). |
-| Increasing stability of neural activity | 🔧 | Confirmed: null = **one unseeded `randperm`** as a mean±SEM band (no p attachable); 3–4-trial edge windows sit inside Naive only; publish the Hierarchical (animal-level) variant only. No citable artefact. |
-| Improved decoding of position | 🔧 | LOTO core sound; **template still session-global** (epoch contrast partly measures similarity to session average). July's "z-scored outside the fold" was **misattributed** — S7A decodes raw rates; the real leak is in the *other* path (`decode_position_mld.m:24` consumes whole-session z-scores). Chance line now correct **by coincidence** (default n_pos_bins=50 finally matches 50 bins). Pin down which decoder makes the panel. |
+| Increasing stability of neural activity | ❌ **REFUTED 2026-08-11** | Regenerated and **quantified for the first time** (`figures/stability_by_animal.csv`). Animal-level Wilcoxon naive→expert, Task: DMS median Δ **−0.0002** (n=13, p=0.735), DLS **+0.0027** (n=10, p=0.557), ACC **−0.0259** (n=14, p=0.049, **p_BH=0.148**). Nothing survives BH across the three areas. DMS splits **6 animals up / 7 down** — no consistent direction. The apparent rise in cross-animal medians (0.221→0.259) is a composition effect, not a within-animal change: the paired delta is zero. Reliability *is* far above shuffle in every epoch — the code is reliably structured, it just doesn't become more so. Prior code defects (single unseeded shuffle, edge windows) now fixed/seeded. |
+| Improved decoding of position | ❌ **REFUTED as a learning effect 2026-08-11** | Quantified (`figures/decoding_by_animal.csv`). Task error 0.317→0.287→0.266, median Δ **−0.032, p=0.168 (n.s., n=13)**. **Control 1 improves as much or more**: 0.349→0.310, Δ −0.044, p=0.062 (n=5) — mice with no task, no cues, nothing to learn, over LP-yoked windows. Task-vs-Control-1 difference in improvement: **Mann-Whitney p=0.924**. Control 2 flat. Secondary metric contradicts sharpening outright: normalised decoder entropy **increases** naive→expert (Task 0.073→0.097, p=0.021; Control 2 p=0.031) — the posterior gets *flatter*, not sharper. Caveat that cuts both ways: the template is session-global, inflating the naive epoch equally in both groups. |
 
 **Cohort correction (Methods-critical).** Current counts, verified from the caches: 16 task mice,
 **DMS 394 / DLS 522 / ACC 699** (striatal+ACC 1615; +V1 264, CA1 133, DG 18 = 2030 total).
