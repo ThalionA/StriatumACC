@@ -13,6 +13,11 @@
 *.gif
 *.txt
 *.csv
+# ...except per-animal result tables, which underwrite written claims and are
+# the only citable numeric trace these MATLAB figure panels leave (2026-08-11).
+!Striatum project/figures/stability_by_animal.csv
+!Striatum project/figures/decoding_by_animal.csv
+!Striatum project/figures/compare_bin_sizes_summary.csv
 *.xlsx
 *.pkl
 *.npz
