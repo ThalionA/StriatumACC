@@ -15,9 +15,14 @@ if isempty(figs)
     n = 0;
     return
 end
+figs = figs(isgraphics(figs, 'figure'));          % drop stale/deleted handles
 [~, order] = sort([figs.Number]);
 figs = figs(order);
+n = 0;
 for k = 1:numel(figs)
+    if ~isgraphics(figs(k), 'figure')
+        continue
+    end
     raw = get(figs(k), 'Name');
     if isempty(raw)
         raw = 'fig';
@@ -27,8 +32,16 @@ for k = 1:numel(figs)
     if isempty(clean)
         clean = 'fig';
     end
-    save_to_svg(sprintf('%s_%02d_%s', prefix, k, clean), figs(k));
+    % One bad figure must never cost the whole sweep (a stale handle killed
+    % the 2026-08-11 spatiotemporal run at its final line).
+    try
+        save_to_svg(sprintf('%s_%02d_%s', prefix, k, clean), figs(k));
+        n = n + 1;
+    catch err
+        warning('save_all_open_figures:printFailed', ...
+                'Figure %d ("%s") not saved: %s', k, clean, err.message);
+    end
 end
-n = numel(figs);
-fprintf('Saved %d figures to figures/ with prefix "%s_" (svg+png pairs).\n', n, prefix);
+fprintf('Saved %d of %d figures to figures/ with prefix "%s_" (svg+png pairs).\n', ...
+        n, numel(figs), prefix);
 end
