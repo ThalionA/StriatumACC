@@ -8,6 +8,11 @@ clearvars; clc; close all;
 % Project-wide constants (paths, LP parameters, areas, colours, ...)
 cfg = project_cfg();
 
+% Seed (2026-08-11). This script draws unseeded permutations in two places —
+% the Section-6 stability shuffle (randperm per mouse) and the Section-7
+% decoder tuning-shuffle — so its figures were not reproducible run to run.
+rng(cfg.seed, 'twister');
+
 % Local aliases for legacy variable names used downstream in this script.
 cfg.lp_thresh_count = cfg.lp_min_consecutive;
 cfg.lp_z_thresh     = cfg.lp_z_threshold;
@@ -1034,6 +1039,10 @@ for g = 1:3
     
     ylabel('Normalized entropy (H / log_2 N)');
     title(sprintf('%s - Certainty Profile', group_names{g}));
+    % Chance reference (2026-08-11): a uniform posterior over N bins has
+    % normalised entropy exactly 1, so this line is the "no information"
+    % level. Without it a curve at 0.95 is unreadable.
+    yline(1, 'k:', 'uniform posterior (chance)', 'LabelHorizontalAlignment', 'left');
     set(gca, 'YDir', 'reverse'); % Downward means lower entropy / higher certainty
     if g == 1 && any(isgraphics(h_lines)), legend(h_lines(isgraphics(h_lines)), cond_names, 'Location', 'best'); end
 end
@@ -1060,8 +1069,9 @@ for g = 1:3
         end
     end
     xline([11, 22], 'k:'); xticks(x_ticks_centers_dec); xticklabels(epochs);
-    title(sprintf('%s - Lick Prediction', group_names{g})); 
+    title(sprintf('%s - Lick Prediction', group_names{g}));
     ylabel('Pearson r (Predicted vs Actual)');
+    yline(0, 'k:');   % chance: r = 0 (2026-08-11)
     if g == 1 && any(isgraphics(h_lines)), legend(h_lines(isgraphics(h_lines)), cond_names, 'Location', 'best'); end
 end
 linkaxes(ax_dec_lick, 'y');
@@ -1593,6 +1603,11 @@ end
 fprintf('\n======================= END OF SUMMARY =======================\n\n');
 
 %% Local Helper for Clean Scatter Plotting
+%% Persist every figure (svg+png). Belt and braces alongside the per-figure
+% save_to_svg calls: a headless run that errors mid-script would otherwise
+% lose every figure produced up to that point (2026-08-11).
+save_all_open_figures('integrated');
+
 function local_plot_scatter(x, y, e_idx, xlab, ylab, colors)
     valid = ~isnan(x) & ~isnan(y) & ~isinf(x) & ~isinf(y);
     if sum(valid) < 5, return; end
@@ -1635,14 +1650,9 @@ function r = calc_triu_corr(mat)
     r = mean(rho(idx), 'omitnan');
 end
 
-function save_to_svg(fig_name)
-    try
-        saveas(gcf, sprintf('%s.svg', fig_name));
-        fprintf('Saved %s.svg\n', fig_name);
-    catch
-        fprintf('Warning: Could not save %s as SVG.\n', fig_name);
-    end
-end
+% Local save_to_svg REMOVED 2026-08-11: it shadowed the repo-resident
+% save_to_svg.m, writing SVG-only into the working directory instead of
+% svg+png pairs into figures/. Calls now resolve to the shared helper.
 
 % is_v1_safe(s) is now a standalone file in Striatum project/ — see
 % is_v1_safe.m. Removed from this file 2026-05-07.
