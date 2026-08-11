@@ -90,6 +90,19 @@ for imouse = 1:num_mice
     end
 
     % --- 3. Load Neuron Types ---
+    % Probe 2 has its own waveform file (<mouse>_v1_neurontype2025.mat, same
+    % layout as the probe-1 file). It exists for every probe-2 mouse but was
+    % never loaded — probe-2 types were hardcoded NaN, so V1/CA1/DG units
+    % had no cell type at all and every RS panel rendered empty (2026-08-11).
+    nt_filename_p2 = ['./RawData/' num2str(curr_mouse) '_v1_neurontype2025.mat'];
+    raw_neurontype_p2 = [];
+    if isfile(nt_filename_p2)
+        tmp_nt2 = load(nt_filename_p2, 'neurontype');
+        if isfield(tmp_nt2, 'neurontype')
+            raw_neurontype_p2 = tmp_nt2.neurontype;
+        end
+    end
+
     nt_filename = ['./RawData/' num2str(curr_mouse) '_neurontype2025.mat'];
     raw_neurontype = [];
     if isfile(nt_filename)
@@ -100,11 +113,13 @@ for imouse = 1:num_mice
                 warning('Mismatch in unit count for neurontype file (Mouse %d). Filling with NaNs.', curr_mouse);
                 raw_neurontype = nan(num_units_p1, 1);
             end
+            % Column 5 (the class code) is (re)assigned area-aware further
+            % down, once unit areas are known — see classify_neuron_types.
+            % The old inline striatal rule used to run here and was applied
+            % to ACC units as well, which is why cortical cells came out
+            % labelled MSN/TAN/UIN (2026-08-11).
             if size(raw_neurontype, 2) < 5
-                raw_neurontype(raw_neurontype(:,3)>=0.4 & raw_neurontype(:,4)<=40,5) = 1; %MSN
-                raw_neurontype(raw_neurontype(:,3)<0.4 & raw_neurontype(:,2)<0.1,5) = 2;  %FSN
-                raw_neurontype(raw_neurontype(:,3)>=0.4 & raw_neurontype(:,4)>40,5) = 3;  %TAN
-                raw_neurontype(raw_neurontype(:,3)<0.4 & raw_neurontype(:,2)>=0.1,5) = 4; %UIN
+                raw_neurontype(:, 5) = NaN;
             end
         else
             raw_neurontype = nan(num_units_p1, 1);
@@ -188,7 +203,23 @@ for imouse = 1:num_mice
             final_spikes_p2 = V1Dat.binned_spikes(units_to_keep_p2, npx_start_frame:npx_end_frame);
         end
         final_areas_p2 = unit_areas_p2(units_to_keep_p2);
-        final_nt_p2 = nan(sum(units_to_keep_p2), size(final_nt_p1, 2));
+        % Probe-2 waveform features, when the file is present and matches the
+        % probe's unit count; otherwise NaN as before (2026-08-11).
+        n_cols_nt = size(final_nt_p1, 2);
+        if ~isempty(raw_neurontype_p2) && ...
+                size(raw_neurontype_p2, 1) == numel(units_to_keep_p2)
+            final_nt_p2 = nan(sum(units_to_keep_p2), n_cols_nt);
+            n_take = min(n_cols_nt, size(raw_neurontype_p2, 2));
+            kept_p2 = raw_neurontype_p2(units_to_keep_p2, 1:n_take);
+            final_nt_p2(:, 1:n_take) = kept_p2;
+        else
+            if ~isempty(raw_neurontype_p2)
+                warning(['Probe-2 neurontype row count (%d) does not match ' ...
+                         'probe-2 unit count (%d) for mouse %d - filling NaN.'], ...
+                        size(raw_neurontype_p2, 1), numel(units_to_keep_p2), curr_mouse);
+            end
+            final_nt_p2 = nan(sum(units_to_keep_p2), n_cols_nt);
+        end
 
         final_spikes = [final_spikes_p1; final_spikes_p2];
         final_areas = [final_areas_p1; final_areas_p2];
@@ -197,6 +228,15 @@ for imouse = 1:num_mice
         final_spikes = final_spikes_p1;
         final_areas = final_areas_p1;
         final_neurontypes = final_nt_p1;
+    end
+
+    % --- Cell-type codes, area-aware (2026-08-11) ---
+    % Striatum (DMS/DLS) keeps MSN/FSN/TAN/UIN; cortex and hippocampus
+    % (ACC/V1/CA1/DG) get a binary FS/RS split on waveform width, so every
+    % non-striatal unit that is not fast-spiking is regular-spiking.
+    if size(final_neurontypes, 2) >= 4 && ~isempty(final_areas)
+        final_neurontypes(:, 5) = classify_neuron_types( ...
+            final_neurontypes(:, 1:4), final_areas);
     end
 
     corrected_vr_time = (RawDat.VR_times_synched - RawDat.VR_times_synched(1))*1000;
