@@ -1,0 +1,77 @@
+=== b10  ===
+task | bin=10ms sigma=2.5 K=20 max_lag=25 shuffles=100 FS=excl cca=partial | 13 learners
+
+  animal 1: lp=22 -> 9 cells
+  animal 2: lp=44 -> 9 cells
+  animal 3: lp=32, 40 run-trials -> epochs don't fit (skip)
+  animal 4: lp=53 -> 9 cells
+  animal 5: lp=54 -> 9 cells
+  animal 6: lp=36 -> 0 cells
+  animal 7: lp=33 -> 3 cells
+  animal 9: lp=44 -> 9 cells
+  animal 10: lp=67 -> 18 cells
+  animal 11: lp=84 -> 45 cells
+  animal 13: lp=23 -> 3 cells
+  animal 14: lp=39 -> 9 cells
+  animal 15: lp=26, 27 run-trials -> epochs don't fit (skip)
+
+wrote epoch_metrics_b10.csv (123 cells), epoch_dims (1707), epoch_weights (9948), epoch_cross (123), epoch_lagcurves (6273)
+=== b10 --include-fs ===
+task | bin=10ms sigma=2.5 K=20 max_lag=25 shuffles=100 FS=incl cca=partial | 13 learners
+
+  animal 1: lp=22 -> 9 cells
+  animal 2: lp=44 -> 9 cells
+  animal 3: lp=32, 40 run-trials -> epochs don't fit (skip)
+  animal 4: lp=53 -> 9 cells
+  animal 5: lp=54 -> 9 cells
+  animal 6: lp=36 -> 3 cells
+  animal 7: lp=33 -> 3 cells
+  animal 9: lp=44 -> 9 cells
+  animal 10: lp=67 -> 18 cells
+  animal 11: lp=84 -> 45 cells
+  animal 13: lp=23 -> 30 cells
+  animal 14: lp=39 -> 9 cells
+  animal 15: lp=26, 27 run-trials -> epochs don't fit (skip)
+
+wrote epoch_metrics_fsincl_b10.csv (153 cells), epoch_dims (1977), epoch_weights (11691), epoch_cross (153), epoch_lagcurves (7803)
+=== b10 --no-partial ===
+task | bin=10ms sigma=2.5 K=20 max_lag=25 shuffles=100 FS=excl cca=plain | 13 learners
+
+  animal 1: lp=22 -> 9 cells
+  animal 2: lp=44 -> 9 cells
+  animal 3: lp=32, 40 run-trials -> epochs don't fit (skip)
+  animal 4: lp=53 -> 9 cells
+  animal 5: lp=54 -> 9 cells
+  animal 6: lp=36 -> 0 cells
+  animal 7: lp=33 -> 3 cells
+  animal 9: lp=44 -> 9 cells
+  animal 10: lp=67 -> 18 cells
+  animal 11: lp=84 -> 45 cells
+  animal 13: lp=23 -> 3 cells
+  animal 14: lp=39 -> 9 cells
+  animal 15: lp=26, 27 run-trials -> epochs don't fit (skip)
+
+wrote epoch_metrics_plain_b10.csv (123 cells), epoch_dims (1694), epoch_weights (9948), epoch_cross (123), epoch_lagcurves (6273)
+=== b10 --include-fs --no-partial ===
+usage: run_epochs.py [-h] [--group {task,control}] [--bin-ms BIN_MS]
+                     [--smooth-ms SMOOTH_MS] [--max-lag MAX_LAG]
+                     [--include-fs] [--no-partial] [--pairs PAIRS]
+                     [--limit LIMIT] [--tag TAG]
+run_epochs.py: error: unrecognized arguments: --include-fs --no-partial
+task | bin=10ms sigma=2.5 K=20 max_lag=25 shuffles=100 FS=incl cca=plain | 13 learners
+
+  animal 1: lp=22 -> 9 cells
+  animal 2: lp=44 -> 9 cells
+  animal 3: lp=32, 40 run-trials -> epochs don't fit (skip)
+  animal 4: lp=53 -> 9 cells
+  animal 5: lp=54 -> 9 cells
+  animal 6: lp=36 -> 3 cells
+  animal 7: lp=33 -> 3 cells
+  animal 9: lp=44 -> 9 cells
+  animal 10: lp=67 -> 18 cells
+  animal 11: lp=84 -> 45 cells
+  animal 13: lp=23 -> 30 cells
+  animal 14: lp=39 -> 9 cells
+  animal 15: lp=26, 27 run-trials -> epochs don't fit (skip)
+
+wrote epoch_metrics_fsincl_plain_b10.csv (153 cells), epoch_dims (1969), epoch_weights (11691), epoch_cross (153), epoch_lagcurves (7803)

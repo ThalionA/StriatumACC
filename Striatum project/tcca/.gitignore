@@ -5,10 +5,12 @@ __pycache__/
 # summary tables, which underwrite written claims and were silently lost once
 # (see NOTES.md 2026-07-28). Keep those in git.
 results/*.csv
-!results/epoch_metrics.csv
-!results/epoch_dims.csv
-!results/epoch_weights.csv
-!results/epoch_cross.csv
+!results/epoch_metrics*.csv
+!results/epoch_dims*.csv
+!results/epoch_weights*.csv
+!results/epoch_cross*.csv
+!results/epoch_lagcurves*.csv
+!results/grid_*.csv
 results/*.pkl
 figures/*.png
 figures/*.svg

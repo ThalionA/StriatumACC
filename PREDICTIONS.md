@@ -35,6 +35,47 @@ and the partner-dependent `gini_pearson_x/y`. Registered before any cohort run.
   Fig 4c revives; (ii) any pair with same-sign p<0.05 naive→expert cc1 change
   in ≥3/8 configs → the strength-change story revives.
 
+**Outcome (2026-08-11, same day) — ✓ P1; ✗ P2; ✗ P3 REVERSED (the registered
+surprise); ✓ P4 with one single-config footnote; ✓ P5. Neither falsifier
+triggered.** Full tables: `tcca/results/grid_summary.csv`,
+`grid_ifi_windows.csv` (script `scripts/analyze_epoch_grid.py`; animals-as-n,
+BH within family).
+
+P1: 24 pair×config tests, exactly 1 nominal hit (b25/fsincl/plain DLS-ACC
+p=0.039), 0 survive BH. The strength null is robust to bin size, FS condition
+and partialling.
+
+P2: FS inclusion raises cc1 in only **54%** of matched cells in the partial
+frame (p_animal 0.43 b25 / 0.11 b10) — prediction wrong. The predicted uplift
+exists only in the PLAIN frame (65% p=0.039 b25; 78% p=0.004 b10). Reading: FS
+units contribute mostly **shared** variance, which partialling removes — Tom's
+"uniformly higher FS-incl" does not transfer to the partial striatal pipeline.
+
+P3: **REVERSED.** plain − partial is *negative* FS-excluded (median −0.012
+b25, p_animal=0.016; −0.031 b10, p=0.039; only ~⅓ of cells positive) and ≈0
+FS-included. I anchored 85% confidence on popsim's common-input scenario;
+these data are not that scenario. Lesson: the triangle's coupling is **not
+inherited from shared drive off the other recorded areas** — partialling acts
+as *denoising* (without residualisation, PCA-k spends components on
+high-variance global directions and crowds out the coupling-carrying ones).
+This is a positive, citable statement: the coupling is pair-specific.
+Null-persists sub-prediction ✓ (all plain configs n.s.).
+
+P4: learning-change: **0/420** (pair × window × config) cells BH-survive.
+Existence: null everywhere except one config-island — b10/fsincl/plain
+DLS-ACC, contiguous ±200–240 ms band, median IFI +0.02, p=0.0078. The
+falsifier required the band in BOTH FS conditions; it is absent FS-excluded
+and absent under partialling → not triggered. Parsimonious read: a small
+shared-drive asymmetry visible only in the least-controlled config.
+
+P5: b10 − b25 cc1 negative in all four frames (medians −0.034…−0.040, 20–31%
+of cells positive, p_animal ≤ 0.02); no verdict flips.
+
+Bonus (the audit's §6 fix, first use): the partner-DEPENDENT
+`gini_pearson_x/y` is **also flat across learning** (b25 committed config:
+x p=0.73, y p=0.30; cohort medians 0.34–0.38) — the Fig 4d Gini null survives
+the corrected metric, so the panel stays a null (or is dropped) either way.
+
 ## 2026-08-10 — spatial bin-size soundness comparison (2.5 cm vs 5 cm, task cohort)
 
 First run of `compare_bin_sizes.m` on the dual-bin outputs of the reworked

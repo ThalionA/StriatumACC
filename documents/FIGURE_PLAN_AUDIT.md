@@ -6,9 +6,10 @@ against current code and on-disk artefacts, superseding stale verdicts in
 each re-reading code at file:line and recomputing numbers from caches/CSVs (read-only; no MATLAB runs).
 Plus: the tcca ↔ TomLearning alignment check (§6).
 
-> ⚠️ **The adversarial skeptic pass has NOT yet run** (session usage limit; resumable —
-> workflow run `wf_4dff1f89-a46`, finder results cache-replayable). Verdicts below are
-> single-sourced, though every load-bearing number was re-derived from disk, not quoted.
+> ✅ **Adversarial skeptic pass completed 2026-08-11** (8 refuters, one per cluster):
+> **0 verdicts overturned, 15 modified, the rest upheld.** All modifications are folded into
+> the text below; the two that changed recommendations are the RL lick-channel headline
+> (§1 — the saturated null is exposure-confounded) and the sweep "chance rate" reading (§4).
 
 **Verdict key.** ✅ SUPPORTED = code sound AND citable artefact on disk · 🔧 FIXABLE = defined fix,
 effort stated · ❌ REFUTED = claim contradicted by data/code · ⬜ UNBUILT = never run / no asset ·
@@ -46,16 +47,25 @@ Key facts, re-derived today from `preprocessed_data5cm.mat` (Aug 10 13:54):
 - The July "velocity wrong by 2×" verdict is **obsolete**: `(4*1.25)` now equals the true 5 cm bin
   width against the caches all three consumer scripts load. Correct-by-coincidence — tie the literals
   to `cfg.velocity_factor` (exists, unused) before anyone re-bins.
-- **RL model (Fig 1's model panel), citable today** (recomputed from npz on disk): held-out lick CV
-  gain **+0.60 nats/bin, 16/16 mice** (v6 interleaved; +0.45, 15/16 forward/blocked). Naive→Expert
-  lick-profile change reproduced in **11/13 evaluable learners** (mean Δr +0.70). Velocity channel
-  honestly weak (6/16, Δr +0.36; CV ≈ 0, and CV-scheme-dependent). ⚠ The recorded +0.57 is the
-  **pre-CV-mask-fix v5 number; the better v6 aggregates were computed and never written down** —
-  record them. Real-data model-comparison ladder: never run (runnable today, hours).
+- **RL model (Fig 1's model panel)** — skeptic-corrected 2026-08-11. **Citable today:** the
+  Naive→Expert lick-profile reproduction, **11/13 evaluable learners, mean Δr +0.70** (artefact-backed,
+  untouched by the null critique), plus the honest velocity caveat (6/16, Δr +0.36; CV ≈ 0,
+  CV-scheme-dependent). **NOT citable as-is:** the held-out CV gain (+0.60 nats/bin v6 interleaved,
+  16/16; +0.45 forward). The saturated per-bin null has **no dwell-time exposure term** while the
+  model scores Poisson(rate·dt) with dt from observed same-bin velocity — MANUSCRIPT_INVENTORY.md:4993
+  rates this "FATAL for the headline claim"; exposure-matched re-scoring collapses the gain to
+  ~+0.11 (inventory spec, 11/16) or ~+0.36 (skeptic's independent spec, 12/16) — direction confirmed
+  twice, magnitude spec-dependent, and neither collapse number has a backing script yet. **Fix is
+  cheap**: null re-scoring only, no refits, hours — run it before any caption quotes a CV gain.
+  (The v6 aggregates ARE recorded — inventory:4930 — contrary to the first-pass claim.)
+  Real-data model-comparison ladder: never run (runnable today, hours).
 - Control caches (regenerated today) still carry the July §5.9 defect: **446 unlabelled
-  V1/CA1/DG units inside control-1 "all units"**; control 2 is now **6 sessions from 5 mice**
-  (1107_M1/M2 same animal — don't count 7), mouse 624's exclusion undocumented, and its
-  fr_threshold moved 0.1→0.02 today (old control-2 numbers incomparable).
+  V1/CA1/DG units inside control-1 "all units"**. Control 2 is now 6 sessions — but the animal
+  count is **unresolved**: `mice_info3.xlsx` suffixes suggest 1107_M1/M2 are two *different* mice
+  recorded the same day (6 animals), not one mouse twice (5) — **confirm identity with Zihao before
+  any per-mouse n is written**, and note 1107_M2's depths are flagged "??" (provisional). 624's
+  exclusion is acknowledged in NOTES:37 ("row unused") but unrationalised. fr_threshold moved
+  0.1→0.02 (old control-2 numbers incomparable).
 
 ---
 
@@ -107,8 +117,17 @@ artefacts — all values re-read from the CSVs today.**
 1. **CC change across epochs**: every animal-level rm-ANOVA n.s. — actual p range **0.155–0.947**
    (note: `MANUSCRIPT_RESULTS.md:340`'s "0.33–0.69" is wrong as a range; conclusion unchanged). Even
    dimension-level (pseudoreplicated) CC ANOVAs are all n.s.; the three dim-level hits are IFI-only and
-   die at animal level. The 1056-config sweep puts naive-vs-expert significance at ~chance (DMS-DLS
-   0.045, DLS-ACC 0.054; best cell DMS-ACC 0.140). tcca replicates the null temporally.
+   die at animal level. Sweep reading **corrected by the skeptic pass**: the enrichment CSV's "chance"
+   baseline is the observed grand rate, not nominal 5% — the sweep-wide naive-vs-expert p<0.05 rate is
+   **8.5% (1.7× nominal)**, concentrated in DMS-ACC (14.0%, 2.8× nominal) and high-k configs, with
+   DMS-DLS (4.5%) and DLS-ACC (5.4%) at nominal. Sweep cells are massively non-independent (same
+   animals, 1056 re-analyses), so this is weak evidence either way — the committed-config animal-level
+   tests, all n.s., remain the verdict. tcca replicates the null temporally.
+   **[2026-08-11 grid update:]** the temporal strength null is now shown robust across the full
+   factorial — bin {25, 10 ms} × FS {excl, incl} × {partial, plain}: 24 pair×config tests, one
+   nominal hit, none BH-surviving (`tcca/results/grid_summary.csv`, registered priors scored in
+   PREDICTIONS.md 2026-08-11). Bonus finding: plain CCA sits *below* partial FS-excluded — the
+   coupling is pair-specific, not shared drive from the other recorded areas.
 2. **Directional flow**: triangle IFI vs 0 — all p ≥ 0.052, all epochs, both variants; the two
    near-misses are *negative* and unsustained; **peak-lag median = 0 bins for every pair**; IFI signs
    flip between null models. The honest claim is *symmetric, zero-lag coupling*.
@@ -116,9 +135,17 @@ artefacts — all values re-read from the CSVs today.**
    eyeballed); temporal Gini recomputed today from `tcca/results/epoch_metrics.csv`: **flat**
    (per-animal triangle medians 0.440/0.441/0.430; paired naive→expert Wilcoxon **p = 1.0**, n=10).
    And see §6: the exported temporal Gini is partner-invariant — it isn't a communication metric at all.
-4. (From tcca 2026-07-28:) **temporal reorientation does not survive residual+partial CCA** —
-   animal-level n=10, rot−floor median +1.03°, Wilcoxon p=0.38, a *powered* null; the positive mean is
-   one animal (A10, +22.4°).
+   **[2026-08-11 grid update: closed.]** The partner-*dependent* `gini_pearson` (the §6 fix, now
+   exported) is **also flat** across epochs (x p=0.73, y p=0.30, committed config) — the null stands
+   under the corrected metric.
+4. (From tcca 2026-07-28, **demoted to inconclusive-leaning-null by the skeptic pass**:) temporal
+   reorientation does not exceed its floor (n=10, rot−floor median +1.03°, Wilcoxon p=0.38; A10 alone
+   carries the positive mean) — but the *measurement* is ceiling-compressed: rotation and floor both
+   sit within ~15° of the 90° ceiling, and the floor comes from half-data single-draw fits
+   (inventory ~4188c says report as INCONCLUSIVE). No evidence for temporal reorientation, but a
+   modest real rotation could hide. The *spatial* reorientation result is separate and survived its
+   residual/signal factorial. Also: none of the tcca p-values is produced by a committed script —
+   they were ad hoc (arithmetically verified); the grid analysis scripts this.
 
 **Supported (the static architecture):**
 
@@ -164,10 +191,12 @@ registered-and-scored with on-disk artefacts (5 cm beats 2.5 cm in **50/50** ani
 
 **Open hazards, ranked:**
 
-1. **Everything is uncommitted** — depth CSVs + helper + test (sitting 6 days), 5 cm repoint, seeds,
-   PREDICTIONS/tcca NOTES entries, tcca CSVs. One hard reset loses the day. The bin-decision evidence
-   (`figures/compare_bin_sizes_*`) is **gitignored with its input deleted** — the exact "silently lost
-   once" failure mode, recreated the day the tcca safeguard was written.
+1. **[Resolved 2026-08-10/11.]** The main bundle was committed the same evening (`ecbd34a`: depth
+   CSVs + helper + test, 5 cm repoint, seeds, PREDICTIONS incl. the bin-decision numbers,
+   compare_bin_sizes code); the tcca epoch CSVs + producing code landed 2026-08-11 (`249ae8c`,
+   `428d2bb`). Remaining unprotected: the `figures/compare_bin_sizes_*` artefact files themselves
+   (gitignored; the P1–P3 numbers are in git via PREDICTIONS.md) with their 2.5 cm input deleted —
+   the decision is recorded but the raw comparison table is single-copy.
 2. **Code mtimes postdate the caches they produced** (16:31 vs 13:54/16:25) and PREDICTIONS describes a
    dual-bin producing variant that no longer exists — benign-looking (the diffs are load-guards) but
    formally unprovable. Commit now and note it, or re-stamp with one rerun.
@@ -212,10 +241,9 @@ temporal arm with TomLearning's **latest** iteration (temporal running-state arm
    (`subspace_window.py:215,242-245`) — the L2 row-norm over the full retained set cancels the
    partner-determined orthogonal factor, i.e. **partner-invariant, area-intrinsic loading geometry**,
    exactly what TomLearning proved (analytically + r=0.981 across partners) and retracted on
-   2026-07-28. The partner-*dependent* control (`gini_pearson_x/y`, CCA-free cross-area coupling) is
-   computed in the same function but **not exported by `run_epochs.py`**. → Export it (or port Tom's
-   `gini_*_conn`/`gini_*_sig`) and re-emit the epoch CSVs (~1–2 h). Until then, the flat-Gini result
-   is "area loading geometry doesn't change", not a communication claim.
+   2026-07-28. **[Fixed 2026-08-11:]** `run_epochs.py` now exports the partner-dependent
+   `gini_pearson_x/y` in every config, and the epoch result under the corrected metric is **also
+   flat** (x p=0.73, y p=0.30) — the Fig 4d null survives, now as a genuine communication claim.
 2. **No frozen-axes arm.** Tom's current iteration freezes canonical axes for every epoch contrast
    (only CC1 has a stable identity; refit-per-epoch contrasts confound axis drift with change). tcca
    refits per epoch. For the scalar cc1-strength null this is conventional and probably harmless; for

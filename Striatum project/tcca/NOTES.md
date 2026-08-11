@@ -7,6 +7,38 @@ contrast; fresh tom_cca-style port; plus an engaged-vs-disengaged contrast).
 
 ---
 
+## 2026-08-11 — Epoch grid (8 configs): every verdict robust; partialling is denoising; corrected Gini also flat
+
+Full factorial on the seeded 5 cm cache: bin {25, 10 ms} × FS {excl, incl} ×
+{partial, plain}, max_lag extended to ±250 ms, per-cell CC1 lag curves +
+`gini_pearson_x/y` exported. Priors registered first (PREDICTIONS.md
+2026-08-11; scored same day — P3 reversed, everything else as predicted).
+Driver additions: `--no-partial`, `epoch_lagcurves*.csv`; analysis in
+`scripts/analyze_epoch_grid.py` (animals-as-n Wilcoxon + BH — the first
+scripted tcca statistics, replacing the ad hoc 07-28 arithmetic). 167 tests.
+
+1. **Strength null in all 8 configs** (24 tests, 1 nominal hit, 0 BH).
+2. **IFI null at every integration window to ±250 ms** — 0/420 learning-change
+   cells; existence null except a non-replicating b10/fsincl/plain DLS-ACC
+   band (±200–240 ms, median +0.02) absent FS-excluded and absent under
+   partialling. Registered falsifier not triggered.
+3. **plain < partial FS-excluded** (median −0.012 b25 / −0.031 b10, p≈0.02/0.04):
+   the coupling is NOT shared drive from the other recorded areas; partialling
+   denoises (PCA-k crowding). FS-incl uplift exists only in the plain frame
+   (78% at b10, p=0.004) → FS units carry mostly shared variance.
+4. **10 ms is uniformly weaker** (b10−b25 median ≈ −0.04, p≤0.02, all frames);
+   25 ms stays the magnitude reference.
+5. **Partner-dependent Gini (gini_pearson) is flat across epochs**
+   (x p=0.73 / y p=0.30, b25 committed config) — the de-sparsification null
+   survives the metric correction flagged in FIGURE_PLAN_AUDIT.md §6.
+
+A7 runs at LP 33 (seeded baseline; recorded runs used 34) → its epoch windows
+shift one trial vs the frozen 07-28 CSVs; cohort counts 122 (b25 fsexcl
+partial) vs 125 recorded. All grid CSVs + analysis outputs are tracked
+(gitignore negations widened).
+
+---
+
 ## 2026-07-28 — Stage 2 cohort rerun: reproduced, + the reorientation question settled
 
 The 2026-06-17 outputs were gitignored and lost. Reran `run_epochs.py --group

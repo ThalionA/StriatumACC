@@ -1,5 +1,27 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-08-11 — Figure-plan audit (adversarially verified) + tcca epoch grid
+
+**Audit.** Every panel of the handwritten manuscript plan verified against
+current code/artefacts: `documents/FIGURE_PLAN_AUDIT.md` (8 verifier + 8
+adversarial-skeptic agents; 0 verdicts overturned, 15 modified). Headlines:
+Fig 4's learning framing is refuted by our own artefacts (recast as static
+architecture + local refinement); the RL lick-channel CV headline (+0.60
+nats/bin) is NOT citable — the saturated null lacks the model's dwell-time
+exposure term (fix = cheap null re-scoring); the TCA arm is unrunnable until
+Run_TCA_pipeline reruns (tca_outputs.mat deleted); Figs 1–2 have sound cores
+but zero citable numbers on disk. Cohort for Methods: DMS 394 / DLS 522 /
+ACC 699 (the July report's 1540/367/490/683 matches no artefact).
+
+**tcca grid** (priors registered → scored, PREDICTIONS.md 2026-08-11): the
+strength and IFI nulls are robust across bin {25,10 ms} × FS {excl,incl} ×
+{partial,plain}, IFI at every integration window to ±250 ms. Surprise (P3
+reversed): plain CCA < partial FS-excluded — the triangle's coupling is
+pair-specific, not shared drive from other recorded areas; partialling is
+denoising. FS-incl uplift exists only in the plain frame. Partner-dependent
+`gini_pearson` (metric fix per audit §6) is also flat → Fig 4d null survives
+the correction. Details: `Striatum project/tcca/NOTES.md` top entry.
+
 ## 2026-08-10 — Depth-boundary corrections, control2 rebuild, control-V1, 5 cm standardisation
 
 Cross-checked all depth CSVs against Zihao's readme (INCR volume, his Aug-3
