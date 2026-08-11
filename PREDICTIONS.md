@@ -1,5 +1,40 @@
 # Predictions (newest first)
 
+## 2026-08-11 — tcca epoch grid: bin {25,10 ms} × FS {excl,incl} × {partial,plain} + IFI integration-window sweep
+
+Eight run_epochs configs on the seeded 5 cm cache (A7's LP is 33 vs the recorded
+34; the other 10 learner LPs are identical — smoke run reproduced A1's nine cc1
+values to 4 d.p.). New per-cell exports: CC1 lag curves to ±250 ms
+(epoch_lagcurves*, IFI recomputable at any window via `lagged.ifi_by_window`)
+and the partner-dependent `gini_pearson_x/y`. Registered before any cohort run.
+
+- **P1 (strength null is config-robust):** paired per-animal Wilcoxon on cc1
+  naive→expert, striatal triangle, all 8 configs (24 tests): 0–2 nominal
+  p<0.05, none surviving BH within its config. Confidence ~80%. Basis: the
+  spatial sweep sat at chance, the 25 ms temporal null, and Tom's threefold
+  strength null.
+- **P2 (FS inclusion raises coupling, changes no verdict):** cc1(FS-incl) >
+  cc1(FS-excl) in ≥70% of matched (animal, pair, epoch) cells at 25 ms partial.
+  Confidence ~75%. Basis: Tom's hierarchy uniformly higher FS-incl; spatial
+  FS-incl/excl agreement r=0.89.
+- **P3 (plain − partial isolates shared drive):** plain cc1 > partial cc1 in
+  ≥80% of matched cells, median uplift ≥ +0.05 (popsim: common-input 0.74→0.19
+  under partialling). The epoch-strength null persists even in plain.
+  Confidence: uplift ~85%; null-persists ~65% — this is the arm most likely to
+  produce a (spurious-looking) epoch effect, since shared drive tracks
+  behavioural state.
+- **P4 (IFI ≈ 0 at every integration window):** per-animal IFI(w), w up to
+  ±250 ms: (a) no striatal-triangle (pair × window) cell survives BH across
+  windows within pair in any config (~70%); (b) session-pooled existence-level
+  IFI vs 0 at ±50 ms also null (~75% — the 25 ms run already gave IFI 0.000 ±
+  0.09), unlike Tom's CA1→RSC where a flow exists.
+- **P5 (10 ms is noisier, verdicts unchanged):** per-cell cc1 magnitudes lower
+  at 10 ms in the majority of matched cells; no cohort verdict flips. ~70%.
+- **Falsifiers:** (i) any pair with a BH-surviving, same-sign IFI window band
+  (≥2 contiguous windows) in BOTH FS conditions → a genuine directional flow —
+  Fig 4c revives; (ii) any pair with same-sign p<0.05 naive→expert cc1 change
+  in ≥3/8 configs → the strength-change story revives.
+
 ## 2026-08-10 — spatial bin-size soundness comparison (2.5 cm vs 5 cm, task cohort)
 
 First run of `compare_bin_sizes.m` on the dual-bin outputs of the reworked
