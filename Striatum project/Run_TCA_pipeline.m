@@ -1204,5 +1204,13 @@ end
 fprintf('Saving TCA outputs to %s ...\n', tca_outputs_file);
 save(tca_outputs_file, save_vars{:}, '-v7.3');
 
+% Persist every figure (svg+png) so headless runs never need repeating just
+% to see a plot (2026-08-11).
+if cfg.balance_areas
+    save_all_open_figures('tca_balanced');
+else
+    save_all_open_figures('tca_unbalanced');
+end
+
 fprintf('--- Analysis Pipeline Finished ---\n');
 

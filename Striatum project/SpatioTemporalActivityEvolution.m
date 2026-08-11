@@ -2027,3 +2027,5 @@ for ds_idx = 1:size(datasets, 1)
     end
 end
 fprintf('--- Hierarchical KDE Mean Activity Distribution Plots Complete ---\n\n');
+%% Persist every figure (svg+png) so headless runs never need repeating (2026-08-11).
+save_all_open_figures('spatiotemporal');

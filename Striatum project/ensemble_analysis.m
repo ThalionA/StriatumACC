@@ -1290,3 +1290,5 @@ else
     
     fprintf('  Displayed average trajectory plot for each ensemble.\n\n');
 end
+%% Persist every figure (svg+png) so headless runs never need repeating (2026-08-11).
+save_all_open_figures('ensemble');
