@@ -322,6 +322,18 @@ else
 end
 
 %% Plot area dimensionality
+% Guarded 2026-08-11: the pca_stim_dimensionality_* fields this section reads
+% are never written anywhere in this script, so it threw on every run and
+% aborted before the sections below (the control cache itself is saved
+% earlier, so the crash cost the plots, not the data). Left in place rather
+% than deleted because the per-area dimensionality analysis is still wanted —
+% it needs calc_dim fixed first (it cumsums PCA coefficients instead of
+% `explained`, so the values come back empty even when the field exists).
+if ~isfield(preprocessed_data, 'pca_stim_dimensionality_all')
+    warning(['Skipping area-dimensionality plots: pca_stim_dimensionality_* ' ...
+             'is never populated. Fix calc_dim to re-enable.']);
+    return
+end
 
 dimensionality_stim_all = cell2mat({preprocessed_data(:).pca_stim_dimensionality_all});
 dimensionality_stim_DMS = cell2mat({preprocessed_data(:).pca_stim_dimensionality_dms});

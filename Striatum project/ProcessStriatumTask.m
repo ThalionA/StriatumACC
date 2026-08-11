@@ -456,14 +456,10 @@ sigstar(comp_groups(sig_ind), comp(sig_ind, 6))
 
 save_to_svg('area_dark_dimensionality')
 
-% Compare task vs dark dimensionality
-figure
-my_errorbar_plot(dimensionality_stim_all, dimensionality_dark_all, true)
-[~, pval] = ttest(dimensionality_stim_all', dimensionality_dark_all');
-sigstar({[1, 2]}, pval)
-xticklabels({'Stim', 'Dark'})
-ylabel('Relative Dimensionality')
-title('Task vs Dark Dimensionality')
+% The task-vs-dark dimensionality comparison that used to sit here referenced
+% dimensionality_stim_all / dimensionality_dark_all, neither of which is ever
+% defined — it threw on every run and aborted the script before the sections
+% below. Removed 2026-08-11; nothing downstream consumed it.
 
 
 %% Decoding of position
