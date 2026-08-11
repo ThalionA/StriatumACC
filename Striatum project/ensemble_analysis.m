@@ -54,13 +54,13 @@ neuron_purity = max(neuron_factors_norm, [], 2);
 
 ensemble_entropy = -sum(neuron_factors_norm.*log2(neuron_factors_norm), 2);
 
-figure
+figure('Name', 'purity vs entropy')
 scatter(neuron_purity, ensemble_entropy)
 lsline
 xlabel('purity')
 ylabel('entropy')
 
-figure
+figure('Name', 'purity and entropy distributions')
 hold on
 histogram(neuron_purity, 25)
 histogram(ensemble_entropy, 25)
@@ -69,13 +69,13 @@ purity_threshold = 0.5;
 pure_fraction = sum(neuron_purity >= purity_threshold)/numel(neuron_purity);
 is_pure = neuron_purity >= purity_threshold;
 
-figure
+figure('Name', 'units per ensemble')
 histogram(ensemble_assignments)
 xlabel('ensemble')
 ylabel('unit no.')
 xticks(1:total_ensembles)
 
-figure
+figure('Name', 'area composition per ensemble')
 t = tiledlayout('flow');
 for iensemble = 1:total_ensembles
     neuron_idx = ensemble_assignments == iensemble;
@@ -430,7 +430,7 @@ end
 %% t-SNE
 
 lala = tsne(neuron_factors_all);
-figure
+figure('Name', 'ensemble spatial profiles by area')
 gscatter(lala(is_pure, 1), lala(is_pure, 2), ensemble_assignments(is_pure), [], [], 15)
 
 % figure
@@ -669,20 +669,20 @@ for ianimal = task_mouse_idx   % task mice only (see header note 2026-08-11)
     all_velocity(ianimal, :, 21:30) = velocity_temp(learning_point+1:learning_point+10, :)';
 end
 
-figure
+figure('Name', 'lick rate across trials')
 imagesc(squeeze(mean(all_licks, 'omitmissing'))')
 colorbar
 xlabel('trial')
 ylabel('lick rate')
 
-figure
+figure('Name', 'velocity across trials')
 imagesc(squeeze(mean(all_velocity, 'omitmissing'))')
 colorbar
 xlabel('trial')
 ylabel('velocity')
 
 mean_licks = squeeze(mean(all_licks, 'omitmissing'))';
-figure
+figure('Name', 'lick rate by spatial bin')
 hold on
 h = shadedErrorBar(1:n_bins, mean(mean_licks(1:10, :)), sem(mean_licks(1:10, :)), 'lineprops', {'Color', 'b'});
 g = shadedErrorBar(1:n_bins, mean(mean_licks(11:20, :)), sem(mean_licks(11:20, :)),  'lineprops', {'Color', 'g'});
@@ -692,7 +692,7 @@ xlabel('spatial bin')
 ylabel('lick rate')
 
 mean_velocity = squeeze(mean(all_velocity, 'omitmissing'))';
-figure
+figure('Name', 'velocity by spatial bin')
 hold on
 h = shadedErrorBar(1:n_bins, mean(mean_velocity(1:10, :)), sem(mean_velocity(1:10, :)), 'lineprops', {'Color', 'b'});
 g = shadedErrorBar(1:n_bins, mean(mean_velocity(11:20, :)), sem(mean_velocity(11:20, :)),  'lineprops', {'Color', 'g'});
@@ -870,7 +870,7 @@ for ianimal = task_mouse_idx   % task mice only (see header note 2026-08-11)
 
 end
 
-figure
+figure('Name', 'ensemble activity aligned to disengagement')
 t = tiledlayout('flow', 'TileSpacing', 'compact');
 for iensemble = 1:total_ensembles
     all_disengaged_ensemble = cat(1, disengaged_aligned_data{:, iensemble});
@@ -884,7 +884,7 @@ end
 ylabel(t, 'trials to disengament')
 xlabel(t, 'spatial bin')
 
-figure
+figure('Name', 'licks vs trials to disengagement')
 t = tiledlayout('flow', 'TileSpacing', 'compact');   
 imagesc(squeeze(mean(all_licks_dis, 'omitmissing'))')
 yticks(0:5:20)
@@ -893,7 +893,7 @@ title('licks')
 ylabel('trials to disengament')
 xlabel(t, 'spatial bin')
 
-figure
+figure('Name', 'lick profile by spatial bin')
 average_licks_dis = squeeze(mean(all_licks_dis, 'omitmissing'));
 hold on
 h = shadedErrorBar(1:n_bins, mean(average_licks_dis(:,1:10),2,'omitmissing'), sem(average_licks_dis(:,1:10),2), 'lineprops',{'Color',green});
@@ -902,7 +902,7 @@ legend([h.mainLine g.mainLine],{'pre-disengagement' 'post-disengagement'})
 xlabel('spatial bin')
 ylabel('lick rate')
 
-figure
+figure('Name', 'velocity vs trials to disengagement')
 t = tiledlayout('flow', 'TileSpacing', 'compact');   
 imagesc(squeeze(mean(all_velocity_dis, 'omitmissing'))')
 yticks(0:5:20)
@@ -911,7 +911,7 @@ title('velocity')
 ylabel('trials to disengament')
 xlabel(t, 'spatial bin')
 
-figure
+figure('Name', 'velocity profile by spatial bin')
 average_vel_dis = squeeze(mean(all_velocity_dis, 'omitmissing'));
 hold on
 h = shadedErrorBar(1:n_bins, mean(average_vel_dis(:,1:10),2,'omitmissing'), sem(average_vel_dis(:,1:10),2), 'lineprops',{'Color',green});
@@ -932,7 +932,7 @@ bin_centres     = bin_edges(1:end-1)+diff(bin_edges)/2;
 % reward_end_idx    = find(bin_centres <= cfg.plot.zone_params.reward_end_au  ,1,'last');
 % visual_end_idx    = reward_start_idx-1;                         % visual ends where reward starts
 
-figure
+figure('Name', 'ensemble activity good vs bad trials')
 t = tiledlayout('flow','TileSpacing','compact');
 
 for iensemble = 1:total_ensembles
@@ -984,7 +984,7 @@ xlabel(t,'spatial bin')
 
 %% Naive/expert/disengaged
 
-figure
+figure('Name', 'ensemble spatial tuning per ensemble')
 t = tiledlayout('flow');
 
 for iensemble = 1:total_ensembles
@@ -1186,7 +1186,7 @@ xlabel('Trial'); title('Pairwise corr (avg activity)');
 % Also compute across‑trial mean for back‑compatibility
 a = pair_r; a(isnan(a)) = 0; pair_mean = squeeze(sum(a,3)) ./ sum(~isnan(pair_r),3);
 
-figure
+figure('Name', 'ensemble reliability across trials')
 plot(pairTime')
 
 %% 4. ANIMATED NETWORK  (edge thickness = |corr|, colour = sign)
