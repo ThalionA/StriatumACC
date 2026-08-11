@@ -1603,6 +1603,59 @@ end
 fprintf('\n======================= END OF SUMMARY =======================\n\n');
 
 %% Local Helper for Clean Scatter Plotting
+%% ================= Numeric export (2026-08-11) =========================
+% These panels previously left no numeric trace: every value lived only in
+% figure pixels, so nothing was citable and task-vs-control contrasts could
+% only be eyeballed. Long-format, per-animal, one row per cell.
+export_dir = 'figures';
+if ~exist(export_dir, 'dir'), mkdir(export_dir); end
+
+% --- Stability (Section 6): per animal x epoch x group x area -------------
+stab_rows = {};
+for g = 1:3
+    for a = 1:n_areas
+        for e = 1:n_epochs
+            for i = 1:max_animals
+                obs = mean(squeeze(hier_z(i, e, :, g, a)), 'omitnan');
+                shf = mean(squeeze(hier_z_shuff(i, e, :, g, a)), 'omitnan');
+                if ~isnan(obs)
+                    stab_rows(end+1, :) = {group_names{g}, upper(areas{a}), ...
+                        epochs{e}, i, obs, shf, obs - shf}; %#ok<SAGROW>
+                end
+            end
+        end
+    end
+end
+if ~isempty(stab_rows)
+    T_stab = cell2table(stab_rows, 'VariableNames', ...
+        {'group', 'area', 'epoch', 'animal', 'reliability', 'shuffle', 'obs_minus_shuffle'});
+    writetable(T_stab, fullfile(export_dir, 'stability_by_animal.csv'));
+    fprintf('Wrote figures/stability_by_animal.csv (%d rows).\n', height(T_stab));
+end
+
+% --- Decoding (Section 7A): per animal x epoch x group x condition --------
+dec_rows = {};
+for g = 1:3
+    for c = 1:n_conds
+        for e = 1:n_epochs
+            for i = 1:max_animals
+                err = mean(squeeze(ep_pos_err(i, e, :, g, c)), 'omitnan');
+                ent = mean(squeeze(ep_pos_entropy(i, e, :, g, c)), 'omitnan');
+                if ~isnan(err)
+                    dec_rows(end+1, :) = {group_names{g}, cond_names{c}, ...
+                        epochs{e}, i, err, ent}; %#ok<SAGROW>
+                end
+            end
+        end
+    end
+end
+if ~isempty(dec_rows)
+    T_dec = cell2table(dec_rows, 'VariableNames', ...
+        {'group', 'condition', 'epoch', 'animal', 'decoding_error', 'norm_entropy'});
+    writetable(T_dec, fullfile(export_dir, 'decoding_by_animal.csv'));
+    fprintf('Wrote figures/decoding_by_animal.csv (%d rows).\n', height(T_dec));
+end
+
 %% Persist every figure (svg+png). Belt and braces alongside the per-figure
 % save_to_svg calls: a headless run that errors mid-script would otherwise
 % lose every figure produced up to that point (2026-08-11).
