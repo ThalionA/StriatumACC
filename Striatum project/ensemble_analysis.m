@@ -16,6 +16,23 @@ if ~exist('best_mdl', 'var') || ~exist('labels_valid', 'var')
                'Run Run_TCA_pipeline first.'], tca_outputs_file);
     end
 end
+% Run_TCA_pipeline sets task_data_to_pass = task_data and task_lps_to_pass =
+% learning_points_task (a cell) in task modes; neither alias is saved, so
+% standalone/headless runs need them restored (2026-08-11 — the decoding
+% sections below read both).
+if ~exist('task_data_to_pass', 'var') && exist('task_data', 'var')
+    task_data_to_pass = task_data;
+end
+if ~exist('task_lps_to_pass', 'var') && exist('learning_points_task', 'var')
+    task_lps_to_pass = learning_points_task;
+end
+% Task-mouse tensor indices (2026-08-11). buildCombinedTensor indexes task
+% mice first, then appends control mice; the lick-error / disengagement
+% sections below read task-only structures (task_data_to_pass, lick errors,
+% LPs), so in task_and_control mode the control indices must be skipped —
+% the old 'for ianimal = unique(mouse_labels)' loops crashed there.
+task_mouse_idx = unique(labels_valid.mouse_labels(:))';
+task_mouse_idx = task_mouse_idx(task_mouse_idx <= numel(task_data_to_pass));
 
 neuron_factors_all = best_mdl.u{1};
 areas_all = labels_valid.area_labels;
@@ -556,7 +573,7 @@ ensemble_activity_good_post = cell(1, total_ensembles);
 ensemble_activity_bad_pre = cell(1, total_ensembles);
 ensemble_activity_bad_post = cell(1, total_ensembles);
 
-for ianimal = unique(labels_valid.mouse_labels)'
+for ianimal = task_mouse_idx   % task mice only (see header note 2026-08-11)
     current_data = task_data_to_pass(ianimal).spatial_binned_fr_all;
     [n_units, n_bins, n_trials] = size(current_data);
     all_idx_to_keep = false(1, n_units);
@@ -637,7 +654,7 @@ ylabel(t, 'firing rate')
 all_licks = nan(numel(unique(labels_valid.mouse_labels)), n_bins, 30);
 all_velocity = nan(numel(unique(labels_valid.mouse_labels)), n_bins, 30);
 
-for ianimal = unique(labels_valid.mouse_labels)'
+for ianimal = task_mouse_idx   % task mice only (see header note 2026-08-11)
     licks_temp = task_data_to_pass(ianimal).spatial_binned_data.licks;
     durations_temp = task_data_to_pass(ianimal).spatial_binned_data.durations;
     velocity_temp = cfg.plot.zone_params.bin_size*1.25./durations_temp;
@@ -802,7 +819,7 @@ n_animals = max(unique(labels_valid.mouse_labels)');
 disengaged_aligned_data = cell(n_animals, total_ensembles);
 
 
-for ianimal = unique(labels_valid.mouse_labels)'
+for ianimal = task_mouse_idx   % task mice only (see header note 2026-08-11)
     current_data = task_data_to_pass(ianimal).spatial_binned_fr_all;
     [n_units, n_bins, n_trials] = size(current_data);
     all_idx_to_keep = false(1, n_units);
