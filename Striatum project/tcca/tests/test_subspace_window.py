@@ -168,3 +168,22 @@ def test_split_half_floor_tracks_true_dimensionality():
     one = fit(1, 0.5)                    # only one shared dimension
     assert one.split_half_x_cc1 < 30.0  # CC1 direction is stable
     assert one.split_half_x > 60.0      # but top-3 max-angle ~orthogonal (dims 2-3 = noise)
+
+
+def test_lag_curve_exported_with_expected_shape():
+    # The CC1 lag curve must come back alongside its lag axis so drivers can
+    # export it and IFI-by-integration-window can be recomputed offline.
+    rng = np.random.default_rng(3)
+    n = 4000
+    lat = rng.normal(0, 1, n)
+    X = rng.normal(0, 0.5, (n, 6))
+    Y = rng.normal(0, 0.5, (n, 6))
+    X[:, 0] += lat
+    Y[:, 0] += lat
+    g = _grouped(n, 10, rng)
+    r = sw.window_subspace(X, Y, g, k=4, max_lag=5, n_shuffles=5)
+    assert r.lags.shape == (11,) and r.lag_cc1.shape == (11,)
+    assert int(r.lags[5]) == 0
+    assert np.isfinite(r.lag_cc1[5]) and r.lag_cc1[5] > 0.3
+    # zero-lag coupling with no built-in delay: the curve should peak at centre
+    assert int(r.lags[int(np.nanargmax(r.lag_cc1))]) == 0

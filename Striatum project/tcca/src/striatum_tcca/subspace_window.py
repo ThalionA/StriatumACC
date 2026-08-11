@@ -51,6 +51,9 @@ class WindowSubspace:
     split_half_x_cc1: float   # CC1-only (dominant-dim) split-half floor — for CC1-only rotation
     split_half_y_cc1: float
     sig_mask: np.ndarray      # (d,) bool — which canonical dims are significant
+    lags: np.ndarray          # (2*max_lag+1,) integer bin lags of the CC1 lag curve
+    lag_cc1: np.ndarray       # (2*max_lag+1,) in-sample CC1 at each lag — lets
+                              # IFI be recomputed at any integration window offline
 
 
 def _pca_fit(M: np.ndarray, k: int):
@@ -260,4 +263,5 @@ def window_subspace(X, Y, groups, Z=None, k: int = 30, max_lag: int = 10,
         split_half_x=sh_x, split_half_y=sh_y,
         split_half_x_cc1=sh_x_cc1, split_half_y_cc1=sh_y_cc1,
         sig_mask=np.asarray(sig, dtype=bool),
+        lags=lags, lag_cc1=lag_cc1,
     )

@@ -48,10 +48,14 @@ def build_present(streams: dataio.TemporalStreams, run: np.ndarray, animal, cfg,
 def fit_window(present: dict[str, np.ndarray], trial_ids_run: np.ndarray,
                ax: str, ay: str, trials_in_window: np.ndarray, cfg, *,
                k: int, max_lag: int, n_shuffles: int, n_folds: int,
-               min_cell_bins: int) -> subspace_window.WindowSubspace | None:
+               min_cell_bins: int,
+               partial_z: bool = True) -> subspace_window.WindowSubspace | None:
     """Fit ``subspace_window`` for one (pair, window) cell, or None if too sparse.
 
     Z = every other present area concatenated (partial CCA control, report 2.4).
+    ``partial_z=False`` runs plain CCA (no partialling) — the shared-drive
+    contrast: plain minus partial isolates what the other areas' common input
+    contributes to the pair's apparent coupling.
     """
     if ax not in present or ay not in present:
         return None
@@ -60,7 +64,7 @@ def fit_window(present: dict[str, np.ndarray], trial_ids_run: np.ndarray,
         return None
     Xw, Yw = present[ax][mask], present[ay][mask]
     others = [present[z][mask] for z in present if z not in (ax, ay)]
-    Z = np.concatenate(others, axis=1) if others else None
+    Z = np.concatenate(others, axis=1) if (others and partial_z) else None
     return subspace_window.window_subspace(
         Xw, Yw, trial_ids_run[mask], Z=Z, k=k, max_lag=max_lag,
         n_shuffles=n_shuffles, n_folds=n_folds, seed=cfg.cv_seed,

@@ -7,8 +7,13 @@ per (animal, pair, epoch) metrics, per-dim rows (dims-as-n), per-neuron weight
 contributions (Gini CDF), and cross-epoch rotation/Jaccard. Learners only.
 
 Run:  python3 scripts/run_epochs.py [--group task] [--bin-ms 10] [--smooth-ms 2.5]
-                                     [--max-lag 5] [--include-fs] [--pairs A-B,C-D]
-                                     [--limit N] [--tag _bin10]
+                                     [--max-lag 5] [--include-fs] [--no-partial]
+                                     [--pairs A-B,C-D] [--limit N] [--tag _bin10]
+
+Grid axes (2026-08-11): --bin-ms {25,10} x --include-fs x --no-partial. Output
+suffix encodes the config, e.g. epoch_metrics_fsincl_plain_b10.csv. The CC1 lag
+curve is exported per cell (epoch_lagcurves*.csv) so IFI can be recomputed at
+any integration window offline via ``lagged.ifi_by_window``.
 """
 
 from __future__ import annotations
@@ -41,6 +46,9 @@ def parse_args():
     p.add_argument("--max-lag", type=int, default=0,
                    help="IFI lag half-width in bins; 0 = auto (+/-50 ms headline)")
     p.add_argument("--include-fs", action="store_true")
+    p.add_argument("--no-partial", action="store_true",
+                   help="plain CCA: do not partial out the other recorded areas "
+                        "(shared-drive contrast vs the partial default)")
     p.add_argument("--pairs", default="", help="comma list A-B,C-D to restrict pairs")
     p.add_argument("--limit", type=int, default=0, help="cap number of learners (smoke)")
     p.add_argument("--tag", default="")
@@ -52,7 +60,8 @@ def main():
     cfg = dataclasses.replace(config.DEFAULT, temporal_bin_ms=args.bin_ms,
                               gaussian_sd_ms=args.smooth_ms,
                               exclude_fast_spiking=not args.include_fs)
-    suffix = ("_fsincl" if args.include_fs else "") + args.tag
+    suffix = (("_fsincl" if args.include_fs else "")
+              + ("_plain" if args.no_partial else "") + args.tag)
     pairs = ([tuple(p.split("-")) for p in args.pairs.split(",")]
              if args.pairs else list(config.PAIRS))
     # IFI integration half-width: report headline is +/-50 ms, so scale to bins.
@@ -65,9 +74,11 @@ def main():
         learners = learners[: args.limit]
     print(f"{args.group} | bin={args.bin_ms}ms sigma={args.smooth_ms} K={K} "
           f"max_lag={max_lag} shuffles={config.SURROGATE_SHUFFLES} "
-          f"FS={'incl' if args.include_fs else 'excl'} | {len(learners)} learners\n")
+          f"FS={'incl' if args.include_fs else 'excl'} "
+          f"cca={'plain' if args.no_partial else 'partial'} | "
+          f"{len(learners)} learners\n", flush=True)
 
-    metrics, dims, weights, cross = [], [], [], []
+    metrics, dims, weights, cross, lagcurves = [], [], [], [], []
     for a in learners:
         e = entries[a.animal_id]
         streams = dataio.load_temporal_streams(a, cfg, period="engaged")
@@ -90,8 +101,10 @@ def main():
             # cells. n_units_z is the partial-out (control) dimensionality.
             n_units_x = int(present[ax].shape[1])
             n_units_y = int(present[ay].shape[1])
-            n_units_z = int(sum(present[z].shape[1] for z in present
-                                if z not in (ax, ay)))
+            # n_units_z documents the partial-out dimensionality; 0 = plain CCA.
+            n_units_z = (0 if args.no_partial else
+                         int(sum(present[z].shape[1] for z in present
+                                 if z not in (ax, ay))))
             k_eff = int(min(K, n_units_x, n_units_y))
             ws_by_epoch = {}
             for epoch in config.EPOCH_NAMES:
@@ -100,7 +113,8 @@ def main():
                 ws = runner.fit_window(
                     present, trial_ids, ax, ay, uniq[pos], cfg,
                     k=K, max_lag=max_lag, n_shuffles=config.SURROGATE_SHUFFLES,
-                    n_folds=cfg.n_folds, min_cell_bins=MIN_CELL_BINS)
+                    n_folds=cfg.n_folds, min_cell_bins=MIN_CELL_BINS,
+                    partial_z=not args.no_partial)
                 if ws is None:
                     continue
                 cc1 = float(ws.cc[0]) if ws.cc.size else float("nan")
@@ -117,9 +131,21 @@ def main():
                     "mi_sig": round(ws.mi_sig, 4), "ifi": round(ws.ifi, 4),
                     "optimal_lag": ws.optimal_lag,
                     "gini_x": round(ws.gini_x, 4), "gini_y": round(ws.gini_y, 4),
+                    # Partner-DEPENDENT sparsity control (CCA-free cross-area
+                    # coupling). gini_x/y above is partner-invariant
+                    # (area-intrinsic) — see FIGURE_PLAN_AUDIT.md §6.
+                    "gini_pearson_x": round(ws.gini_pearson_x, 4),
+                    "gini_pearson_y": round(ws.gini_pearson_y, 4),
                     "sh_x_cc1": round(ws.split_half_x_cc1, 2),
                     "sh_y_cc1": round(ws.split_half_y_cc1, 2)})
                 n_rows += 1
+                for i, L in enumerate(ws.lags):
+                    v = float(ws.lag_cc1[i])
+                    lagcurves.append({
+                        "animal": a.animal_id, "pair": f"{ax}-{ay}",
+                        "epoch": epoch, "lag_bin": int(L),
+                        "lag_ms": int(L) * args.bin_ms,
+                        "cc1": round(v, 4) if np.isfinite(v) else ""})
                 for d in range(int(ws.cc.size)):
                     dims.append({
                         "animal": a.animal_id, "pair": f"{ax}-{ay}", "epoch": epoch,
@@ -147,9 +173,10 @@ def main():
     _write(config.RESULTS_DIR / f"epoch_cross{suffix}.csv",
            [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in r.items()}
             for r in cross])
+    _write(config.RESULTS_DIR / f"epoch_lagcurves{suffix}.csv", lagcurves)
     print(f"\nwrote epoch_metrics{suffix}.csv ({len(metrics)} cells), "
           f"epoch_dims ({len(dims)}), epoch_weights ({len(weights)}), "
-          f"epoch_cross ({len(cross)})")
+          f"epoch_cross ({len(cross)}), epoch_lagcurves ({len(lagcurves)})")
 
 
 def _write(path: Path, rows: list[dict]) -> None:

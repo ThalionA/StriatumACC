@@ -89,3 +89,29 @@ def test_cross_window_runs_on_two_fits():
     cw = runner.cross_window(w1, w2)
     assert 0.0 <= cw.jaccard_x <= 1.0
     assert np.isfinite(cw.rot_x_cc1) and np.isfinite(cw.floor_x_cc1)
+
+
+def test_fit_window_no_partial_keeps_common_input():
+    # A third area (DLS) drives both DMS and ACC. Partialling it out must
+    # remove the shared drive; partial_z=False (plain CCA) must keep it.
+    n_units = 30
+    a = _animal(n_units, {"DMS": range(0, 10), "ACC": range(10, 20),
+                          "DLS": range(20, 30)})
+    rng = np.random.default_rng(7)
+    n_bins, n_trials = 4000, 20
+    common = rng.normal(size=(n_bins, 1))
+    spikes = rng.normal(size=(n_bins, n_units)).astype(np.float32)
+    spikes[:, 0:30] += (1.2 * common).astype(np.float32)
+    vel = np.full(n_bins, 10.0)
+    trial_idx = np.repeat(np.arange(n_trials), n_bins // n_trials).astype(float)
+    s = dataio.TemporalStreams(spikes=spikes, vel=vel, trial_idx=trial_idx)
+    run = dataio.running_mask(s, CFG)
+    present = runner.build_present(s, run, a, CFG)
+    tids = s.trial_idx[run]
+    trials = np.arange(n_trials)
+    kw = dict(k=5, max_lag=2, n_shuffles=3, n_folds=4, min_cell_bins=100)
+    ws_partial = runner.fit_window(present, tids, "DMS", "ACC", trials, CFG, **kw)
+    ws_plain = runner.fit_window(present, tids, "DMS", "ACC", trials, CFG,
+                                 partial_z=False, **kw)
+    assert ws_partial is not None and ws_plain is not None
+    assert ws_plain.cc[0] > ws_partial.cc[0] + 0.1
