@@ -38,6 +38,10 @@ cfg.tca.max_iterations = 200;
 cfg.tca.num_initialisations = 25;
 cfg.tca.select_factors_method = 'bic'; % or 'manual' or 'fixed'
 cfg.tca.fixed_n_factors = 5; % Used if select_factors_method is 'fixed' or as fallback/manual choice
+% Per-area balanced subsampling (default true = original behaviour). Headless
+% runs can request the full-tensor variant with TCA_UNBALANCED=1 in the
+% environment; outputs then go to tca_outputs_unbalanced.mat (2026-08-11).
+cfg.balance_areas = ~strcmp(getenv('TCA_UNBALANCED'), '1');
 
 % --- Plotting Parameters ---
 cfg.plot.zone_params.visual_zones_au  = [80 100];
@@ -286,6 +290,15 @@ fprintf('  Dimensions of valid tensor: [%d neurons x %d bins x %d trials]\n', si
 fprintf('  Total valid mice included: %d Task, %d Control\n', tensor_info.n_animals_task, tensor_info.n_animals_control); % Report actual included counts
 
 %% ================= Subsample Units by Area =============================================
+% cfg.balance_areas gates the per-area balanced subsample (added 2026-08-11).
+% true  = original behaviour: every kept area subsampled (unseeded randperm)
+%         down to the smallest kept area's unit count.
+% false = full-tensor variant: all NaN-free units enter; area contributions
+%         are then proportional to unit count (ACC dominates), and outputs
+%         save to tca_outputs_unbalanced.mat so the balanced artefact and its
+%         downstream consumers are untouched.
+if ~isfield(cfg, 'balance_areas'), cfg.balance_areas = true; end
+if cfg.balance_areas
 fprintf('--- Subsampling units ---\n');
 
 % Use the area labels from the valid labels structure
@@ -345,6 +358,10 @@ else
     
     fprintf('Subsampling complete. Dataset reduced from %d to %d total units.\n\n', ...
             original_unit_count, size(supermouse_combined_valid, 1));
+end
+else
+    fprintf('--- Per-area subsampling SKIPPED (cfg.balance_areas = false): %d units enter unbalanced ---\n', ...
+            size(supermouse_combined_valid, 1));
 end
 
 %% ================= Analyze and Visualize Response Range ================================
@@ -1161,7 +1178,11 @@ end
 
 % --- Save key outputs so downstream scripts can load them without
 %     requiring a fresh run of the whole pipeline. (2026-05-07) ---
-tca_outputs_file = 'processed_data/tca_outputs.mat';
+if cfg.balance_areas
+    tca_outputs_file = 'processed_data/tca_outputs.mat';
+else
+    tca_outputs_file = 'processed_data/tca_outputs_unbalanced.mat';
+end
 save_vars = {'supermouse_tensor_raw', 'combined_labels', 'tensor_info', ...
              'cfg', 'task_data', 'learning_points_task', 'avg_learning_point'};
 if exist('best_mdl', 'var') && ~isempty(best_mdl)
@@ -1173,6 +1194,12 @@ if exist('labels_valid', 'var')
 end
 if exist('supermouse_combined_valid', 'var')
     save_vars{end+1} = 'supermouse_combined_valid';
+end
+% Persist the full selection results (all_best_models for every tested rank,
+% BIC/recon curves) so rank comparisons never need a refit (2026-08-11 —
+% the rank-4 model had to be refitted because only best_mdl was saved).
+if exist('tca_results', 'var') && ~isempty(tca_results)
+    save_vars{end+1} = 'tca_results';
 end
 fprintf('Saving TCA outputs to %s ...\n', tca_outputs_file);
 save(tca_outputs_file, save_vars{:}, '-v7.3');
