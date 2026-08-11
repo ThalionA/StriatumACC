@@ -18,6 +18,15 @@
 !Striatum project/figures/stability_by_animal.csv
 !Striatum project/figures/decoding_by_animal.csv
 !Striatum project/figures/compare_bin_sizes_summary.csv
+
+# Run logs from the headless pipeline chains — regenerable, and large.
+Striatum project/processed_data/*.log
+
+# The curated manuscript panel set IS tracked: it is a hand-mapped selection
+# copied out of the regenerable figures/ tree, and losing it costs the layout
+# rather than a rerun (2026-08-12).
+!documents/manuscript_figures/*.png
+!documents/manuscript_figures/*.svg
 *.xlsx
 *.pkl
 *.npz
