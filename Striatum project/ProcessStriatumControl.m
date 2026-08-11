@@ -142,6 +142,13 @@ else
         is_dms = strcmp(all_data(ianimal).final_areas, 'DMS');
         is_dls = strcmp(all_data(ianimal).final_areas, 'DLS');
         is_acc = strcmp(all_data(ianimal).final_areas, 'ACC');
+        % Probe-2 masks (2026-08-11): the control organiser labels V1/CA1/DG
+        % since 2026-08-04, but these masks were never mirrored from the task
+        % script — so 446 probe-2 units sat inside 'all units' with no area
+        % identity in the cache (is_area_safe silently all-false downstream).
+        is_v1  = strcmp(all_data(ianimal).final_areas, 'V1');
+        is_ca1 = strcmp(all_data(ianimal).final_areas, 'CA1');
+        is_dg  = strcmp(all_data(ianimal).final_areas, 'DG');
 
         % Helper for slicing spikes
         slice_spikes = @(spikes) arrayfun(@(s,e) spikes(:, s:e), npxStartIdx, npxEndIdx, 'UniformOutput', false);
@@ -266,6 +273,9 @@ else
         preprocessed_data(ianimal).is_dms = is_dms;
         preprocessed_data(ianimal).is_dls = is_dls;
         preprocessed_data(ianimal).is_acc = is_acc;
+        preprocessed_data(ianimal).is_v1  = is_v1;    % NEW (2026-08-11)
+        preprocessed_data(ianimal).is_ca1 = is_ca1;
+        preprocessed_data(ianimal).is_dg  = is_dg;
         
         preprocessed_data(ianimal).binned_spikes_trials = binned_spikes_trials;
         preprocessed_data(ianimal).npx_times_trials = npx_times_trials;
