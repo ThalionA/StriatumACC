@@ -1020,7 +1020,7 @@ fprintf('Shuffle  RMSE  = %.2f ± %.2f\n', ...
         results.shuffle.rmse_mean, results.shuffle.rmse_sem);
 
 %% Plot decoding results
-figure
+figure('Name', 'decoding KO by trial')
 hold on
 plot(results.baseline.abs_error_trial, 'k', 'LineWidth', 2)
 shadedErrorBar(1:30, results.shuffle.abs_error_trial_mean, results.shuffle.abs_error_trial_sem, 'lineprops', {'Color', 'r', 'LineWidth', 1})
@@ -1031,7 +1031,7 @@ title('KO')
 xlabel('trial')
 ylabel('abs decoding error')
 
-figure
+figure('Name', 'decoding single by trial')
 hold on
 plot(results.baseline.abs_error_trial, 'k', 'LineWidth', 2)
 shadedErrorBar(1:30, results.shuffle.abs_error_trial_mean, results.shuffle.abs_error_trial_sem, 'lineprops', {'Color', 'r', 'LineWidth', 1})
@@ -1043,7 +1043,7 @@ xlabel('trial')
 ylabel('abs decoding error')
 
 
-figure
+figure('Name', 'decoding KO by space')
 hold on
 plot(results.baseline.abs_error_space, 'k', 'LineWidth', 2)
 shadedErrorBar(1:50, results.shuffle.abs_error_space_mean, results.shuffle.abs_error_space_sem, 'lineprops', {'Color', 'r', 'LineWidth', 1})
@@ -1055,7 +1055,7 @@ xlabel('spatial bin')
 ylabel('abs decoding error')
 
 
-figure
+figure('Name', 'decoding single by space')
 hold on
 plot(results.baseline.abs_error_space, 'k', 'LineWidth', 2)
 shadedErrorBar(1:50, results.shuffle.abs_error_space_mean, results.shuffle.abs_error_space_sem, 'lineprops', {'Color', 'r', 'LineWidth', 1})
@@ -1066,24 +1066,34 @@ title('single')
 xlabel('spatial bin')
 ylabel('abs decoding error')
 
-figure
+figure('Name', 'decoding KO boxplot')
 boxplot([results.baseline.abs_error_trial, results.shuffle.abs_error_trial_mean', [results.knockout(:).abs_error_trial]])
 title('KO')
 xticklabels([{'full', 'shuffle'}, strsplit(num2str(1:total_ensembles))])
 xlabel('ensemble')
 ylabel('abs decoding error')
 
-figure
+figure('Name', 'decoding KO delta')
 boxplot([results.knockout(:).abs_error_trial] - results.baseline.abs_error_trial)
 title('KO')
 delta_errors = [results.knockout(:).abs_error_trial] - results.baseline.abs_error_trial;
-[h, pval] = ttest(delta_errors);
-sigstar({[1, 1], 2*[1, 1], 3*[1, 1], 4*[1, 1], 5*[1, 1]}, pval)
+[h, pval] = ttest(delta_errors);   % per-trial t-test, n = 30 trials (supermouse: no animal-level unit exists)
+% Plain stars above each box (2026-08-11). The old sigstar call passed
+% zero-width same-column "pairs" ({[1,1]}...), whose coincident bracket legs
+% rendered as tall clipped vertical lines over every box.
+yl = ylim;
+for e_sig = 1:total_ensembles
+    n_stars = sum(pval(e_sig) < [0.05, 0.01, 0.001]);
+    if n_stars > 0
+        text(e_sig, yl(2) - 0.04 * range(yl), repmat('*', 1, n_stars), ...
+             'HorizontalAlignment', 'center', 'FontSize', 12);
+    end
+end
 yline(0, 'k--')
 xlabel('ensemble')
 ylabel('\Delta decoding error')
 
-figure
+figure('Name', 'decoding single boxplot')
 boxplot([results.baseline.abs_error_trial, results.shuffle.abs_error_trial_mean', [results.only(:).abs_error_trial]])
 title('single')
 xticklabels([{'full', 'shuffle'}, strsplit(num2str(1:total_ensembles))])
