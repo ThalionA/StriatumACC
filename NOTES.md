@@ -1,5 +1,37 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-08-12 — Cell types fixed; full regeneration; manuscript panel set
+
+**Cell-type classification was broken two ways in series** and is now fixed
+(`classify_neuron_types.m` + test). (1) Both organisers hardcoded
+`final_nt_p2 = NaN` and never loaded `<mouse>_v1_neurontype2025.mat`, which
+has existed all along — so V1/CA1/DG had no cell type at all. (2) ACC was
+labelled with the striatal four-way rule, so cortical cells came out
+MSN/TAN/UIN and code 5 (RS) was never assigned. A THIRD, independent fault
+sat in the plotting: `SpatioTemporalActivityEvolution` remapped every label
+`>3` to 4 while its panels ask for `target_types=[1 2 3 5]`, erasing RS at
+draw time regardless of the data. Rule now: DMS/DLS keep MSN/FSN/TAN/UIN;
+ACC/V1/CA1/DG split FS (<0.4 ms peak-trough) vs RS (everything else).
+Result: ACC 76 FS/623 RS, V1 42/222, CA1 17/116, DG 7/11 (11-16% FS, the
+right ballpark for cortex/hippocampus).
+
+**Full chain regenerated** (organisers → preprocessing → TCA → ensembles →
+spatiotemporal). Two pre-existing crashes had to be cleared first: both
+preprocessing scripts aborted on undefined variables
+(`dimensionality_stim_all`, `pca_stim_dimensionality_*`) — caches are saved
+before those points, so the data was never affected, but any scripted chain
+died there.
+
+**Deliverables.** `presentations/StriatumUpdate_20260811.pptx` — 271 slides,
+15 white section dividers, 256 figures, no text on figure slides.
+`documents/manuscript_figures/` — 37 panels mapped onto the handwritten
+four-figure layout (tracked in git). Six panels have no figure (1A/2A/2B/4A/4E
+illustrations; 1D needs `legacy/optimality_analysis.m` resurrected).
+
+**Standing caveat:** panels are placed by position in the layout, not by
+whether they support the claim. Fig 2D/2E and the Fig 4 set are refuted or
+null — see `documents/FIGURE_PLAN_AUDIT.md`.
+
 ## 2026-08-11 — Figure-plan audit (adversarially verified) + tcca epoch grid
 
 **Audit.** Every panel of the handwritten manuscript plan verified against
