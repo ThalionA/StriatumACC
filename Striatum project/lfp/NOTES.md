@@ -1,5 +1,65 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-08-11 — Zihao's re-export: the gate is CLEARED (with two data gaps)
+
+Zihao re-exported the LFP (CAR only, no filter; the previous files were scrambled
+by the save step). New files live on the lab share, **not** in this repo:
+`/Volumes/INCR-RochefortLab/Striatum_ACC/Archive/All mice_task_1ms_binned/<mouse>/voltage_data_384ch.mat`.
+**22 task-mouse files, regenerated 2026-07-29 → 08-07.** Read-only verification from
+disk (h5py over the mount); no files copied.
+
+**New format.** `data_to_save` (8,400,000 × 384) float32, gzip-chunked (42,384);
+`channels_to_save` 1–384; **`depth_to_save` 0–3820 µm** (2 channels per 20 µm — NP 1.0
+geometry, and the same depth convention as `goodcluster2`, so the existing depth-band
+CSVs assign LFP channels to DMS/DLS/ACC directly).
+
+**The alignment blocker is solved.** Every mouse's LFP has *exactly* the same sample
+count as its `binned_spikes` (8,400,000 = 140 min at 1 kHz), i.e. the LFP is on the
+project's 1 ms grid. Verified physiologically, not just by shape: 727's 30–90 Hz
+envelope × MUA cross-correlation **peaks at lag 0 ms** (r=0.061, falling to 0.031 by
+±50 ms). LFP sample *i* ↔ `binned_spikes` sample *i* ↔ `VR_times_synched`.
+
+**Before → after** (mid-session block, per-channel z, fs=1 kHz):
+
+| | old (local Jun files) | new (lab share) |
+|---|---|---|
+| adjacent-depth r | 0.985–0.989 | 0.83–0.96 |
+| distant r (+100 ch) | **+0.42 to +0.46** | **0.00 to +0.09** |
+| LF/HF (1–10 vs 100–200 Hz) | **0.6–1.5** (broadband) | **97–1400** (1/f LFP) |
+| 75 / 151 Hz line ratio | contaminated (audit 2026-07-12) | **1.0 / 0.9–1.1 — gone** |
+| 60 s periodic events | exact 60 s cadence | none in 727/730 (peak/median 1.5–2.1) |
+
+So the three July blockers — scrambled layout, broadband dominance, and the ~75/151 Hz
+contamination that invalidated the 30–80 Hz band — are all resolved. **Low gamma is
+usable again.** Mild 50 Hz mains in some sessions (2.2–2.6× neighbours in 727/730,
+~1.0 in 523/731) — notch or avoid.
+
+**Two data gaps — do not analyse until resolved:**
+
+1. **614 and 731 are byte-identical.** Same size (5,142,176,092), same mtime
+   (Jul 29 16:46:44), same SHA1 on every slice tested. Identity resolved by
+   LFP↔spike coupling: the shared file correlates with **731's** spiking
+   (mean|r| = 0.322 across 384 ch) and **not** with 614's (0.008). The test is
+   validated — matched pairs always win (727×727 0.032, 523×523 0.033, 730×730 0.010
+   vs off-diagonal 0.004–0.008), and 731's rate matches *only* this file. **Conclusion:
+   the file is 731's; 614 has no genuine LFP and must be re-exported.**
+2. **1212 was not regenerated** — still the June file (11,400,000 samples, std ≈ 1.64,
+   LF/HF 1.3, peaks at ~417 Hz). Consistent with the standing rule that 1212 is
+   qualitatively different and stays separate.
+3. **No control-group LFP exists** (`All_mice_control1/control2_*` contain no
+   `voltage_*` files) — so any LFP claim is task-only.
+
+**Open questions for Zihao** (none blocking the fix above): units (values are ~3–5e-6,
+i.e. µV-scale if volts — he flags default gain, fine for correlation/coherence, matters
+for absolute power); referencing (the across-channel **mean** is not zeroed —
+residual 0.12–0.20 of a channel SD — while the **median** residual is 0.05–0.07, which
+looks like common-*median* referencing rather than CAR); and whether "no filter" still
+implies an anti-alias filter in the 30 kHz → 1 kHz decimation.
+
+**Housekeeping.** Terminal zero padding runs from ~130–135 min to the 140 min end —
+mask it. The four June files in `RawData/LFP/` are superseded; `lfp_mapping.txt`
+(1212/614/727/731) no longer describes the current set.
+
 ## 2026-07-13 — Validation hardening and figure/code reconciliation
 
 - Corrected the state histograms to exclude periodic high-amplitude bins and
