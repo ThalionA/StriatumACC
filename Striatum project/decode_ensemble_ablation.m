@@ -59,8 +59,12 @@ poisLL = @(r,lam) r.*log(max(lam,cfg.poisson_eps)) - lam;   % elementwise
         pred = nan(nTrials,nBins);
         for tst = 1:nTrials
             trn = setdiff(1:nTrials,tst);
-            % mu  = mean(tensor(idx,:,trn),3,'omitnan');        % (#idx × bins)
-            mu  = mean(tensor(idx,:,21:30),3,'omitnan');        % (#idx × bins)
+            % Leave-one-trial-out template (restored 2026-08-11). The previous
+            % line trained on trials 21:30 unconditionally, so post-LP test
+            % trials sat inside their own template (leak) while naive trials
+            % were decoded with an expert template — the learning effect and
+            % the leakage pointed the same way (audit Fig-3 ablation finding).
+            mu  = mean(tensor(idx,:,trn),3,'omitnan');        % (#idx × bins)
             testDat = tensor(idx,:,tst);
             for b = 1:nBins
                 ll = sum(poisLL(testDat(:,b), mu),1);        % 1×bins
