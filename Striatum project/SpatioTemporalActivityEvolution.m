@@ -1521,7 +1521,11 @@ lbls_full.area  = combined_labels.area_labels_all(valid_idx);
 % Handle Neuron Types
 raw_ntypes = combined_labels.neurontype_labels_all(valid_idx);
 processed_ntypes = raw_ntypes;
-processed_ntypes(isnan(raw_ntypes) | (raw_ntypes < 1) | (raw_ntypes > 3)) = 4;
+% Fold only genuinely unclassified units into 4. The old rule collapsed
+% everything >3 — including RS (code 5) — so the RS panels below, which
+% ask for target_types = [1 2 3 5], could never find a single unit and
+% rendered empty in every area (fixed 2026-08-11).
+processed_ntypes(isnan(raw_ntypes) | ~ismember(raw_ntypes, [1, 2, 3, 5])) = 4;
 lbls_full.ntype = processed_ntypes;
 
 % --- 2. Calculate Z-Scored Tensor ---
@@ -1775,7 +1779,11 @@ lbls_full.area  = combined_labels.area_labels_all(valid_idx);
 % Handle Neuron Types
 raw_ntypes = combined_labels.neurontype_labels_all(valid_idx);
 processed_ntypes = raw_ntypes;
-processed_ntypes(isnan(raw_ntypes) | (raw_ntypes < 1) | (raw_ntypes > 3)) = 4;
+% Fold only genuinely unclassified units into 4. The old rule collapsed
+% everything >3 — including RS (code 5) — so the RS panels below, which
+% ask for target_types = [1 2 3 5], could never find a single unit and
+% rendered empty in every area (fixed 2026-08-11).
+processed_ntypes(isnan(raw_ntypes) | ~ismember(raw_ntypes, [1, 2, 3, 5])) = 4;
 lbls_full.ntype = processed_ntypes;
 
 % --- 2. Calculate Z-Scored Tensor ---
