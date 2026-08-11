@@ -17,7 +17,13 @@ clear proj
 % Areas + field map are driven from project_cfg(); DG is then dropped here
 % (excluded from all figures/analyses, 2026-05-24) without touching the
 % shared config, so other pipelines that read project_cfg keep DG.
-cfg.analysis_mode = 'task_and_control'; % Options: 'task_only', 'control_only', 'task_and_control'
+% Options: 'task_only', 'control_only', 'task_and_control'. Headless runs can
+% override via the TCA_MODE environment variable (2026-08-11, for the
+% separate task/control decompositions).
+cfg.analysis_mode = 'task_and_control';
+if ~isempty(getenv('TCA_MODE'))
+    cfg.analysis_mode = getenv('TCA_MODE');
+end
 proj = project_cfg();
 cfg.areas_to_include = proj.areas(~strcmp(proj.areas, 'DG'));
 cfg.area_field_map   = proj.area_field_map;
@@ -1102,6 +1108,41 @@ grid on;
 xlim([1, cfg.tca.max_factors + 0.5]); % Adjust xlim slightly
 hold off;
 
+%% ================= Save Outputs (before plotting, 2026-08-11) ==========================
+% Saved BEFORE the visualization sections so a plotting error in a less-
+% exercised mode (e.g. control_only) can never cost the fitted models.
+% Variant-aware output name: combined+balanced keeps the canonical
+% tca_outputs.mat; other variants get explicit tags so nothing is clobbered.
+mode_tag = '';
+if ~strcmp(cfg.analysis_mode, 'task_and_control')
+    mode_tag = ['_' strrep(cfg.analysis_mode, '_only', '')];
+end
+bal_tag = '';
+if ~cfg.balance_areas
+    bal_tag = '_unbalanced';
+end
+tca_outputs_file = sprintf('processed_data/tca_outputs%s%s.mat', mode_tag, bal_tag);
+save_vars = {'supermouse_tensor_raw', 'combined_labels', 'tensor_info', ...
+             'cfg', 'task_data', 'learning_points_task', 'avg_learning_point'};
+if exist('best_mdl', 'var') && ~isempty(best_mdl)
+    save_vars{end+1} = 'best_mdl';
+    save_vars{end+1} = 'best_n_factors';
+end
+if exist('labels_valid', 'var')
+    save_vars{end+1} = 'labels_valid';
+end
+if exist('supermouse_combined_valid', 'var')
+    save_vars{end+1} = 'supermouse_combined_valid';
+end
+% Persist the full selection results (all_best_models for every tested rank,
+% BIC/recon curves) so rank comparisons never need a refit (2026-08-11 —
+% the rank-4 model had to be refitted because only best_mdl was saved).
+if exist('tca_results', 'var') && ~isempty(tca_results)
+    save_vars{end+1} = 'tca_results';
+end
+fprintf('Saving TCA outputs to %s ...\n', tca_outputs_file);
+save(tca_outputs_file, save_vars{:}, '-v7.3');
+
 %% ================= Visualization and Further Analysis ==================================
 fprintf('--- Generating Plots and Further Analyses ---\n');
 
@@ -1178,39 +1219,10 @@ end
 
 % --- Save key outputs so downstream scripts can load them without
 %     requiring a fresh run of the whole pipeline. (2026-05-07) ---
-if cfg.balance_areas
-    tca_outputs_file = 'processed_data/tca_outputs.mat';
-else
-    tca_outputs_file = 'processed_data/tca_outputs_unbalanced.mat';
-end
-save_vars = {'supermouse_tensor_raw', 'combined_labels', 'tensor_info', ...
-             'cfg', 'task_data', 'learning_points_task', 'avg_learning_point'};
-if exist('best_mdl', 'var') && ~isempty(best_mdl)
-    save_vars{end+1} = 'best_mdl';
-    save_vars{end+1} = 'best_n_factors';
-end
-if exist('labels_valid', 'var')
-    save_vars{end+1} = 'labels_valid';
-end
-if exist('supermouse_combined_valid', 'var')
-    save_vars{end+1} = 'supermouse_combined_valid';
-end
-% Persist the full selection results (all_best_models for every tested rank,
-% BIC/recon curves) so rank comparisons never need a refit (2026-08-11 —
-% the rank-4 model had to be refitted because only best_mdl was saved).
-if exist('tca_results', 'var') && ~isempty(tca_results)
-    save_vars{end+1} = 'tca_results';
-end
-fprintf('Saving TCA outputs to %s ...\n', tca_outputs_file);
-save(tca_outputs_file, save_vars{:}, '-v7.3');
 
 % Persist every figure (svg+png) so headless runs never need repeating just
 % to see a plot (2026-08-11).
-if cfg.balance_areas
-    save_all_open_figures('tca_balanced');
-else
-    save_all_open_figures('tca_unbalanced');
-end
+save_all_open_figures(sprintf('tca%s%s', mode_tag, bal_tag));
 
 fprintf('--- Analysis Pipeline Finished ---\n');
 
