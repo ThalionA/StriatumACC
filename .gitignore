@@ -23,6 +23,7 @@
 
 # Run logs from the headless pipeline chains — regenerable, and large.
 Striatum project/processed_data/*.log
+Striatum project/rl_model/results/*.log
 
 # The curated manuscript panel set IS tracked: it is a hand-mapped selection
 # copied out of the regenerable figures/ tree, and losing it costs the layout
