@@ -151,7 +151,16 @@ def main():
 
 
 def _profile(arr, mask):
-    """Trial-averaged spatial profile over valid bins."""
+    """Trial-averaged spatial profile over valid bins.
+
+    The fitted latents and the behavioural record can disagree by one trial
+    (io_real takes n_trials from licks; some fits hold one fewer — M13 is
+    155 vs 156). Clamp both to the shorter before combining, rather than
+    letting NumPy raise on the broadcast (fixed 2026-08-12).
+    """
+    arr = np.asarray(arr)
+    n = min(arr.shape[0], mask.shape[0])
+    arr, mask = arr[:n], mask[:n]
     w = mask.sum(0)
     return (arr * mask).sum(0) / np.maximum(w, 1.0)
 
