@@ -28,6 +28,42 @@ therefore changes for every non-striatal area.
 - **Falsifier:** any striatal pair with a BH-surviving epoch effect on
   held-out CC → the learning-change claim revives and Fig 4B is back.
 
+**Outcome (2026-08-12, same day) — ✗ P1 wrong (CC rose systematically);
+~P2 directionally right; ✓ P3; ✓ P4; ✓ P5. Falsifier not triggered.**
+
+P1: **wrong, and in an informative way.** Every pair's per-animal held-out CC1
+came out ABOVE the recorded committed-config values, by more than the ±0.03 I
+allowed: DMS-DLS 0.200/0.184/0.191 (was 0.154/0.140/0.180), DMS-ACC
+0.172/0.143/0.164 (was 0.120/0.096/0.115), DLS-ACC 0.132/0.132/0.138 (was
+0.107/0.094/0.093) [naive/intermediate/expert]. Uplift +0.01 to +0.05, most
+consistent for DMS-ACC (+0.05 in all three epochs). I predicted stability
+because I was thinking of the FS-exclusion change as the only difference and
+treated the binning change as neutral — but the recorded values came from the
+**2.5 cm** committed config, and 5 cm has better per-bin SNR (the same effect
+that won the bin-size comparison: +0.17 split-half reliability). Lesson: when
+several things changed at once, predict against the change with the largest
+known effect size, not the one most recently on my mind.
+
+P2: DMS-ACC did shift most (+0.049 mean), consistent with ACC's FS set
+changing from ~26 striatal-criteria units to 76 — but since every pair rose,
+the binning is the better explanation for most of the movement, and the ACC
+contribution is not separable in this run.
+
+P3 ✓ **the load-bearing null holds**: animal-level rm-ANOVA on held-out CC is
+n.s. for every striatal pair — DMS-DLS p=0.854, DMS-ACC p=0.450, DLS-ACC
+p=0.904 (dimension-level likewise 0.92/0.51/0.58). Nothing to correct.
+
+P4 ✓ CC>0 at the animal level in all three epochs for all three pairs
+(p=0.016 worst, 4e-05 best).
+
+P5 ✓ V1-ACC n=3, V1-DMS n=2, CA1-* n=1, V1-DLS/CA1-DLS n=0 — still
+uninferable. DLS-ACC gained one animal (4→5).
+
+**Net:** the spatial arm now agrees with the temporal arm on both headline
+claims — communication is reliably present and does not change with learning —
+and the magnitudes are ~30% higher than previously recorded because the arm
+finally runs on the bin size the project chose on evidence.
+
 ## 2026-08-11 — tcca epoch grid: bin {25,10 ms} × FS {excl,incl} × {partial,plain} + IFI integration-window sweep
 
 Eight run_epochs configs on the seeded 5 cm cache (A7's LP is 33 vs the recorded

@@ -112,11 +112,20 @@ def fit_batch():
         if time.time() - t0 > TIME_BUDGET and n_this_run > 0:
             break
         mid = m["mouse"]
-        nt = m["n_trials"]
+        # The behavioural record and the neural tensor can disagree by a trial
+        # (io_real takes n_trials from licks; the .mat tensor may hold one
+        # fewer). Clamp everything to the shorter of the two — before this
+        # guard, fr[:nt] silently returned fewer trials than the mask and
+        # encode_mouse died on a boolean-index mismatch (M13: 155 vs 156
+        # trials = 7750 vs 7800 bins). Fixed 2026-08-12.
+        nt = int(min(m["n_trials"], neural[i]["fr"].shape[0]))
+        if nt < m["n_trials"]:
+            log(f"  {mid}: neural tensor has {neural[i]['fr'].shape[0]} trials "
+                f"vs {m['n_trials']} behavioural - using {nt}")
         fr = neural[i]["fr"][:nt]
-        lat = {k: np.asarray(lat_npz[k][i], dtype=float) for k in LATENTS}
-        vel = np.exp(m["logv"])
-        res = encode_mouse(fr, lat, m["licks"], vel, m["mask"])
+        lat = {k: np.asarray(lat_npz[k][i], dtype=float)[:nt] for k in LATENTS}
+        vel = np.exp(m["logv"])[:nt]
+        res = encode_mouse(fr, lat, m["licks"][:nt], vel, m["mask"][:nt])
         out = dict(area=neural[i]["area"].astype(str))
         for mdl in MODELS:
             out[f"r2_{mdl}"] = res[mdl]["r2_full"]
