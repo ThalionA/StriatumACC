@@ -1,5 +1,33 @@
 # Predictions (newest first)
 
+## 2026-08-12 — spatial CCA rerun on the corrected 5 cm cache
+
+First spatial-arm run since (a) the 5 cm standardisation, (b) the depth fix,
+(c) LP seeding, and (d) today's cell-type fix. (d) matters most here: the
+pipeline excludes fast-spiking units by `FS_TYPE_CODE = 2`, and before today
+ACC carried striatal-criteria FS labels while V1/CA1/DG had **no type at
+all**, so no unit was excluded in those areas. The FS-excluded cohort
+therefore changes for every non-striatal area.
+
+- **P1 (striatal triangle is stable):** DMS-DLS and DLS-ACC per-animal
+  held-out CC1 land within ±0.03 of the recorded committed-config values
+  (DMS-DLS ≈0.14–0.18, DLS-ACC ≈0.09–0.11). DMS/DLS unit sets are untouched
+  by the fix; only ACC's changes. Confidence ~70%.
+- **P2 (ACC pairs shift most):** DMS-ACC changes more than DMS-DLS does,
+  because ACC now excludes 76 FS units instead of the ~26 the striatal rule
+  picked. Direction unsigned — excluding more units cuts n but removes
+  broad-waveform contamination. Confidence ~65%.
+- **P3 (the null survives):** no pair shows a BH-surviving naive→expert
+  change in held-out CC at the animal level. This is the load-bearing one —
+  it has held across 1056 sweep configs, the tcca 8-config grid and the
+  committed-config ANOVAs. Confidence ~85%.
+- **P4 (CC>0 survives):** every striatal-triangle pair stays significantly
+  above zero at the animal level in all three epochs. Confidence ~85%.
+- **P5 (V1/CA1 stay anecdotal):** V1 pairs keep n≤3 learners and CA1 pairs
+  n≤2 after the new FS exclusion, so they remain uninferable. ~90%.
+- **Falsifier:** any striatal pair with a BH-surviving epoch effect on
+  held-out CC → the learning-change claim revives and Fig 4B is back.
+
 ## 2026-08-11 — tcca epoch grid: bin {25,10 ms} × FS {excl,incl} × {partial,plain} + IFI integration-window sweep
 
 Eight run_epochs configs on the seeded 5 cm cache (A7's LP is 33 vs the recorded
