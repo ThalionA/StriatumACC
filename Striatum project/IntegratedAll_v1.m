@@ -428,7 +428,15 @@ save_to_svg('Behavioral_Stability_AllGroups_Epochs');
 
 %% 5. Extract Epoch Data (Behavior - Yoked to LP)
 fprintf('Extracting behavioral data across yoked epochs...\n');
-epochs = {'Naive', 'Intermediate', 'Expert'};
+% Naive is split at trial 3 so the behavioural traces resolve the very first
+% trials separately, matching the neural convention in
+% SpatioTemporalActivityEvolution.m:68 (epoch_trials = {1:3, 4:10, 11:20, 21:30}).
+% NB the four windows are unequal (3, 7, 10, 10 trials), so the first two
+% carry more sampling noise than the LP-relative pair (2026-08-27).
+naive_split = 3;
+epochs = {sprintf('Trials 1-%d', naive_split), ...
+          sprintf('Trials %d-%d', naive_split + 1, trials_per_epoch), ...
+          'Intermediate', 'Expert'};
 n_epochs = length(epochs);
 
 % Bin-indexed trackers sized to the largest group (see group_n_bins); each
@@ -463,9 +471,10 @@ for g = 1:3
         end
         
         epoch_idx = cell(1, n_epochs);
-        if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
-        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
-        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
+        if n_tr >= naive_split, epoch_idx{1} = 1:naive_split; end
+        if n_tr >= trials_per_epoch, epoch_idx{2} = (naive_split + 1):trials_per_epoch; end
+        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{3} = (lp - trials_per_epoch) : (lp - 1); end
+        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{4} = lp : (lp + trials_per_epoch - 1); end
         
         for e = 1:n_epochs
             idx = epoch_idx{e};

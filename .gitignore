@@ -36,3 +36,8 @@ Striatum project/rl_model/results/*.log
 *.done
 *.pyc
 *.npz
+
+# npm deps for the deck builder (regenerable via npm install)
+Striatum project/presentations/node_modules/
+Striatum project/presentations/package-lock.json
+Striatum project/presentations/package.json
