@@ -25,3 +25,10 @@ figures/**/*.svg
 # 2026-08-27 NOTES entry and cost a full re-scan of ~90 GB to regenerate.
 !results/lfp_inventory.csv
 !results/lfp_identity_matrix.csv
+!results/lfp_arms_evolution.csv
+!results/lfp_arms_evolution_stats.csv
+!results/lfp_arms_decoding.csv
+!results/lfp_arms_reliability.csv
+!results/lfp_arms_cca.csv
+!results/lfp_bandpower_summary.csv
+!results/lfp_bandpower_validation.csv

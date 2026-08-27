@@ -1,0 +1,24 @@
+[arms] 17 band-power files
+[arms] 1206/striatum  lp=None areas=['DMS'] 10+10+10+0 rows      2s
+[arms] 1106/visual    lp=67 areas=['V1'] 20+20+20+0 rows      3s
+[arms] 1105/visual    lp=44 areas=['V1'] 20+20+20+0 rows      5s
+[arms] 1212/striatum  lp=23 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     40s
+[arms] 1212/visual    lp=23 areas=['CA1', 'DG', 'V1'] 60+60+60+15 rows     44s
+[arms] 1206/visual    lp=None areas=['CA1', 'DG', 'V1'] 30+30+30+15 rows     48s
+[arms] 1201/striatum  lp=84 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     54s
+[arms] 1105/striatum  lp=44 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     58s
+[arms] 1106/striatum  lp=67 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     59s
+[arms] 731/striatum  lp=36 areas=['ACC', 'DMS'] 40+40+40+5 rows     14s
+[arms] 624/striatum  lp=32 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     27s
+[arms] 823/striatum  lp=14 areas=['ACC', 'DMS'] 40+40+40+5 rows     25s
+[arms] 614/striatum  lp=44 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     56s
+[arms] 523/striatum  lp=22 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     64s
+[arms] 822/striatum  lp=33 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     37s
+[arms] 727/striatum  lp=53 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     61s
+[arms] 730/striatum  lp=54 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15 rows     60s
+[arms] all files in 2.0 min
+[arms] wrote lfp_arms_evolution_stats.csv: 2/48 cells survive BH-FDR at q=0.05
+[arms] wrote lfp_arms_evolution.csv (820 rows)
+[arms] wrote lfp_arms_decoding.csv (820 rows)
+[arms] wrote lfp_arms_reliability.csv (820 rows)
+[arms] wrote lfp_arms_cca.csv (190 rows)

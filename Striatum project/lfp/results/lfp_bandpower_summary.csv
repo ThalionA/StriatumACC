@@ -1,0 +1,3 @@
+mouse_id,probe,n_trials_total,n_trials_stored,n_good_trials,truncated_at_max,corridor_cells_filled,median_samples_per_spatial_bin,file_mb,elapsed_s
+1212,striatum,156,156,107,False,0.9983177570093458,269.0,73.949346,414.83446407318115
+1212,visual,156,156,107,False,0.9983177570093458,269.0,73.903554,415.5495789051056

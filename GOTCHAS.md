@@ -42,3 +42,18 @@
   comparable across candidates. An animal whose MUA carries a synchronous artefact
   correlates with *every* file and steals rows. Divide each candidate column by its
   median across files (`cohort.column_normalise`) before taking the argmax. (2026-08-27)
+- A decoding null that permutes TRIALS is no null at all when every trial carries
+  the same target sequence: for corridor position, `y` = 0..49 repeated per trial,
+  so a trial permutation leaves it bit-identical and the "null" re-runs the real
+  decoder. It looked like a real null because it returned a plausible non-zero R².
+  Rotate the labels *within* each trial instead (`arms.circular_shift_targets`).
+  With the broken null, LFP decoding looked like chance; with the correct one, 12/12
+  striatal/ACC cells survive BH-FDR. (2026-08-27)
+- MATLAB's `spatial_binned_data.durations` is the UNCLIPPED VR span, while the spike
+  sum it feeds uses npx indices clipped to the trial length. Validating a new binning
+  against `durations` therefore flags each trial's LAST bin as a mismatch even when
+  the binning is correct. Compare against the clipped range. (2026-08-27)
+- `npx_index`-style clipping hides a truncated trial: a trial running off the end of
+  a short export comes back looking like one that finishes exactly at the last
+  sample. Only the UNCLIPPED VR time distinguishes them (`bandpower.truncated_trials`);
+  this bites 1212, whose export stops 41 min before its session does. (2026-08-27)

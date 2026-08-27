@@ -1,5 +1,97 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-08-27 (b) — Band power as the firing-rate analogue: extraction, then four arms
+
+**The product.** `results/lfp_band_trials/<mouse>_<probe>.npz`, one per export:
+mean power in 5 bands (theta 4–8, beta 15–30, low gamma 30–80, high gamma
+80–150, total 1–150) per channel, per 5 cm corridor bin and per 100 ms dark bin,
+per trial, capped at 200 trials (~136 MB each, 2 GB total). 50 Hz/100/150 notched
+unconditionally on every file. Extraction is one streaming pass, ~4 min/file.
+
+**The bin map is MATLAB's, verified cell by cell.** `validate_lfp_bandpower.py`
+compares every (trial, bin) span against `spatial_binned_data.durations`:
+**17/17 files, median / p99 / max absolute difference all 0.0 ms**, no bin present
+in one pipeline and missing from the other. Two wrinkles found on the way, both
+now reproduced deliberately: (1) MATLAB's `durations` field is the *unclipped* VR
+span while the spike sum it feeds uses npx indices clipped to the trial length, so
+each trial's last bin is genuinely shorter in the data than in `durations`;
+(2) `npx_index` clips to the recording, so 1212's one trial that runs off the end
+of its truncated export looked like a trial finishing exactly at the last sample —
+`bandpower.truncated_trials` catches it from the unclipped VR time instead, and
+1212 now yields 107 complete trials rather than 107 + a half.
+
+**One deliberate difference from the unit pipeline:** band power is the plain mean
+over a bin's samples, with no occupancy denominator. That avoids the `(k-1)*dt`
+speed bias the FR corridor arm carries — but it makes the two a **different
+estimand**, so an LFP corridor panel must never be captioned "the same analysis".
+
+**Learning points ported and checked against MATLAB for all 16 animals**
+(`analysis.learning_point` vs the values CorridorVsDarkActivity logged): exact match.
+
+### Results
+
+**1. Evolution.** Consistent spectral tilt across learning — theta down, gamma up —
+in DMS, DLS and directionally ACC. Declared family = area × band, animals as n,
+paired trials 4–10 → Expert, BH-FDR q=0.05: **2/48 cells survive, both DLS theta**
+(raw Δ = −0.157, p_FDR = 0.020; speed-residualised Δ = −0.145, p_FDR = 0.029).
+Everything else is a near-miss (DMS theta/low/high gamma p = 0.02–0.04 raw).
+**Running speed rises 24.9 → 33.4 cm/s (+34%) over the same epochs**, so every
+effect is reported twice, raw and after removing the linear log-speed component
+per channel. The one surviving effect survives the control; that is the whole
+point of running it.
+
+**2. Spatial decoding — reliable but small, and the first null was broken.**
+The original null permuted trials, which does nothing: every trial carries the
+same 0–49 bin sequence, so `y` came back bit-identical and the "null" silently
+re-ran the real decoder. Replaced with a within-trial circular rotation of the
+position labels (`arms.circular_shift_targets`). With the correct null, position
+IS decodable: **12/12 striatal and ACC area × band cells survive BH-FDR**
+(R² − null = +0.010 to +0.062). V1 has the largest effect (+0.10) but n = 4 and
+does not reach significance. Practically the effect is slight: median error
+59.5–61.9 cm against a 62 cm chance level, i.e. ~1–2.5 cm on a 250 cm corridor.
+Per-epoch decoding is **not estimable** — 10 trials give the ridge ~500 samples
+for 30–140 channels and every animal returns a negative R².
+
+**3. Reliability — high, with a large qualifier.** Split-half r (interleaved
+halves, Spearman-Brown) of the spatial profile: theta 0.72–0.92, high gamma
+0.65–0.79, beta 0.50–0.85, low gamma 0.48–0.75; V1/CA1/DG above striatum.
+But the profile's correlation with the **speed** profile is r ≈ −0.40 to −0.59
+for beta in *every* area, and −0.15 to −0.37 for the gammas, against −0.33 to
++0.23 for theta. **Beta's spatial profile is substantially a speed profile;
+theta's is not.**
+
+**4. Cross-area CCA — not separable from a shared field with this design.**
+Held-out CC1 is far above the trial-permutation null (0.35–0.95 vs 0.03–0.13)
+and far below the within-area split-half ceiling (0.97–0.999). It falls with
+electrode separation along the shank (Spearman ρ = −0.24 to −0.40; p = 0.012 for
+theta, 0.12 for high gamma, n.s. for beta and low gamma), and the adjacent pairs
+score highest (CA1–DG 0.90–0.95, DLS–DMS 0.47–0.73) versus the distant ones
+(ACC–DMS/DLS 0.36–0.54). That is the shape of a volume-conducted field, but the
+scatter is large enough that distance alone does not explain it. **No cross-area
+LFP coupling claim should be made until this is re-derived under bipolar or CSD
+referencing.**
+
+### Code
+New: `bandpower.py` (trial/spatial/dark bin geometry, notches, band power,
+streaming segment accumulator), `analysis.py` (learning point, epoch windows,
+bin speed, joint z-score — all ports checked against MATLAB), `arms.py`
+(design matrices, split-half + pairwise reliability, trial-grouped held-out CCA,
+trial-permutation null, volume-conduction ceiling, circular-shift decoding null,
+speed residualisation, BH-FDR verified against statsmodels).
+Drivers: `run_lfp_bandpower.py`, `validate_lfp_bandpower.py`, `run_lfp_arms.py`,
+`plot_lfp_arms.py`. 190 tests pass (15 skipped: the July cached-result checks, whose CSVs are gitignored).
+
+### Figures
+`lfp_evolution_z`, `lfp_evolution_speed_residual`, `lfp_evolution_fraction`,
+`lfp_evolution_speed`, `lfp_decoding`, `lfp_reliability`, `lfp_cca`,
+`lfp_cca_vs_distance` (svg + png).
+
+### Standing caveats
+Task-only (no control-group LFP exists). 1212 excluded from nothing here but
+carries a 41 min truncation. CA1 and DG are n = 2 — plotted, never claimed.
+Absolute power is never compared across animals (two gain regimes, ~30×).
+
+
 ## 2026-08-27 — Full-cohort download: 17 files inventoried, every filename verified
 
 The LFP set is no longer four size-keyed files. `RawData/LFP/` now holds **17
