@@ -25,14 +25,12 @@ _PROJECT = Path(__file__).resolve().parents[3]          # ".../Striatum project"
 RAWDATA = _PROJECT / "RawData"
 LFP_DIR = RAWDATA / "LFP"
 
-# LFP file <-> mouse map (RawData/LFP/lfp_mapping.txt, keyed by file size).
-FILE_BY_MOUSE: dict[int, str] = {
-    1212: "voltage_data_384ch.mat",     # 16.33 GB, 11.4 M samples (190 min at 1 kHz)
-    614: "voltage_data_384ch 2.mat",    # 11.38 GB,  8.4 M samples (140 min at 1 kHz)
-    727: "voltage_data_384ch 3.mat",    # 11.65 GB,  8.4 M samples
-    731: "voltage_data_384ch 4.mat",    # 11.48 GB,  8.4 M samples
-}
-LFP_MICE: tuple[int, ...] = (1212, 614, 727, 731)
+# The June files were size-keyed via RawData/LFP/lfp_mapping.txt. The 2026-08
+# download names every file after its animal, so the map is now derived from the
+# directory listing: see ``cohort.discover_lfp_files`` (and ``cohort.parse_lfp_filename``
+# for the two naming variants, ``<mouse>_...`` and ``<mouse>_v1_...``). Nothing here
+# hard-codes a filename any more, and no code should assume one file per mouse:
+# a mouse with both probes contributes two.
 # Positional order used by OrganiseStriatumDataIncV1.m and therefore by the
 # preprocessed cohort struct / tcca Animal.animal_id.
 TASK_MOUSE_IDS: tuple[int, ...] = (
@@ -41,15 +39,25 @@ TASK_MOUSE_IDS: tuple[int, ...] = (
 )
 
 # Depth -> area boundaries (micrometres from probe tip). Probe 1 = striatum/cortex
-# (DMS/DLS/ACC, all 4 mice); probe 2 = visual/hippocampal (V1/CA1/DG, only 1212).
-# NB: the LFP .mat is 384 channels == ONE probe. The three non-1212 mice have only
-# probe 1, so their LFP is striatal. For 1212 the probe identity of the LFP file is
-# unconfirmed -- default to probe 1 (striatum); revisit V1/CA1 at Stage 3.
+# (DMS/DLS/ACC); probe 2 = visual/hippocampal (V1/CA1/DG). Each LFP .mat is 384
+# channels == ONE probe, and the filename now states which: ``<mouse>_v1_...`` is
+# probe 2. The 2026-08 export also ships ``depth_to_save`` (0-3820 um), so the
+# geometry assumption below is checkable against the file rather than assumed.
 DEPTH_CSV = RAWDATA / "Neuropixels_Depth_Data.csv"
 V1_CSV = RAWDATA / "Neuropixels_V1_Depth_Data.csv"
 
-# Per-mouse spike + behaviour bundle (VR_data, VR_times_synched, binned_spikes).
-RAW_MAT: dict[int, Path] = {m: RAWDATA / f"{m}_raw.mat" for m in LFP_MICE}
+# Per-mouse spike + behaviour bundle (VR_data, VR_times_synched, binned_spikes),
+# one per probe. ``<mouse>_raw.mat`` is probe 1; ``<mouse>_V1_raw.mat`` is probe 2
+# and exists only for the five dual-probe mice. Behaviour fields are identical in
+# both, so either file answers a behavioural question; spikes are probe-specific.
+RAW_MAT: dict[int, Path] = {m: RAWDATA / f"{m}_raw.mat" for m in TASK_MOUSE_IDS}
+V1_RAW_MAT: dict[int, Path] = {m: RAWDATA / f"{m}_V1_raw.mat" for m in TASK_MOUSE_IDS}
+
+
+def raw_mat(mouse_id: int, probe: str = "striatum") -> Path:
+    """Spike/behaviour bundle for one mouse and probe ("striatum" | "visual")."""
+    table = RAW_MAT if probe == "striatum" else V1_RAW_MAT
+    return table[mouse_id]
 # The cohort struct the spike tensor was built from (corridorData, learning point,
 # zscored_lick_errors, ...). Reused wholesale for the LFP drop-in behaviour fields.
 PREPROC_MAT = _PROJECT / "processed_data" / "preprocessed_data5cm.mat"
@@ -122,7 +130,9 @@ class Config:
     qc_std_mad_k: float = 4.0       # legacy within-group amplitude threshold
 
     # --- Spatial / temporal binning -----------------------------------------
-    n_spatial_bins: int = 100       # 2.5 cm bins over the 250 cm corridor
+    n_spatial_bins: int = 50        # 5 cm bins over the 250 cm corridor (project_cfg
+                                    # cfg.n_bins_full; the 2.5 cm grid was retired 2026-08-10)
+    max_bin: int = 30               # spatial truncation (project_cfg cfg.max_bin)
     temporal_bin_ms: int = 50       # tcca running-state stream bin width
     velocity_thresh_cm_s: float = 2.0
 
@@ -132,3 +142,44 @@ class Config:
 
 
 DEFAULT = Config()
+
+
+# --- Backwards compatibility -------------------------------------------------
+# The July drivers (scripts/run_sanity_audit.py, run_signal_identity.py,
+# plot_sanity_audit.py, the quarantined learning/decode drivers) index
+# ``config.FILE_BY_MOUSE[mouse]`` and iterate ``config.LFP_MICE``, both written
+# for the four size-keyed June files. Rather than rewrite those drivers, resolve
+# both lazily from the directory listing so they address the current export.
+# Both cover probe 1 only, which is what those drivers assume; anything
+# two-probe-aware should call ``cohort.discover_lfp_files`` directly.
+# Module-level ``__getattr__`` (PEP 562) keeps this off the import path, which
+# is what avoids a config <-> cohort import cycle.
+
+
+def lfp_path(mouse_id: int, probe: str = "striatum") -> Path:
+    """Path to one mouse's LFP export for one probe, resolved by filename."""
+    from .cohort import discover_lfp_files
+
+    return discover_lfp_files(LFP_DIR)[(mouse_id, probe)]
+
+
+def lfp_mice(probe: str = "striatum") -> tuple[int, ...]:
+    """Task mice with an LFP export for ``probe``, in cohort (positional) order."""
+    from .cohort import discover_lfp_files
+
+    present = {m for (m, p) in discover_lfp_files(LFP_DIR) if p == probe}
+    return tuple(m for m in TASK_MOUSE_IDS if m in present)
+
+
+def __getattr__(name: str):
+    if name == "LFP_MICE":
+        return lfp_mice()
+    if name == "FILE_BY_MOUSE":
+        from .cohort import discover_lfp_files
+
+        return {
+            m: path.name
+            for (m, p), path in discover_lfp_files(LFP_DIR).items()
+            if p == "striatum"
+        }
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

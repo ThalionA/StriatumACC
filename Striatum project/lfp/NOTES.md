@@ -1,5 +1,92 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-08-27 — Full-cohort download: 17 files inventoried, every filename verified
+
+The LFP set is no longer four size-keyed files. `RawData/LFP/` now holds **17
+named exports** — 13 striatum probes (523, 614, 624, 727, 730, 731, 822, 823,
+1105, 1106, 1201, 1206, 1212) and **4 visual probes** (1105, 1106, 1206, 1212,
+as `<mouse>_v1_voltage_data_384ch.mat`). Missing: 409, 418, 703 (probe 1) and
+1201 (probe 2); one further download was in flight during this run. `lfp_mapping.txt`
+is dead — the map now comes from the filename (`cohort.parse_lfp_filename`;
+note 727's file has **no** underscore before `voltage`).
+
+**Every file is the animal its name claims — verified, not assumed.**
+`scripts/run_lfp_identity.py` correlates each file's 30–90 Hz envelope against
+*every* task animal's MUA over three independent 10 min windows. Raw |r| is not
+comparable across candidates, so each candidate column is divided by its median
+over all files (`cohort.column_normalise`): the question becomes "does this file
+couple to that animal more than the other files do". 15/17 win their own row in
+all three windows; 823 and 1105/striatum win 2/3, losing only the t = 4800 s
+window where a synchronous artefact makes several animals' MUA correlate with
+everything — in both cases the claimed animal still scores 2.5–4.9× its column
+median, so this is a contaminated window, not a mislabelling. No duplicate
+content fingerprints: **the 614/731 duplicate is gone.**
+
+**1212 is truncated, not wrong.** Both its probes export 8,400,000 samples while
+`binned_spikes` runs 11,400,000 (VR to 10,879 s), so ~41 min of behaviour — the
+late, expert end — has no LFP. The offset scan settles what kind of defect it is:
+coupling to its own MUA is 0.263 at offset 0 and 0.011–0.018 at +600/+1500/+3000 s,
+so the export is the **truncated head of the same session**, sample-for-sample
+aligned from t = 0. Usable for the first 140 min; excluded from any trial-indexed
+or learning analysis until the missing tail is re-exported.
+
+**Two export batches with different gain.** Median channel RMS is
+6.3e-6–1.3e-5 for the eight July files and 1.6e-4–3.2e-4 for the nine August
+ones — ~30× in amplitude, ~1000× in power. **Absolute power is not comparable
+across animals.** The batches differ in two more ways: terminal zero padding is
+present in all eight July files (starting 7863–8135 s, 4.4–7.5% exact zeros) and
+**absent in all nine August files** (0.5–1.2% zeros); and `lfp/NOTES.md`'s
+"padding runs from ~130–135 min to the 140 min end" is a July statement, not a
+cohort one.
+
+**Mains is the big new problem, and it is per-session.** 50 Hz power over its
+±5 Hz shoulders: 1105 visual **1348×**, 1105 striatum **1097×**, 1106 visual
+**450×**, 1212 striatum **161×** — then 7 files at 3–17× and 6 files below 3×.
+1105 additionally carries odd harmonics (150 Hz 27×, 250 Hz 9–12×, 350 Hz 5–8×),
+the signature of a clipped rather than sinusoidal mains pickup. **Notch 50/100/150 Hz
+unconditionally on every file**: conditional notching would make the estimator a
+function of the mouse. The July 75/151 Hz instrument peaks are gone everywhere
+(ratios 0.94–1.06) except where they coincide with a mains harmonic.
+
+**Everything else passes.** All 17: (8,400,000 × 384) float32, gzip chunks
+(42, 384), zero non-finite values, zero dead channels, `channels_to_save` = 1..384,
+and `depth_to_save` reproducing `geometry.channel_depths` **exactly** (max error
+0.0 µm) — the 2-channels-per-20 µm assumption is now measured, not inherited.
+1/f slope −0.78 to −2.89 and LF/HF 55–21,343, all far from the scrambled June
+signature (0.6–1.5); adjacent-channel r 0.52–0.96 with distant r ≈ 0, i.e. the
+layout is right. Flag not exclude: 823 adjacent r = 0.52 (all others 0.83–0.96),
+822 LF/HF = 21,343 with slope −2.89 and a common-**mean** residual of 2.42.
+
+**Referencing does not generalise.** Common-median residual is 0.030–0.084
+everywhere (consistent with common-median referencing), but the common-**mean**
+residual runs 0.12–0.18 in the July files and up to 1.18–2.42 in 822/1105/1106·v1.
+Treat referencing as a per-session covariate, not a cohort property.
+
+**Area coverage is ragged and decides the real n.** DMS 13 animals (32–140 ch),
+ACC 12, DLS 10 (blank CSV cell for 731, 823, 1206), V1 4, **CA1 2, DG 2**. A CA1
+or DG LFP claim is not available from this cohort.
+
+**Code.** New: `cohort.py` (filename→(mouse, probe) discovery, binning, per-column
+Pearson, coupling score, column normalisation), `inventory.py` (structure,
+integrity, spectra, fingerprint, coupling envelope), `scripts/run_lfp_inventory.py`,
+`scripts/run_lfp_identity.py`, `scripts/plot_lfp_inventory.py`. `config.py`'s
+`FILE_BY_MOUSE`/`LFP_MICE` now resolve lazily from the directory (old drivers keep
+working); `RAW_MAT` covers all 16 task mice and gains a probe-2 twin. Fixed:
+`geometry.channel_area_masks` applied no precedence, so 1206's probe-2 channel at
+1160 µm was labelled **both** CA1 and DG — MATLAB assigns in CSV column order and
+lets the last write win (DG), and the Python now matches. Two stale tests
+corrected: 731's DMS band (0–300 → 500–800, per the 2026-08-10 CSV fix) and the
+1212 length assertion (11.4 M → the measured 8.4 M truncation). 110 tests pass.
+
+**Artefacts.** `results/lfp_inventory.{csv,json}`, `results/lfp_psd.npz`,
+`results/lfp_identity_matrix.csv`, `results/lfp_identity.json`;
+`figures/lfp_cohort_overview`, `lfp_spectra`, `lfp_depth_by_frequency`,
+`lfp_session_integrity`, `lfp_identity_matrix` (svg + png).
+
+**Next**: band power as the analogue of firing rate — see the Stage B/C plan.
+Not started; nothing in this entry position-bins, decodes, or couples areas.
+
+
 ## 2026-08-11 — Zihao's re-export: the gate is CLEARED (with two data gaps)
 
 Zihao re-exported the LFP (CAR only, no filter; the previous files were scrambled

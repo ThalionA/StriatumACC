@@ -1,37 +1,60 @@
 # striatum_lfp — voltage-export audit and provisional LFP pipeline
 
-Audits the new 384-channel Neuropixels voltage exports and, once their provenance
-and timing are resolved, will analyse band power analogously to unit firing rate.
-Downstream MATLAB and temporal-CCA stages are currently gated on provenance.
+Audits the 384-channel Neuropixels voltage exports and analyses band power as the
+analogue of unit firing rate. Provenance and 1 ms grid alignment were resolved on
+2026-08-11; the full 17-file cohort was inventoried and every filename verified
+against spiking on 2026-08-27. What is still gated is listed under Current gate.
 
-## Data: verified facts
-- 4 mice (1212, 614, 727, 731); one `RawData/LFP/voltage_data_384ch*.mat` each,
-  mapped to a mouse by file size (`RawData/LFP/lfp_mapping.txt`).
-- HDF5 `data_to_save` = `(n_samples × 384)` float32 stored voltage. Length equals
-  each mouse's 1 ms `binned_spikes` length (1212: 11.4 M; others: 8.4 M), making
-  a 1000 Hz export grid plausible. Equality of lengths does **not** prove offset
-  or sample-accurate VR alignment.
-- Channels → depth (Neuropixels geometry) → area via the same µm boundaries the
-  spikes use (`Neuropixels_Depth_Data.csv`). Behaviour + learning point reused
-  per mouse from `<ID>_raw.mat` / `preprocessed_data2p5cm.mat`.
-- Physical units, input band (LF/AP/wideband), gain, referencing, downsampling
-  and anti-alias filtering are unknown: no producer script or source metadata is
-  present. Call values "stored voltage units", not volts or microvolts.
-- Full-file audit: no zero windows during behaviour. Files 614/727/731 have one
-  terminal zero-padding block after behaviour; 1212 has effectively no zeros.
-- A sharply separated high-amplitude mode recurs every 60 s (614/727/731) or 5 s
-  (1212). Its cadence and cross-depth synchrony are instrument-like; its exact
-  mechanism is unresolved, so it must be masked rather than interpreted.
+## Data: verified facts (measured 2026-08-27 over the full cohort)
+- **17 named exports** in `RawData/LFP/`: 13 striatum probes (523, 614, 624, 727,
+  730, 731, 822, 823, 1105, 1106, 1201, 1206, 1212) and 4 visual probes (1105,
+  1106, 1206, 1212, suffixed `_v1`). Absent: 409, 418, 703 (probe 1), 1201
+  (probe 2). The file→mouse map comes from the filename now, not from file size —
+  `lfp_mapping.txt` is superseded. Note 727's file has no underscore before
+  `voltage`; use `cohort.parse_lfp_filename`, do not re-derive the pattern.
+- Every file is `data_to_save` = (8,400,000 × 384) float32, gzip, chunks (42, 384),
+  no non-finite values, no dead channels. `channels_to_save` = 1..384 and
+  `depth_to_save` = 0–3820 µm reproduces `geometry.channel_depths` exactly, so the
+  2-channels-per-20 µm geometry behind the area mapping is measured, not assumed.
+- **Every filename has been verified against spiking** (`scripts/run_lfp_identity.py`):
+  each file's 30–90 Hz envelope beats every other animal's MUA in 3 (15 files) or
+  2 of 3 (823, 1105 striatum) independent windows. No duplicate content fingerprints.
+- 1212 is the one exception to grid compatibility: 8.4 M LFP samples against
+  11.4 M spike bins. The offset scan places it at offset 0, so it is the truncated
+  head of the same session — the last ~41 min of behaviour simply has no LFP.
+- **Two gain regimes.** Median channel RMS 6.3e-6–1.3e-5 (July batch) vs
+  1.6e-4–3.2e-4 (August batch). Never compare absolute power across animals; every
+  outcome must be within-session relative. Values remain "stored voltage units":
+  gain, physical units and the anti-alias filter are still undocumented.
+- **Mains must be notched on every file.** 50 Hz / shoulder ratio reaches 1348×
+  (1105 visual), 1097× (1105 striatum), 450× (1106 visual), 161× (1212 striatum),
+  with odd harmonics to 350 Hz in 1105. Six files are below 3×. Notch unconditionally.
+- Terminal zero padding exists only in the July batch (onset 7863–8135 s). No
+  mid-session dropouts anywhere.
+- Referencing is per-session: common-*median* residual is 0.030–0.084 throughout,
+  but the common-*mean* residual runs 0.12–0.18 (July) up to 2.42 (822).
+- Area coverage: DMS 13 animals, ACC 12, DLS 10, V1 4, CA1 2, DG 2. CA1/DG cannot
+  support a cohort claim.
 
 ## Current gate
 
-Do not position-bin, decode, or run temporal CCA until the export producer or
-source `.meta` establishes the exact time offset and signal preprocessing.
+The July gate (no position binning, decoding or CCA until provenance is resolved)
+was **lifted on 2026-08-11**: the re-export is real LFP on the project's 1 ms grid,
+verified physiologically. What remains gated is narrower and specific:
+
+- Absolute-power and cross-animal amplitude comparisons — blocked by the two gain
+  regimes and the undocumented units.
+- 1212 in any trial-indexed or learning analysis — blocked by the 41 min truncation.
+- Any band overlapping 50 Hz or its harmonics before notching.
+- Cross-area coupling claims without both a trial-permutation null *and* the
+  within-area split-half volume-conduction ceiling: DMS/DLS/ACC sit on one shank.
+- CA1 and DG cohort claims — n = 2.
 
 ## Layout
-`src/striatum_lfp/` — configuration, geometry, out-of-core reading, integrity
-audit/sanity helpers, provisional feature extraction, and quarantined learning
-helpers. `scripts/` contains reproducible audit drivers; `tests/` contains
+`src/striatum_lfp/` — configuration, cohort discovery and file-identity
+statistics (`cohort.py`), geometry, out-of-core reading, per-file inventory
+(`inventory.py`), integrity/sanity helpers, provisional feature extraction, and
+quarantined learning helpers. `scripts/` contains reproducible audit drivers; `tests/` contains
 synthetic-ground-truth pytest checks. The old single-window `qc.py` thresholds
 are retained only as tested numerical primitives and are not an analysis gate.
 

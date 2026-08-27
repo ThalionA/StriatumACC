@@ -85,12 +85,30 @@ def load_area_boundaries(
 
 
 def channel_area_masks(
-    depths: np.ndarray, boundaries: dict[str, tuple[float, float]]
+    depths: np.ndarray, boundaries: dict[str, tuple[float, float]],
+    precedence: tuple[str, ...] | None = None,
 ) -> dict[str, np.ndarray]:
     """``{area: bool mask (n_channels,)}`` from per-channel depths + ``{area: (s, e)}``.
 
     Inclusive ``[start, end]``, mirroring ``OrganiseStriatumDataIncV1.m``'s depth
-    test. Areas do not overlap within a probe.
+    test. The bands can touch: mouse 1206's probe-2 CSV has DG ending and CA1
+    starting at the same 1160 um. MATLAB resolves that by assigning areas in
+    column order and letting the LAST one overwrite (``OrganiseStriatumDataIncV1.m``
+    :162-179, ``assign_areas_by_depth.m``), so the returned masks are made
+    mutually exclusive the same way -- ``precedence`` defaults to the CSV column
+    order, and a channel claimed by two bands goes to whichever comes later.
     """
     depths = np.asarray(depths, float)
-    return {area: (depths >= s) & (depths <= e) for area, (s, e) in boundaries.items()}
+    order = precedence or _default_precedence(boundaries)
+    masks = {area: (depths >= s) & (depths <= e) for area, (s, e) in boundaries.items()}
+    claimed = np.zeros(depths.shape, dtype=bool)
+    for area in reversed([a for a in order if a in masks]):
+        masks[area] = masks[area] & ~claimed
+        claimed |= masks[area]
+    return masks
+
+
+def _default_precedence(boundaries: dict[str, tuple[float, float]]) -> tuple[str, ...]:
+    """CSV column order for whichever probe these boundaries came from."""
+    known = _STRIATUM_AREAS if set(boundaries) <= set(_STRIATUM_AREAS) else _VISUAL_AREAS
+    return tuple(a for a in known if a in boundaries)

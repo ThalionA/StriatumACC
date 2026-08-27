@@ -27,3 +27,18 @@
   break on the Linux cluster.
 - Task depth-CSV id 507 = recording `0705_M1_Vishal` (MMDD swap), deliberately
   excluded from `all_mouse_ids`; control2 CSV row 624 likewise unused.
+- LFP file `727voltage_data_384ch.mat` has **no underscore** before `voltage` while
+  every other export does. An f-string pattern `f"{mouse}_voltage_data_384ch.mat"`
+  drops mouse 727 silently, with no error. Use `cohort.parse_lfp_filename`. (2026-08-27)
+- The probe-2 LFP file is lowercase `<m>_v1_voltage_data_384ch.mat` but the probe-2
+  spike bundle is uppercase `<m>_V1_raw.mat`. Deriving one path from the other by
+  string substitution works by accident on this case-insensitive volume and fails
+  on a case-sensitive one. Use `config.raw_mat(mouse, probe)`. (2026-08-27)
+- Depth bands in the CSVs can touch: 1206's probe 2 has DG ending and CA1 starting
+  at 1160 µm. MATLAB assigns areas in CSV column order and lets the **last** write
+  win (DG), so independent boolean masks double-label that channel.
+  `geometry.channel_area_masks` now applies the same precedence. (2026-08-27)
+- LFP file identity: raw |r| between an LFP envelope and a candidate's MUA is not
+  comparable across candidates. An animal whose MUA carries a synchronous artefact
+  correlates with *every* file and steals rows. Divide each candidate column by its
+  median across files (`cohort.column_normalise`) before taking the argmax. (2026-08-27)
