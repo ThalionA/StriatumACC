@@ -1,5 +1,10 @@
 %% ================= Configuration =======================================================
 clear; clc; close all;
+% Build figures off-screen so a long run doesn't throw windows in front of
+% whatever you're doing; they still save normally. Released at the end of
+% the script (setenv('MATLAB_SHOW_FIGURES','1') to see them live).
+fig_guard = figures_offscreen(); %#ok<NASGU>
+
 % rng(0)
 % --- Data Files ---
 % The whole pipeline is 5 cm since 2026-08-10, so TCA now just follows
@@ -1226,3 +1231,5 @@ save_all_open_figures(sprintf('tca%s%s', mode_tag, bal_tag));
 
 fprintf('--- Analysis Pipeline Finished ---\n');
 
+% Restore figure visibility for interactive work.
+clear fig_guard

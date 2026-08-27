@@ -2,6 +2,12 @@
 
 % Self-sufficient loading (2026-05-07).
 % Depends on Run_TCA_pipeline outputs.
+
+% Build figures off-screen so a long run doesn't throw windows in front of
+% whatever you're doing; they still save normally. Released at the end of
+% the script (setenv('MATLAB_SHOW_FIGURES','1') to see them live).
+fig_guard = figures_offscreen(); %#ok<NASGU>
+
 if ~exist('best_mdl', 'var') || ~exist('labels_valid', 'var')
     if ~exist('cfg', 'var') || isempty(cfg)
         cfg = project_cfg();
@@ -1319,3 +1325,6 @@ else
 end
 %% Persist every figure (svg+png) so headless runs never need repeating (2026-08-11).
 save_all_open_figures('ensemble');
+
+% Restore figure visibility for interactive work.
+clear fig_guard

@@ -1,4 +1,10 @@
 %% ================= Comprehensive Spatiotemporal Visualization (Pre-Subsampling) =================
+
+% Build figures off-screen so a long run doesn't throw windows in front of
+% whatever you're doing; they still save normally. Released at the end of
+% the script (setenv('MATLAB_SHOW_FIGURES','1') to see them live).
+fig_guard = figures_offscreen(); %#ok<NASGU>
+
 fprintf('--- Generating Comprehensive Spatiotemporal Plots (Pooled vs Hierarchical) ---\n');
 
 % --- Self-sufficient loading (2026-05-07) ---
@@ -2037,3 +2043,6 @@ end
 fprintf('--- Hierarchical KDE Mean Activity Distribution Plots Complete ---\n\n');
 %% Persist every figure (svg+png) so headless runs never need repeating (2026-08-11).
 save_all_open_figures('spatiotemporal');
+
+% Restore figure visibility for interactive work.
+clear fig_guard

@@ -18,6 +18,7 @@
 !Striatum project/figures/stability_by_animal.csv
 !Striatum project/figures/decoding_by_animal.csv
 !Striatum project/figures/compare_bin_sizes_summary.csv
+!Striatum project/figures/corridor_vs_dark_by_animal.csv
 !Striatum project/rl_model/results/encoding_summary_by_animal.csv
 !Striatum project/rl_model/results/encoding_summary_by_area.csv
 

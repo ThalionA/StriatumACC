@@ -3,6 +3,11 @@
 % ALL groups are aligned to the Task Group's Average Learning Point (avg_lp)
 % Y-axes are strictly linked across comparative subplots.
 clearvars; clc; close all;
+% Build figures off-screen so a long run doesn't throw windows in front of
+% whatever you're doing; they still save normally. Released at the end of
+% the script (setenv('MATLAB_SHOW_FIGURES','1') to see them live).
+fig_guard = figures_offscreen(); %#ok<NASGU>
+
 
 %% 1. Configuration & Data Loading
 % Project-wide constants (paths, LP parameters, areas, colours, ...)
@@ -250,10 +255,8 @@ for i = 1:n_animals_task
     n_tr = length(z);
     
     % Define standard epochs
-    epoch_idx = cell(1, n_epochs);
-    if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
-    if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
-    if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
+    epoch_idx = epoch_indices(lp, n_tr, ...
+        struct('trials_per_epoch', trials_per_epoch));
     
     for e = 1:n_epochs
         idx = epoch_idx{e};
@@ -353,10 +356,8 @@ for g = 1:3
         end
         
         % 4. Extract into Epochs
-        epoch_idx = cell(1, n_epochs);
-        if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
-        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
-        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
+        epoch_idx = epoch_indices(lp, n_tr, ...
+            struct('trials_per_epoch', trials_per_epoch));
         
         for e = 1:n_epochs
             idx = epoch_idx{e};
@@ -470,11 +471,8 @@ for g = 1:3
             lp = avg_lp; 
         end
         
-        epoch_idx = cell(1, n_epochs);
-        if n_tr >= naive_split, epoch_idx{1} = 1:naive_split; end
-        if n_tr >= trials_per_epoch, epoch_idx{2} = (naive_split + 1):trials_per_epoch; end
-        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{3} = (lp - trials_per_epoch) : (lp - 1); end
-        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{4} = lp : (lp + trials_per_epoch - 1); end
+        epoch_idx = epoch_indices(lp, n_tr, struct( ...
+            'trials_per_epoch', trials_per_epoch, 'naive_split', naive_split));
         
         for e = 1:n_epochs
             idx = epoch_idx{e};
@@ -547,6 +545,13 @@ save_to_svg('Behavioural_Evolution_3Groups_Yoked');
 
 %% 6. Trial-to-Trial Correlation (Neural Single-Neuron Reliability)
 fprintf('Computing continuous single-neuron reliability...\n');
+% Epoch convention stated explicitly (2026-08-27). This section used to
+% inherit `epochs`/`n_epochs` from whichever section ran last; when
+% section 5 gained a four-window Naive split the stale bound leaked in
+% here and silently added a phantom empty epoch. The neural analyses use
+% the three-window convention.
+epochs   = cfg.epoch_names;
+n_epochs = numel(epochs);
 % V1/CA1 added (2026-05-07/08); DG dropped 2026-05-24 (excluded from all
 % figures/analyses). 'all' stays last so the "All Units" semantics are
 % preserved as the final element regardless of how many real areas exist.
@@ -624,10 +629,8 @@ for g = 1:3
             stab_z_shuff(:, t) = batch_triu_corr_mean(activity_z_shuff(:, :, win_idx));
         end
 
-        epoch_idx = cell(1, n_epochs);
-        if n_trials >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
-        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_trials, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
-        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_trials, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
+        epoch_idx = epoch_indices(lp, n_trials, ...
+            struct('trials_per_epoch', trials_per_epoch));
 
         ep_z       = nan(n_cells_total, n_epochs, trials_per_epoch);
         ep_z_shuff = nan(n_cells_total, n_epochs, trials_per_epoch);
@@ -743,6 +746,13 @@ end
 
 %% 7. Decoding Space/Time & Lick Patterns (Poisson ML + Ridge Log-Link)
 fprintf('Running Spatial/Temporal ML Decoding and Lick Ridge... \n');
+% Epoch convention stated explicitly (2026-08-27). This section used to
+% inherit `epochs`/`n_epochs` from whichever section ran last; when
+% section 5 gained a four-window Naive split the stale bound leaked in
+% here and silently added a phantom empty epoch. The neural analyses use
+% the three-window convention.
+epochs   = cfg.epoch_names;
+n_epochs = numel(epochs);
 lambda = 1.0; 
 cond_names = {'All', 'No-DMS', 'No-DLS', 'No-ACC', 'No-V1', 'No-CA1', 'Shuffle'};
 n_conds = length(cond_names);
@@ -815,10 +825,8 @@ for g = 1:3
                        'V1',  v1_mask(keep_cells), ...
                        'CA1', ca1_mask(keep_cells));
         
-        epoch_idx = cell(1, n_epochs);
-        if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
-        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
-        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
+        epoch_idx = epoch_indices(lp, n_tr, ...
+            struct('trials_per_epoch', trials_per_epoch));
         
         for c = 1:n_conds
             c_name = cond_names{c};
@@ -1150,10 +1158,8 @@ for g = 1:3
         act_time_z   = squeeze(mean(act_z, 2, 'omitnan'));
         
         % Epoch definitions
-        epoch_idx = cell(1, n_epochs);
-        if n_tr >= trials_per_epoch, epoch_idx{1} = 1:trials_per_epoch; end
-        if ~isnan(lp) && lp > trials_per_epoch && lp <= n_tr, epoch_idx{2} = (lp - trials_per_epoch) : (lp - 1); end
-        if ~isnan(lp) && (lp + trials_per_epoch - 1) <= n_tr, epoch_idx{3} = lp : (lp + trials_per_epoch - 1); end
+        epoch_idx = epoch_indices(lp, n_tr, ...
+            struct('trials_per_epoch', trials_per_epoch));
         
         % Masks
         v1_mask  = is_area_safe(curr_data(i), 'V1');
@@ -1669,6 +1675,9 @@ end
 % save_to_svg calls: a headless run that errors mid-script would otherwise
 % lose every figure produced up to that point (2026-08-11).
 save_all_open_figures('integrated');
+
+% Restore figure visibility for interactive work.
+clear fig_guard
 
 function local_plot_scatter(x, y, e_idx, xlab, ylab, colors)
     valid = ~isnan(x) & ~isnan(y) & ~isinf(x) & ~isinf(y);
