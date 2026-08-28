@@ -1,4 +1,4 @@
-"""Tests for tom_cca.subspace_window (full per-window subspace readout)."""
+"""Tests for striatum_tcca.subspace_window (full per-window subspace readout)."""
 
 from __future__ import annotations
 
