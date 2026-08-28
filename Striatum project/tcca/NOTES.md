@@ -7,6 +7,63 @@ contrast; fresh tom_cca-style port; plus an engaged-vs-disengaged contrast).
 
 ---
 
+## 2026-08-28 — Back-port from TomLearning `tom_cca` (numerics + power); zero result change
+
+The port was frozen on 2026-07-28; `tom_cca` moved 37 commits since. A module-by-module
+diff (both packages imported side by side) put 8 of 19 numeric modules byte-identical and
+the shared numerics in agreement to ~3e-15. Four things worth having had drifted in; three
+are back-ported here, one went the other way.
+
+**1. `core.cca_fit` — covariance route (tom 2026-08-17).** Each population is whitened
+through the eigen-decomposition of its own k×k covariance instead of a thin SVD of the n×k
+data matrix. The old implementation is kept verbatim as `core._cca_fit_svd`, tests only.
+Rank rule documented (`_COV_EIG_FLOOR = 1e-10` relative eigenvalue ≈ 1e-5 relative singular
+value). **Measured, not assumed:** on animal 1 / DMS-DLS / all three epochs through
+`runner.fit_window` at the committed b25 config, every field of `WindowSubspace` agrees with
+the frozen SVD route to **3.1e-13** (cc1, IFI, n_sig, Gini, weights, split-half, lag curve),
+and the fit is **2.7× faster** (2.7 s vs 7.2 s for the three cells). 4 equivalence tests
+ported from `tom_cca` (rank-deficient, n < p, zero-variance column, weights up to a per-pair
+sign flip). No committed CSV moves.
+
+**2. `lagged.py` — now byte-identical to `tom_cca/lagged.py`.** Adds `ifi_sides` (tells the
+degenerate IFI = 0 "no coupling either way" apart from a genuinely balanced curve),
+`heldout_lag_curve_flat_perdim` (per-dimension held-out lag curves; `heldout_lag_curve_flat`
+is now its d=0 slice), and `perdim_significance` / `PerDimSignificance` — the **held-out
+per-dim circular-shift null with BH correction**, the like-for-like alternative to the
+in-sample dominant-dim null in `subspace_window._significance` (which is unchanged and still
+what every committed epoch result used). New module `lagpairs.py` (ported verbatim) is now
+the single within-group lag pairer; `lagged._segment_lagged_pairs` delegates to it and
+`tests/test_lagpairs.py` pins the delegate against the frozen inline loop for lags −12…+12.
+
+⚠ **`perdim_significance` is not usable at the current shuffle count.** `config.fdr_dims = 10`
+is added (inert — no driver reads it) but a permutation p cannot go below 1/(n_shuffles+1),
+and BH at 10 dims needs 0.005. At `SURROGATE_SHUFFLES = 100` the floor is 0.0099, so **no
+dimension can pass**; a driver adopting this null must raise shuffles to ≥ 200 (floor
+0.00498). Left as a flagged decision — changing the shuffle default would move committed
+numbers.
+
+**3. `paired_stats.paired_t` / `welch_t`.** The parametric siblings of `wilcoxon_signed` /
+Mann-Whitney. At the cohort n (11–13 animals) the exact signed-rank p sits ON its floor
+(2/2^10 = 0.00195 with all deltas one-signed); the t-test is unbounded below. 9 new tests,
+mirrored into `tom_cca` — both functions had shipped there untested.
+
+**4. Sent the other way (`tom_cca` gained it from here):** `subspace_window.WindowSubspace`
+now exports `lags` + `lag_cc1`, so IFI can be recomputed at any integration window offline.
+Its test came with it.
+
+**Still divergent (deliberately).** `config.py` / `dataio.py` / `runner.py` vs `pipeline.py`
+are the dataset boundary and stay separate. Not taken: `core.pca_fit_flat` & friends (would
+be dead code until the three inline copies are rewired), and `membership
+.subspace_contribution_connection` + `gini_*_conn` / `gini_*_sig` — note that this project's
+"corrected Gini" (`gini_pearson_x/y`, 2026-08-11 entry below) is the CCA-independent Pearson
+control, which `tom_cca` also has; its two *connection-specific* corrected definitions have
+never been run on this dataset. Parameter defaults still differ: `max_lag_bins` 5 (±50 ms)
+here vs 25 (±250 ms) in tom's `TemporalDefaults`, and `n_shuffles` 100 vs 200.
+
+220 tests (was 167).
+
+---
+
 ## 2026-08-11 — Epoch grid (8 configs): every verdict robust; partialling is denoising; corrected Gini also flat
 
 Full factorial on the seeded 5 cm cache: bin {25, 10 ms} × FS {excl, incl} ×
