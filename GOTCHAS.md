@@ -63,3 +63,20 @@
   any SINGLE trial resembles its neighbours (LFP: 0.00–0.09 above shuffle). Say which
   one a number is. The unit pipeline's `stability_by_animal.csv` is the second kind.
   (2026-08-28)
+- Any `tcca` result written before 2026-08-12 predates the cell-type fix: FS-exclusion
+  was a NO-OP in V1/CA1/DG (no cell type assigned at all) and ACC used the striatal
+  four-way rule. Re-running the 2026-08-11 epoch grid on corrected types drops
+  122 -> 107 FS-excluded cells at b25 (animal 11's DG falls to 3 units) and moves 83
+  of the 107 survivors, worst cc1 0.73. FS-INCLUDED arms are immune (inclusion ignores
+  the label) — use them to separate a labelling change from a code change.
+- Partial CCA can annihilate rank, and nothing in `epoch_metrics*.csv` shows it:
+  `k_eff` is `min(K, n_units_x, n_units_y)`, the PRE-partial dimensionality. Measured:
+  animal 14's ACC has 21 units and Z = 13, but only 14 directions survive partialling —
+  the rest sit at relative singular values of 1e-9. Such cells' cc1 swings by up to 0.4
+  purely on the CCA rank tolerance, so their communication estimate is not trustworthy
+  under any implementation. Check the post-partial spectrum before believing a
+  partial-CCA cell; a plain-CCA run is unaffected (0/153 cells move on the rank rule).
+- At n = 9-11 animals the two-sided Wilcoxon p sits on a coarse discrete lattice
+  (0.0020, 0.0039, 0.0156, 0.0391, ...). An unchanged p across two runs is NOT evidence
+  of unchanged data — medians moved by up to 40% under identical p-values in the
+  2026-08-28 grid re-run. Compare medians and effect sizes, not p-values.

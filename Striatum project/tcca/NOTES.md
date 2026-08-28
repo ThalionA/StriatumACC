@@ -7,6 +7,69 @@ contrast; fresh tom_cca-style port; plus an engaged-vs-disengaged contrast).
 
 ---
 
+## 2026-08-28 (later) — CORRECTION to the entry below, and the whole grid re-run on corrected cell types
+
+**The entry below claims the `cca_fit` back-port makes "no committed CSV move". That is wrong.**
+It was measured on ONE cell (animal 1, DMS-DLS, 3.1e-13) and generalised to 1158. Corrected
+statement, measured on the full grid with the cell-type variable held fixed (the FS-**included**
+arms, where unit selection cannot change, so only the CCA route differs):
+
+| frame | cells moved | worst cc1 | worst n_sig |
+|---|---|---|---|
+| **plain CCA** (no partialling) | **0 / 153** | 0 | 0 |
+| **partial CCA** (Z = the other areas) | **7 / 152** | 0.40 | 6 |
+
+**The two routes differ only when partialling is on**, because partialling out 13–177 units
+destroys rank: the directions the covariance route cuts (relative singular value < 1e-5) and the
+SVD route kept (down to 1e-9) turn out to have relative singular values of **1e-9 to 4e-9** —
+double-precision debris. Measured on the affected cells: a14 ACC has 21 units and Z = 13, and only
+**14** independent directions survive partialling, but the SVD route fitted 17. Its extra canonical
+dimensions were noise, which is why its cc1 came out *lower* (0.0964 vs 0.1846) — the leading
+direction was polluted. **The covariance route is the correct rank rule here and is kept.**
+
+### The grid was stale for a bigger reason, and is now re-run
+
+The committed 2026-08-11 grid predates the **2026-08-12 cell-type fix** (root `NOTES.md`). At grid
+time FS-exclusion was a **no-op in V1, CA1 and DG** (they carried no cell type at all) and ACC was
+labelled with the striatal four-way rule, not the FS/RS split. Re-running the same code on the same
+`.mat` today:
+
+* FS-**excluded** b25: **122 → 107 cells**; animal 11's DG drops from 6 units to 3 (< `min_units`),
+  taking all five DG pairs with it. 83 of the 107 shared cells move, worst cc1 **0.73**
+  (a11 CA1-ACC expert), `optimal_lag` moves in 21 cells by up to 13 bins.
+* FS-**included**: cell counts unchanged (inclusion uses every unit regardless of label).
+* Unit sets changed for animals 5, 9, 10, 11, 13 (V1 67→54, CA1 28→22, ACC 62→61, …).
+
+All 8 configs re-run (b25 ≈ 15 min, b10 ≈ 22 min: 305/428/250/323 s per config), plus
+`analyze_epoch_grid.py` and `figs_epoch_grid.py`. Results, logs and summary tables committed.
+
+### Every headline finding of the 2026-08-11 entry survives
+
+| finding | committed | re-run |
+|---|---|---|
+| 1. strength null | 24 tests, 1 nominal (b25/fsincl/plain DLS-ACC p=0.0391), 0 BH | **identical** |
+| 2. IFI null | 0/420 change; 5 exist, all b10/fsincl/plain DLS-ACC ±200–240 ms | **identical** |
+| 3. plain < partial, FS-excl | b25 −0.012 p=0.016 / b10 −0.031 p=0.039 | −0.0173 p=0.016 / −0.0267 p=0.039 |
+| 4. 10 ms weaker | median ≈ −0.04, p ≤ 0.02 all frames | −0.038…−0.042, p ≤ 0.0039 |
+| 5. `gini_pearson` flat | x p=0.73 / y p=0.30 | x p=0.43 / y p=0.25 (still null; medians flat) |
+| FS-incl uplift only in the plain frame | 78 % at b10, p=0.004 | 79.7 %, p=0.0039 |
+
+⚠ **Do not read the identical p-values as identical data.** At n = 9–11 animals the two-sided
+Wilcoxon p sits on a coarse discrete lattice (0.0039, 0.0156, 0.0391, …), so a p can be unchanged
+while its median moves by 40 %. Two p-values did move: `b25/partial fsincl-fsexcl` 0.43 → 0.57 and
+`b25/fsincl plain-partial` 0.16 → 0.074. The conclusions are robust; the arithmetic is not a
+reproduction.
+
+### New methodological trap (also in root `GOTCHAS.md`)
+
+`k_eff` in `epoch_metrics*.csv` is `min(K, n_units_x, n_units_y)` — the *pre*-partial dimensionality.
+Nothing records the rank that survives partialling, so a cell where Z has eaten most of the subspace
+is indistinguishable in the CSV from a well-conditioned one. Those are exactly the cells whose cc1
+swings by up to 0.4 on the rank rule alone, i.e. cells whose communication estimate was never
+trustworthy under *either* implementation. A post-partial rank column would make them visible.
+
+---
+
 ## 2026-08-28 — Back-port from TomLearning `tom_cca` (numerics + power); zero result change
 
 The port was frozen on 2026-07-28; `tom_cca` moved 37 commits since. A module-by-module
