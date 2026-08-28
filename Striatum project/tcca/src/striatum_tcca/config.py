@@ -183,6 +183,13 @@ class Config:
     surrogate_seed: int = 0
     null_type: str = "circshift"
     circshift_min_bins: int = 15          # >= 150 ms at 10 ms
+    # BH family size for `lagged.perdim_significance(correct="fdr")`: the leading
+    # dims only, because a permutation p cannot go below 1/(n_shuffles+1) while BH
+    # needs the best of `d` tests to reach alpha/d. ⚠ At the `n_shuffles = 100`
+    # above the floor is 1/101 = 0.0099 > 0.05/10 = 0.005, so NO dimension can pass
+    # BH at fdr_dims = 10: a driver adopting the per-dim null must raise n_shuffles
+    # to >= 200 (floor 0.00498). Left inert here so no committed result moves.
+    fdr_dims: int = 10
 
     # --- Parallelism ---------------------------------------------------------
     n_jobs: int = 4

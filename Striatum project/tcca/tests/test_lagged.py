@@ -167,3 +167,155 @@ def test_segment_aware_no_cross_trial_pairing():
     Sx, Sy, groups = _flat_lead_data(rng, n_bins=40, lead=2)
     lags, cc = lagged.heldout_lag_curve_flat(Sx, Sy, groups, max_lag=6, n_folds=4)
     assert int(lags[np.nanargmax(cc)]) == 2
+
+
+# ---------------------------------------------------------------------------
+# heldout_lag_curve_flat_perdim — per-dimension held-out lag curves (R2 figure)
+# ---------------------------------------------------------------------------
+def test_heldout_lag_curve_perdim_shape_and_cc1_equivalence():
+    # the per-dim curve's dominant column must be IDENTICAL to the CC1-only helper
+    # (same folds/seed) — the CC1 function is just the d=0 slice of the per-dim one.
+    rng = np.random.default_rng(3)
+    Sx, Sy, groups = _flat_lead_data(rng, lead=3, k=4)
+    lags_p, cc_p = lagged.heldout_lag_curve_flat_perdim(
+        Sx, Sy, groups, max_lag=8, n_dims=4, n_folds=4)
+    assert cc_p.shape == (lags_p.size, 4)
+    lags1, cc1 = lagged.heldout_lag_curve_flat(Sx, Sy, groups, max_lag=8, n_folds=4)
+    assert np.array_equal(lags_p, lags1)
+    assert np.allclose(cc_p[:, 0], cc1, equal_nan=True)
+
+
+def test_heldout_lag_curve_perdim_signal_dim_leads_noise_dims():
+    # canonical dim 0 = the planted shared signal (X leads by 3): peaks at +3, strong.
+    # higher canonical dims are noise-only -> far weaker held-out CC.
+    rng = np.random.default_rng(4)
+    Sx, Sy, groups = _flat_lead_data(rng, lead=3, k=4)
+    lags, cc = lagged.heldout_lag_curve_flat_perdim(
+        Sx, Sy, groups, max_lag=8, n_dims=4, n_folds=4)
+    assert int(lags[np.nanargmax(cc[:, 0])]) == 3
+    assert np.nanmax(cc[:, 0]) > 0.7
+    assert np.nanmax(cc[:, 1]) < np.nanmax(cc[:, 0])
+
+
+# ---------------------------------------------------------------------------
+# perdim_significance — significance from the SAME fit that made the curve
+# ---------------------------------------------------------------------------
+def _coupled_scores(n=600, k=4, noise=0.4, seed=0):
+    rng = np.random.default_rng(seed)
+    s = rng.standard_normal(n)
+    Sx = np.column_stack([s] + [rng.standard_normal(n) for _ in range(k - 1)])
+    Sy = np.column_stack([s + noise * rng.standard_normal(n)] +
+                         [rng.standard_normal(n) for _ in range(k - 1)])
+    return Sx, Sy
+
+
+def _groups(n=600, n_trials=10):
+    return np.repeat(np.arange(n_trials), n // n_trials)
+
+
+def test_significance_returns_mask_p_and_threshold():
+    Sx, Sy = _coupled_scores()
+    r = lagged.perdim_significance(Sx, Sy, np.array([0.8, 0.1, 0.05, 0.01]),
+                                   groups=_groups(), n_shuffles=10, seed=0)
+    assert r.mask.shape == (4,) and r.p.shape == (4,) and r.threshold.shape == (4,)
+    assert r.mask.dtype == bool
+    assert np.all((r.p > 0) & (r.p <= 1))          # +1 correction: never exactly 0
+
+
+def test_dominant_null_is_MONOTONE_in_the_heldout_cc():
+    """One scalar threshold => a higher CC can never fail while a lower one passes.
+
+    The shipped run_lag_curves violated this by attaching a mask from a DIFFERENT fit
+    by bare index: 19% of flagged dims had a negative held-out CC, and in 57% of cells
+    a non-significant dim outranked a significant one.
+    """
+    Sx, Sy = _coupled_scores()
+    cc = np.array([0.02, 0.9, -0.3, 0.45, 0.0])
+    r = lagged.perdim_significance(Sx, Sy, cc, groups=_groups(), n_shuffles=20,
+                                   seed=0, null_mode="dominant", correct=None)
+    if r.mask.any() and (~r.mask).any():
+        assert cc[r.mask].min() > cc[~r.mask].max()
+
+
+def test_perdim_null_thresholds_fall_with_rank():
+    """Shuffled canonical correlations decrease with rank, so each dim's own bar does
+    too — which is exactly why the per-dim null admits high-rank dims the dominant-dim
+    null cannot, and why the mask is NOT monotone in cc under this mode."""
+    Sx, Sy = _coupled_scores(k=5)
+    cc = np.array([0.5, 0.4, 0.3, 0.2, 0.1])
+    r = lagged.perdim_significance(Sx, Sy, cc, groups=_groups(), n_shuffles=25, seed=0)
+    thr = r.threshold[np.isfinite(r.threshold)]
+    assert thr[0] >= thr[-1]
+
+
+def test_negative_cc_never_passes_in_either_mode():
+    Sx, Sy = _coupled_scores()
+    cc = np.array([-0.5, -0.2, -0.01])
+    for mode in ("perdim", "dominant"):
+        r = lagged.perdim_significance(Sx, Sy, cc, groups=_groups(), n_shuffles=20,
+                                       seed=0, null_mode=mode)
+        assert not r.mask.any(), mode
+
+
+def test_perdim_null_detects_a_real_coupling():
+    Sx, Sy = _coupled_scores(noise=0.2)
+    g = _groups()
+    _, cc = lagged.heldout_lag_curve_flat_perdim(Sx, Sy, g, max_lag=0, n_dims=4)
+    r = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=30, seed=0,
+                                   correct=None)
+    assert r.mask[0]
+
+
+def test_perdim_null_is_sparse_on_pure_noise():
+    rng = np.random.default_rng(5)
+    Sx = rng.standard_normal((600, 4))
+    Sy = rng.standard_normal((600, 4))
+    g = _groups()
+    _, cc = lagged.heldout_lag_curve_flat_perdim(Sx, Sy, g, max_lag=0, n_dims=4)
+    r = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=40, seed=0,
+                                   correct=None)
+    assert r.mask.sum() <= 1
+
+
+def test_perdim_null_is_less_conservative_than_dominant():
+    """The whole point of the switch: comparing dim j to dim j's own held-out null,
+    rather than to the in-sample dominant-dim null, must not be STRICTER."""
+    Sx, Sy = _coupled_scores(k=5, noise=0.3)
+    g = _groups()
+    _, cc = lagged.heldout_lag_curve_flat_perdim(Sx, Sy, g, max_lag=0, n_dims=5)
+    a = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=30, seed=0,
+                                   null_mode="perdim", correct=None)
+    b = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=30, seed=0,
+                                   null_mode="dominant", correct=None)
+    assert a.mask.sum() >= b.mask.sum()
+
+
+def test_significance_handles_nan_cc():
+    Sx, Sy = _coupled_scores()
+    cc = np.array([0.9, np.nan, 0.01])
+    r = lagged.perdim_significance(Sx, Sy, cc, groups=_groups(), n_shuffles=20, seed=0)
+    assert not r.mask[1]
+
+
+def test_fdr_is_blocked_by_the_permutation_p_floor():
+    """Documents the arithmetic trap: with too few shuffles relative to the family
+    size, BH cannot reject ANYTHING, and an empty mask would be mistaken for a null."""
+    Sx, Sy = _coupled_scores()
+    g = _groups()
+    _, cc = lagged.heldout_lag_curve_flat_perdim(Sx, Sy, g, max_lag=0, n_dims=4)
+    few = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=10, seed=0,
+                                     correct="fdr")
+    assert not few.mask.any()                  # floor 1/11 > 0.05/4
+    assert few.p.min() >= 1 / 11
+
+
+def test_fdr_family_can_be_restricted_to_the_leading_dims():
+    Sx, Sy = _coupled_scores(k=5, noise=0.2)
+    g = _groups()
+    _, cc = lagged.heldout_lag_curve_flat_perdim(Sx, Sy, g, max_lag=0, n_dims=5)
+    wide = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=60, seed=0,
+                                      correct="fdr")
+    narrow = lagged.perdim_significance(Sx, Sy, cc[0], groups=g, n_shuffles=60, seed=0,
+                                        correct="fdr", fdr_dims=2)
+    assert narrow.mask.sum() >= wide.mask.sum()
+    assert not narrow.mask[2:].any()           # outside the family, never flagged
