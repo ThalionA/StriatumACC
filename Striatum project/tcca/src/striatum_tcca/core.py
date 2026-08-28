@@ -136,6 +136,12 @@ def pca_transform(tensor: np.ndarray, state: PCAState) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Canonical correlation analysis
 # ---------------------------------------------------------------------------
+# Relative eigenvalue floor for the covariance-route CCA (see cca_fit): the Gram
+# matrix's round-off at n ~ 3e5 is ~1e-13 relative, so nothing below this can be a
+# real direction. Equivalent to a relative singular-value cutoff of 1e-5.
+_COV_EIG_FLOOR = 1e-10
+
+
 @dataclass
 class CCAResult:
     """A fitted CCA model."""
@@ -148,14 +154,21 @@ class CCAResult:
 
 
 def cca_fit(x: np.ndarray, y: np.ndarray, rank_tol: float = 1e-9) -> CCAResult:
-    """Canonical correlation analysis, SVD-based and rank-robust.
+    """Canonical correlation analysis, rank-robust, via the k x k covariances.
 
-    Each population is reduced to an orthonormal basis of its (numerical)
-    column space; the canonical correlations are the singular values of the
-    cross-product of those bases. This handles rank-deficient inputs gracefully
-    (returning ``d = min(rank_x, rank_y)`` canonical correlations) -- which
-    arises when bin-slicing for the lagged CCA leaves a PC-score column with
-    no variance over the slice.
+    Each population is whitened through the eigen-decomposition of its own
+    covariance (numerical rank = eigenvalues above ``(rank_tol * s_max)^2``, the
+    same rule as a singular-value cutoff of ``rank_tol * s_max``); the canonical
+    correlations are the singular values of the whitened cross-covariance. This
+    handles rank-deficient inputs gracefully (returning ``d = min(rank_x, rank_y)``
+    canonical correlations) -- which arises when bin-slicing for the lagged CCA
+    leaves a PC-score column with no variance over the slice.
+
+    Until 2026-08-17 this was a thin SVD of the ``n x k`` data matrices
+    (:func:`_cca_fit_svd`, kept as the reference the tests pin against). The two
+    agree to floating precision; the covariance route is O(n k^2) with a small
+    constant and is ~17x faster at n ~ 300k, which is what made the uncapped
+    whole-session lag-curve run tractable.
 
     Parameters
     ----------
@@ -165,6 +178,57 @@ def cca_fit(x: np.ndarray, y: np.ndarray, rank_tol: float = 1e-9) -> CCAResult:
         A singular value is treated as non-zero if it exceeds
         ``rank_tol * largest_singular_value``.
     """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if y.shape[0] != x.shape[0]:
+        raise ValueError("x and y must have the same number of samples")
+    p, q = x.shape[1], y.shape[1]
+
+    mask = _finite_rows(x, y)
+    x, y = x[mask], y[mask]
+    n = x.shape[0]
+    if n < 3:
+        raise ValueError("need at least 3 finite paired samples for CCA")
+    x_mean = x.mean(axis=0)
+    y_mean = y.mean(axis=0)
+    xc, yc = x - x_mean, y - y_mean
+
+    def _whiten(c):
+        # eigenvalues of X'X are the squared singular values of X; ascending from eigh.
+        # Rank rule: eigenvalue > (rank_tol * s_max)^2 — but never below EIG_FLOOR,
+        # because forming X'X squares the condition number and its round-off sits at
+        # ~1e-13 relative for n ~ 3e5: a direction whose relative singular value is
+        # below ~1e-5 is round-off here (the SVD route resolved down to 1e-9; such
+        # directions never occur in PCA scores, and an exact duplicate / constant
+        # column is cut either way).
+        ev, vec = linalg.eigh(c)
+        ev, vec = ev[::-1], vec[:, ::-1]
+        if ev.size == 0 or ev[0] <= 0:
+            return None
+        keep = ev > max(rank_tol ** 2, _COV_EIG_FLOOR) * ev[0]
+        return vec[:, keep] / np.sqrt(ev[keep])          # (k, rank): V S^-1
+
+    wx = _whiten(xc.T @ xc)
+    wy = _whiten(yc.T @ yc)
+    if wx is None or wy is None:
+        return CCAResult(
+            A=np.zeros((p, 1)), B=np.zeros((q, 1)),
+            r=np.zeros(1), x_mean=x_mean, y_mean=y_mean,
+        )
+    # whitened cross-covariance == U_x' U_y of the data-matrix SVD route
+    uc, rho, vct = linalg.svd(wx.T @ (xc.T @ yc) @ wy)
+    d = min(wx.shape[1], wy.shape[1])
+    r = np.clip(rho[:d], 0.0, 1.0)
+    scale = np.sqrt(n - 1)
+    a = (wx @ uc[:, :d]) * scale
+    b = (wy @ vct[:d].T) * scale
+    return CCAResult(A=a, B=b, r=r, x_mean=x_mean, y_mean=y_mean)
+
+
+def _cca_fit_svd(x: np.ndarray, y: np.ndarray, rank_tol: float = 1e-9) -> CCAResult:
+    """Reference implementation (thin SVD of the n x k data matrices) — the
+    project's CCA until 2026-08-17. Kept ONLY so tests can pin :func:`cca_fit`
+    against it; do not call it from analysis code."""
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     if y.shape[0] != x.shape[0]:

@@ -269,3 +269,60 @@ def test_cv_recovers_true_correlation():
     cv = core.cca_cv(px, py, CFG)
     assert abs(cv.held_out_r[0] - rho) < 0.15
     assert cv.n_samples == n_tr * n_bin
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-17: cca_fit switched from a thin SVD of the n x k data matrix to the
+# covariance route (k x k eigen-whitening). At n ~ 300k the SVD took 1.7 s per fit
+# and made the uncapped lag-curve run 17x slower than necessary. The old
+# implementation is kept as core._cca_fit_svd purely as the reference for these
+# tests: the two must agree to floating precision, including on rank-deficient
+# and n < p inputs, and the returned weights must be the same up to a per-pair
+# sign flip (which cca_score is invariant to).
+
+def _same_up_to_pair_sign(a1, b1, a2, b2, tol=1e-6):
+    assert a1.shape == a2.shape and b1.shape == b2.shape
+    for j in range(a1.shape[1]):
+        s = np.sign(a1[:, j] @ a2[:, j]) or 1.0
+        assert np.allclose(a1[:, j], s * a2[:, j], atol=tol, rtol=tol)
+        assert np.allclose(b1[:, j], s * b2[:, j], atol=tol, rtol=tol)
+
+
+def test_cca_fit_matches_svd_reference_on_random_data():
+    rng = np.random.default_rng(3)
+    x = rng.normal(size=(2000, 6))
+    y = 0.4 * x @ rng.normal(size=(6, 5)) + rng.normal(size=(2000, 5))
+    new, ref = core.cca_fit(x, y), core._cca_fit_svd(x, y)
+    assert new.r.shape == ref.r.shape
+    assert np.allclose(new.r, ref.r, atol=1e-12)
+    assert np.allclose(new.x_mean, ref.x_mean) and np.allclose(new.y_mean, ref.y_mean)
+    _same_up_to_pair_sign(new.A, new.B, ref.A, ref.B)
+    # and the held-out scores through either model agree
+    xt = rng.normal(size=(500, 6)); yt = 0.4 * xt @ np.eye(6, 5) + rng.normal(size=(500, 5))
+    assert np.allclose(core.cca_score(xt, yt, new), core.cca_score(xt, yt, ref), atol=1e-8)
+
+
+def test_cca_fit_matches_svd_reference_on_rank_deficient_input():
+    rng = np.random.default_rng(4)
+    x = rng.normal(size=(300, 4)); x = np.column_stack([x, x[:, 0]])   # rank 4 of 5
+    y = rng.normal(size=(300, 3))
+    new, ref = core.cca_fit(x, y), core._cca_fit_svd(x, y)
+    assert new.r.size == ref.r.size == 3
+    assert np.allclose(new.r, ref.r, atol=1e-10)
+
+
+def test_cca_fit_matches_svd_reference_when_n_below_p():
+    rng = np.random.default_rng(5)
+    x = rng.normal(size=(8, 12)); y = rng.normal(size=(8, 10))
+    new, ref = core.cca_fit(x, y), core._cca_fit_svd(x, y)
+    assert new.r.size == ref.r.size
+    assert np.allclose(new.r, ref.r, atol=1e-8)
+
+
+def test_cca_fit_matches_svd_reference_with_a_zero_variance_column():
+    rng = np.random.default_rng(6)
+    x = rng.normal(size=(400, 5)); x[:, 2] = 1.0            # constant column
+    y = rng.normal(size=(400, 4))
+    new, ref = core.cca_fit(x, y), core._cca_fit_svd(x, y)
+    assert new.r.size == ref.r.size
+    assert np.allclose(new.r, ref.r, atol=1e-10)
