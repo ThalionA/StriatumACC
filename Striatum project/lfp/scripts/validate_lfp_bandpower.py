@@ -24,10 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import config  # noqa: E402
 
-OUT_DIR = config.RESULTS_DIR / "lfp_band_trials"
-# Positional order built by OrganiseStriatumDataIncV1.m:9 -- the index into
-# preprocessed_data is the position in this list, not the mouse id.
-COHORT_ORDER = config.TASK_MOUSE_IDS
+# The index into preprocessed_data is the animal's POSITION in its organiser's
+# list, not its mouse id (OrganiseStriatumDataIncV1.m:9 /
+# OrganiseStriatumDataControlIncV1.m:20).
 
 
 def matlab_animal(handle, index: int):
@@ -41,15 +40,24 @@ def matlab_animal(handle, index: int):
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
+    args = parser.parse_args()
+    ch = config.get_cohort(args.cohort)
+    out_dir = config.RESULTS_DIR / f"lfp_band_trials_{args.cohort}"
+
     rows = []
-    with h5py.File(config.PREPROC_MAT, "r") as handle:
-        for path in sorted(OUT_DIR.glob("*.npz")):
+    with h5py.File(ch.preproc_mat, "r") as handle:
+        for path in sorted(out_dir.glob("*.npz")):
             z = np.load(path, allow_pickle=False)
             mouse = int(z["mouse_id"])
             probe = str(z["probe"])
-            if mouse not in COHORT_ORDER:
+            if mouse not in ch.mouse_ids:
                 continue
-            durations, n_trials_matlab = matlab_animal(handle, COHORT_ORDER.index(mouse))
+            durations, n_trials_matlab = matlab_animal(handle, ch.mouse_ids.index(mouse))
 
             counts = z["corridor_counts"]                    # (50, n_trials_stored)
             good = z["good_trials"]
@@ -76,7 +84,7 @@ def main() -> None:
             both = np.isfinite(expected_ms) & (got > 0) & good[:n][None, :]
             diff = np.abs(got - expected_ms)[both]
             rows.append({
-                "mouse_id": mouse, "probe": probe,
+                "cohort": args.cohort, "mouse_id": mouse, "probe": probe,
                 "n_trials_matlab": n_trials_matlab,
                 "n_good_trials_lfp": int(good.sum()),
                 "n_compared_cells": int(both.sum()),
@@ -100,7 +108,8 @@ def main() -> None:
                   f"matlab-only {r['n_matlab_only']} lfp-only {r['n_lfp_only']} "
                   f"clipped {r['n_trial_end_clipped']}{flag}", flush=True)
 
-    with (config.RESULTS_DIR / "lfp_bandpower_validation.csv").open("w", newline="") as fh:
+    out = config.RESULTS_DIR / f"lfp_bandpower_validation_{args.cohort}.csv"
+    with out.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)

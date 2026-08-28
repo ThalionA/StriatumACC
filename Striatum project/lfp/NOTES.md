@@ -1,5 +1,106 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-08-28 (b) — Control LFP arrives; the cohort abstraction; what survives a yoked control
+
+**The task-only caveat is retired.** `RawDataControl/LFP/` holds 9 exports; 8 are
+usable — 5 striatum probes (407, 513, 515, 817, 1205) and 3 visual (513, 515,
+817). **408 has an export but is not in `OrganiseStriatumDataControlIncV1.m:20`**,
+exactly as 507 is absent on the task side, and `parse_lfp_filename`'s mouse-list
+guard drops it without being asked. Control 2 is dark-only and ships no voltage.
+
+**Cohorts are now a first-class object** (`config.Cohort`), not a fork of the
+scripts. Every driver takes `--cohort task|control` and every output is suffixed.
+What actually differs, and is now encoded once: the control probe-2 spike bundle
+is lowercase (`513_v1_raw.mat` vs the task's `1105_V1_raw.mat`); depth boundaries
+live in separate CSVs whose mouse-number ranges overlap the task ones; and
+**yoked controls have no learning point**, so `IntegratedAll_v1`'s rule applies —
+every control animal inherits the task cohort's average LP (41), making control
+"epochs" matched time windows rather than learning windows.
+
+**Control data quality.** All 8 files are (8,400,000 × 384), 1/f slopes −1.16 to
+−2.05, adjacent r 0.78–0.99, distant r ≈ 0, mains mostly 1.1–3.8× (407 is 29.6×).
+Gain sits in the task August batch's regime. **8/8 reproduce the MATLAB bin map
+to 0.0 ms.** Identity: 7/8 confirmed in all three windows; **817/striatum is
+2/3 and weak (0.99×, 1.29×, 2.93×)** — its raw bundle has only 48 sorted units,
+so the MUA reference is sparse and the test is underpowered there, not the file
+suspect. Grid mismatches are benign except one: the three visual probes have
+11.4 M spike bins against 8.4 M of LFP, but the organiser already crops probe 2
+to probe 1's window and all their behaviour fits inside the export (validation
+recovers the same trial counts as probe 1). **407 is the real loss** — 10.08 M
+bins, VR to 9972 s, so the export stops 26 min early and 169 of 209 trials survive.
+
+### What the control group changes
+
+**1. The gamma rise is not learning.** Naive→expert gamma increases in DMS and
+DLS are present in yoked controls too and are *larger* there (DMS low gamma
++0.236 control vs +0.085 task; DLS +0.192 vs +0.058). Four of the task's
+"near-miss" cells are in this category. Time in the apparatus, not task learning.
+
+**2. DLS theta survives, and it is the only thing that does.** A proper group ×
+epoch contrast (Welch on the per-animal Δ, BH-FDR within arm,
+`run_lfp_group_contrast.py`) finds **1 of 56 evolution cells differing between
+groups: DLS theta, task −0.157 vs control +0.076, p = 0.0024, p_FDR = 0.049.**
+It also survives the speed control. That is now a dissociation, not a lone
+significant cell.
+
+**3. Position decoding does not depend on reward.** 0 of 30 decoding cells differ.
+Control 1 runs the same corridor, and the LFP's (small) position information is
+there just the same.
+
+**4. The reliability gap is behavioural, and I nearly reported it as neural.**
+13 of 30 split-half cells differ, task ≫ control everywhere in striatum and ACC
+(e.g. DMS beta 0.60 vs 0.02). Two checks before believing it:
+- **Trial count does not explain it.** Matching both groups to exactly 100 trials
+  leaves 11/24 cells differing with near-identical effect sizes.
+- **Behaviour does.** The split-half reliability of the **speed profile itself**
+  is 0.98 in task animals and 0.68 in controls (p = 0.013), and controls run at
+  21 vs 36 cm/s (p = 0.005). Task animals traverse the corridor the same way every
+  trial; controls do not. Since the spatial LFP profile largely tracks speed
+  (population-profile r ≈ −0.9 for beta), this is a behavioural difference read
+  out through the LFP, **not** a neural one. V1 is the one area with no group
+  difference, and V1 theta is also the one profile uncorrelated with speed
+  (r ≈ −0.01 against +0.65/−0.58 elsewhere) — consistent with a position-locked
+  visual drive, though not established.
+
+`behaviour` is now a first-class arm (`lfp_arms_behaviour_<cohort>.csv`:
+speed-profile split-half r, mean speed, within-bin CV) so this control is run
+every time rather than remembered.
+
+**5. Cross-area CCA and moving reliability: 0 cells differ.** Consistent with the
+shared-field reading — volume conduction should not care which group an animal
+is in.
+
+### Correction to the 2026-08-27 entry
+That entry said beta's spatial profile is largely a speed profile "and theta's is
+not". That was the **per-channel median** r (theta: DMS +0.09, DLS +0.15, ACC
+−0.33). At the **population-profile** level theta is strongly speed-related too,
+with opposite signs by area: DMS +0.65, DLS +0.63, ACC −0.58, V1 −0.01. The gap
+between the two says the speed-locked component is shared across an area's
+channels while each channel adds enough idiosyncratic variance to dilute its own
+correlation.
+
+### Corridor structure (measured, task cohort)
+Speed minimum 12.8 cm/s at 132 cm — inside the 125–169 cm reward zone — and
+maximum 45 cm/s at 208 cm. **Beta peaks at 128 cm in DMS, DLS and ACC together**,
+at the reward-zone onset. For a "beta codes position" claim the −0.9 speed
+correlation is fatal; for basal-ganglia beta, high beta exactly where the animal
+stops to collect reward is the expected movement-suppression signal. Same
+measurement, two readings, decided by the question.
+
+### Code
+`config.Cohort` + `TASK`/`CONTROL` + `get_cohort`; `results_io.py` (shared table
+loader and hierarchical aggregator, hoisted out of both plotting drivers);
+`run_lfp_group_contrast.py`; `plot_lfp_task_vs_control.py`. `cohort`, `geometry`
+and `analysis` all take a cohort. Results renamed to `<name>_<cohort>` throughout
+and band-power caches to `lfp_band_trials_<cohort>/`. 228 tests pass.
+
+### Standing caveats (updated)
+Control n is 5 striatal / 3–4 elsewhere, so "no group difference" is weak evidence
+of absence everywhere except the reliability arm, where the effect is large.
+1212 (task) and 407 (control) are truncated. CA1/DG are n = 3 per group.
+Absolute power is never compared across animals.
+
+
 ## 2026-08-28 — 1201_v1 added; moving-window reliability ported from the unit code; dedup pass
 
 **Cohort is now 18 files.** `1201_v1_voltage_data_384ch.mat` landed and is in:

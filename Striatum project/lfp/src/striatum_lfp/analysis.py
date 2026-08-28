@@ -97,27 +97,42 @@ def epoch_indices(lp: int | None, n_trials: int, *,
     return idx
 
 
-def cohort_learning_points(preproc_mat=None) -> dict[int, int | None]:
-    """``{mouse_id: learning point}`` for the 16 task animals, from the cohort struct."""
+def cohort_learning_points(cohort=None, preproc_mat=None) -> dict[int, int | None]:
+    """``{mouse_id: learning point}`` from a cohort's preprocessed struct.
+
+    Yoked controls have no learning point of their own -- there is nothing for
+    them to learn -- so ``IntegratedAll_v1.m`` gives every control animal the TASK
+    cohort's average learning point, and the epoch windows follow from that. A
+    cohort declaring ``learning_point_source == "task_average"`` gets the same
+    treatment here, so control epochs line up with task epochs by construction.
+    """
     import h5py
 
+    ch = cohort or config.TASK
+    if ch.learning_point_source == "task_average":
+        task_lps = [v for v in cohort_learning_points(config.TASK).values()
+                    if v is not None]
+        avg = int(round(sum(task_lps) / len(task_lps))) if task_lps else None
+        return {m: avg for m in ch.mouse_ids}
+
     out: dict[int, int | None] = {}
-    with h5py.File(preproc_mat or config.PREPROC_MAT, "r") as handle:
+    with h5py.File(preproc_mat or ch.preproc_mat, "r") as handle:
         P = handle["preprocessed_data"]
-        for i, mouse in enumerate(config.TASK_MOUSE_IDS):
+        for i, mouse in enumerate(ch.mouse_ids):
             z = np.asarray(handle[P["zscored_lick_errors"][i, 0]]).ravel()
             out[mouse] = learning_point(z)
     return out
 
 
-def cohort_trial_counts(preproc_mat=None) -> dict[int, int]:
+def cohort_trial_counts(cohort=None, preproc_mat=None) -> dict[int, int]:
     """``{mouse_id: n_trials}`` as the unit analyses count them."""
     import h5py
 
+    ch = cohort or config.TASK
     out: dict[int, int] = {}
-    with h5py.File(preproc_mat or config.PREPROC_MAT, "r") as handle:
+    with h5py.File(preproc_mat or ch.preproc_mat, "r") as handle:
         P = handle["preprocessed_data"]
-        for i, mouse in enumerate(config.TASK_MOUSE_IDS):
+        for i, mouse in enumerate(ch.mouse_ids):
             out[mouse] = int(np.asarray(handle[P["n_trials"][i, 0]]).ravel()[0])
     return out
 
@@ -168,7 +183,7 @@ def log_power(x: np.ndarray) -> np.ndarray:
     return out
 
 
-def read_behaviour(mouse_id: int, probe: str = "striatum") -> dict:
+def read_behaviour(mouse_id: int, probe: str = "striatum", cohort=None) -> dict:
     """VR position/world/trial on the millisecond grid, plus the recording crop.
 
     Column order follows ``OrganiseStriatumDataIncV1.m``:225-260 -- VR_data row 2
@@ -178,7 +193,7 @@ def read_behaviour(mouse_id: int, probe: str = "striatum") -> dict:
     """
     import h5py
 
-    path = config.raw_mat(mouse_id, probe)
+    path = config.raw_mat(mouse_id, probe, cohort or config.TASK)
     with h5py.File(path, "r") as handle:
         vr_times_s = np.asarray(handle["VR_times_synched"]).ravel().astype(float)
         vr = np.asarray(handle["VR_data"])

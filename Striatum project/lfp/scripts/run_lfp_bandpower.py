@@ -39,7 +39,8 @@ FS = config.FS
 MAX_TRIALS = 200
 BLOCK_SAMPLES = 210_000          # 5000 x 42-row HDF5 chunks
 PAD_SAMPLES = 3_000              # >= 3 s: covers the 1 Hz filter transient
-OUT_DIR = config.RESULTS_DIR / "lfp_band_trials"
+def out_dir(cohort_name: str) -> Path:
+    return config.RESULTS_DIR / f"lfp_band_trials_{cohort_name}"
 
 
 def build_segments(beh: dict, n_lfp_samples: int) -> dict:
@@ -133,14 +134,15 @@ def build_segments(beh: dict, n_lfp_samples: int) -> dict:
 
 
 def extract_one(item) -> dict:
-    (mouse_id, probe), path = item
+    (mouse_id, probe), path, cohort_name = item
+    ch = config.get_cohort(cohort_name)
     t0 = time.time()
     path = Path(path)
     band_names = list(bandpower.ANALYSIS_BANDS)
 
     with h5py.File(path, "r") as handle:
         n_samples, n_channels = map(int, handle[DATASET].shape)
-    beh = read_behaviour(mouse_id, probe)
+    beh = read_behaviour(mouse_id, probe, ch)
     geo = build_segments(beh, n_samples)
 
     n_trials = geo["n_trials_stored"]
@@ -194,20 +196,21 @@ def extract_one(item) -> dict:
 
     depths = geometry.channel_depths(n_channels)
     try:
-        bounds = geometry.load_area_boundaries(mouse_id, probe=probe)
+        bounds = geometry.load_area_boundaries(mouse_id, probe=probe, cohort=ch)
         masks = geometry.channel_area_masks(depths, bounds)
     except KeyError:
         masks = {}
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / f"{mouse_id}_{probe}.npz"
+    target = out_dir(cohort_name)
+    target.mkdir(parents=True, exist_ok=True)
+    out_path = target / f"{mouse_id}_{probe}.npz"
     np.savez_compressed(
         out_path,
         corridor=corridor, dark=dark,
         corridor_counts=cor_counts, dark_counts=dark_counts,
         bands=np.array(band_names), band_edges=np.array(
             [bandpower.ANALYSIS_BANDS[b] for b in band_names]),
-        mouse_id=mouse_id, probe=probe,
+        mouse_id=mouse_id, probe=probe, cohort=cohort_name,
         channel_depth_um=depths,
         good_trials=geo["good_trials"],
         n_trials_total=geo["n_trials_total"],
@@ -223,7 +226,7 @@ def extract_one(item) -> dict:
     n_good = int(geo["good_trials"].sum())
     filled = float(np.isfinite(corridor[0, :, :, geo["good_trials"]]).mean())
     row = {
-        "mouse_id": mouse_id, "probe": probe,
+        "cohort": cohort_name, "mouse_id": mouse_id, "probe": probe,
         "n_trials_total": geo["n_trials_total"], "n_trials_stored": n_trials,
         "n_good_trials": n_good,
         "truncated_at_max": geo["n_trials_total"] > MAX_TRIALS,
@@ -233,7 +236,7 @@ def extract_one(item) -> dict:
         "file_mb": out_path.stat().st_size / 1e6,
         "elapsed_s": time.time() - t0,
     }
-    print(f"[bandpower] {mouse_id}/{probe:9s} {n_good:4d}/{n_trials:4d} good trials  "
+    print(f"[bandpower] {cohort_name[:4]:<4} {mouse_id}/{probe:9s} {n_good:4d}/{n_trials:4d} good trials  "
           f"{filled:5.1%} cells filled  median {row['median_samples_per_spatial_bin']:.0f} ms/bin  "
           f"{row['file_mb']:5.0f} MB  {row['elapsed_s']:5.0f}s"
           + ("  [TRUNCATED to 200 trials]" if row["truncated_at_max"] else ""), flush=True)
@@ -244,14 +247,17 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=5)
     parser.add_argument("--only", type=str, default="")
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
     args = parser.parse_args()
+    ch = config.get_cohort(args.cohort)
 
-    found = cohort.discover_lfp_files(config.LFP_DIR)
+    found = cohort.discover_lfp_files(ch.lfp_dir, ch.mouse_ids)
     if args.only:
         keep = {int(x) for x in args.only.split(",")}
         found = {k: v for k, v in found.items() if k[0] in keep}
-    items = [(k, str(v)) for k, v in sorted(found.items())]
-    print(f"[bandpower] {len(items)} files, bands {list(bandpower.ANALYSIS_BANDS)}, "
+    items = [(k, str(v), args.cohort) for k, v in sorted(found.items())]
+    print(f"[bandpower] cohort={args.cohort}: {len(items)} files, bands {list(bandpower.ANALYSIS_BANDS)}, "
           f"notch {bandpower.NOTCH_HZ} Hz", flush=True)
 
     t0 = time.time()
@@ -260,7 +266,7 @@ def main() -> None:
     print(f"[bandpower] all files in {(time.time() - t0) / 60:.1f} min")
 
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out = config.RESULTS_DIR / "lfp_bandpower_summary.csv"
+    out = config.RESULTS_DIR / f"lfp_bandpower_summary_{args.cohort}.csv"
     # Merge on (mouse, probe) rather than overwrite: a `--only` rerun must not
     # wipe the rows for the files it did not touch.
     merged = {}
@@ -275,7 +281,7 @@ def main() -> None:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(ordered)
-    print(f"[bandpower] wrote {config.RESULTS_DIR}/lfp_bandpower_summary.csv")
+    print(f"[bandpower] wrote {out.name}")
 
 
 if __name__ == "__main__":

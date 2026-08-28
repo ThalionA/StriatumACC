@@ -48,13 +48,13 @@ CHANNEL_STEP = 4
 OFFSET_SCAN = (0, 600_000, 1_500_000, 3_000_000)
 
 
-def mua_rate(mouse_id: int, probe: str, start: int, n: int, *, block: int = 100_000):
+def mua_rate(mouse_id: int, probe: str, start: int, n: int, ch, *, block: int = 100_000):
     """Multi-unit rate: spikes summed over units, binned to ``BIN_MS``.
 
     Read in blocks and summed on the fly -- a 555-unit slice is gigabytes if
     materialised, and only the across-unit sum is ever needed.
     """
-    path = config.raw_mat(mouse_id, probe)
+    path = config.raw_mat(mouse_id, probe, ch)
     if not path.exists():
         return None
     out = np.empty(n, dtype=np.float64)
@@ -72,9 +72,9 @@ def mua_rate(mouse_id: int, probe: str, start: int, n: int, *, block: int = 100_
 
 
 def _mua_job(args):
-    mouse_id, probe, start, n = args
+    mouse_id, probe, start, n, cohort_name = args
     t0 = time.time()
-    rate = mua_rate(mouse_id, probe, start, n)
+    rate = mua_rate(mouse_id, probe, start, n, config.get_cohort(cohort_name))
     print(f"[mua] {mouse_id}/{probe:9s} "
           f"{'ok' if rate is not None else 'ABSENT':6s} {time.time() - t0:5.1f}s", flush=True)
     return (mouse_id, probe, start), (None if rate is None else rate.astype(np.float32))
@@ -93,31 +93,37 @@ def _env_job(args):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=6)
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
     args = parser.parse_args()
+    ch = config.get_cohort(args.cohort)
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    found = cohort.discover_lfp_files(config.LFP_DIR)
+    found = cohort.discover_lfp_files(ch.lfp_dir, ch.mouse_ids)
     probes_present = sorted({p for _, p in found})
 
     # Candidate MUA sources: every task animal that has a raw bundle for a probe
     # that appears in the LFP set -- the controls must include animals whose LFP
     # has not been downloaded, or the test only asks "which of the files I have".
+    # Candidates are this cohort's animals: a control file must beat the other
+    # controls, which is the mix-up that could actually have happened at download.
     mua_requests = [
-        (m, p, w, WINDOW_SAMPLES)
-        for p in probes_present for m in config.TASK_MOUSE_IDS for w in WINDOW_STARTS
-        if config.raw_mat(m, p).exists()
+        (m, p, w, WINDOW_SAMPLES, args.cohort)
+        for p in probes_present for m in ch.mouse_ids for w in WINDOW_STARTS
+        if config.raw_mat(m, p, ch).exists()
     ]
     # Extra offsets for animals whose raw session is longer than 8.4 M bins.
-    for m in config.TASK_MOUSE_IDS:
+    for m in ch.mouse_ids:
         for p in probes_present:
-            path = config.raw_mat(m, p)
+            path = config.raw_mat(m, p, ch)
             if not path.exists():
                 continue
             with h5py.File(path, "r") as h:
                 total = int(h["binned_spikes"].shape[0])
             if total > 8_400_000:
                 for off in OFFSET_SCAN[1:]:
-                    mua_requests.append((m, p, WINDOW_STARTS[0] + off, WINDOW_SAMPLES))
+                    mua_requests.append(
+                        (m, p, WINDOW_STARTS[0] + off, WINDOW_SAMPLES, args.cohort))
 
     env_requests = [(k, str(v), w) for k, v in sorted(found.items()) for w in WINDOW_STARTS]
 
@@ -131,7 +137,7 @@ def main() -> None:
     # Score every (file, candidate) pair per window, then column-normalise so a
     # candidate whose MUA correlates with everything cannot win someone else's row.
     files = sorted(found)
-    cands = [m for m in config.TASK_MOUSE_IDS]
+    cands = list(ch.mouse_ids)
     rows, verdicts = [], []
     per_window_norm: dict[int, np.ndarray] = {}
     per_window_raw: dict[int, np.ndarray] = {}
@@ -173,7 +179,7 @@ def main() -> None:
             for j, cand in enumerate(cands):
                 if not np.isfinite(raw[j]):
                     continue
-                rows.append({"mouse_id": mouse_id, "probe": probe,
+                rows.append({"cohort": args.cohort, "mouse_id": mouse_id, "probe": probe,
                              "window_start_s": w // FS, "candidate": cand,
                              "mean_abs_r": raw[j], "normalised": norm[j],
                              "is_claimed": cand == mouse_id})
@@ -182,7 +188,8 @@ def main() -> None:
         n_win = sum(wins)
         verdict = ("CONFIRMED" if n_win == len(wins) else
                    f"MAJORITY({n_win}/{len(wins)})" if n_win > len(wins) / 2 else "FAILED")
-        record = {"mouse_id": mouse_id, "probe": probe, "verdict": verdict,
+        record = {"cohort": args.cohort, "mouse_id": mouse_id,
+                  "probe": probe, "verdict": verdict,
                   "windows_won": f"{n_win}/{len(wins)}", "windows": window_rows}
         print(f"[identity] {mouse_id}/{probe:9s} {verdict:14s} " + "  ".join(
             f"t={r['window_start_s']}s own={r['own_norm']:5.2f}x "
@@ -203,11 +210,12 @@ def main() -> None:
                 f"{o / FS:+.0f}s={v:.4f}" for o, v in offset_scores.items()), flush=True)
         verdicts.append(record)
 
-    with (config.RESULTS_DIR / "lfp_identity_matrix.csv").open("w", newline="") as fh:
+    out = config.RESULTS_DIR / f"lfp_identity_matrix_{args.cohort}.csv"
+    with out.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
-    (config.RESULTS_DIR / "lfp_identity.json").write_text(
+    (config.RESULTS_DIR / f"lfp_identity_{args.cohort}.json").write_text(
         json.dumps(verdicts, indent=2, default=str)
     )
 

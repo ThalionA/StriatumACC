@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import analysis, config  # noqa: E402
+from striatum_lfp.results_io import hierarchical, load_arms as load  # noqa: E402
 from striatum_lfp.figstyle import (  # noqa: E402
     AREA_COLOUR, AREA_ORDER, BAND_LABEL, PLOT_BANDS, save_pair,
 )
@@ -30,45 +31,14 @@ EPOCHS = list(analysis.EPOCH_NAMES)
 WINDOWS = ["All"] + EPOCHS
 
 
-def load(name: str) -> list[dict]:
-    path = config.RESULTS_DIR / f"lfp_arms_{name}.csv"
-    if not path.exists():
-        return []
-    with path.open() as fh:
-        rows = list(csv.DictReader(fh))
-    for r in rows:
-        for k, v in r.items():
-            if k in ("probe", "area", "band", "epoch", "window", "area_a", "area_b",
-                     "trial_rel_lp"):
-                continue
-            r[k] = float(v) if v not in ("", "None") else np.nan
-    return rows
-
-
-def hierarchical(rows, key_fields, value_field):
-    """{key: (mean, sem, n_animals)} with the ANIMAL as the unit of analysis."""
-    by_key = defaultdict(dict)
-    for r in rows:
-        v = r[value_field]
-        if np.isfinite(v):
-            by_key[tuple(r[f] for f in key_fields)][int(r["mouse_id"])] = v
-    out = {}
-    for key, per_animal in by_key.items():
-        vals = np.array(list(per_animal.values()))
-        n = vals.size
-        out[key] = (float(vals.mean()),
-                    float(vals.std(ddof=1) / np.sqrt(n)) if n > 1 else np.nan, n)
-    return out
-
-
 def _epoch_axis(ax):
     ax.set_xticks(range(len(EPOCHS)))
     ax.set_xticklabels(["1–3", "4–10", "Inter", "Expert"], fontsize=7)
 
 
-def load_stats():
+def load_stats(cohort_name: str = "task"):
     """{(metric, area, band): (mean_delta, p_fdr, survives)} from the declared family."""
-    path = config.RESULTS_DIR / "lfp_arms_evolution_stats.csv"
+    path = config.RESULTS_DIR / f"lfp_arms_evolution_stats_{cohort_name}.csv"
     if not path.exists():
         return {}
     with path.open() as fh:
@@ -444,19 +414,21 @@ def plot_moving_reliability_absolute(rows, stem="lfp_reliability_moving_session"
     save_pair(fig, stem)
 
 
-def plot_moving_reliability_depth(stem="lfp_reliability_moving_depth", band="low_gamma"):
+def plot_moving_reliability_depth(cohort_name="task",
+                                  stem="lfp_reliability_moving_depth", band="low_gamma"):
     """Per-file depth x trial reliability -- the LFP analogue of the neurons x trials
     ``imagesc(avg_corrs)`` panel in ProcessStriatumTask.m:997."""
     from striatum_lfp import arms
 
-    files = sorted((config.RESULTS_DIR / "lfp_band_trials").glob("*.npz"))
+    ch = config.get_cohort(cohort_name)
+    files = sorted((config.RESULTS_DIR / f"lfp_band_trials_{cohort_name}").glob("*.npz"))
     if not files:
         return
     ncol = 6
     nrow = int(np.ceil(len(files) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.0 * ncol, 2.7 * nrow), squeeze=False)
-    lps = analysis.cohort_learning_points()
-    counts = analysis.cohort_trial_counts()
+    lps = analysis.cohort_learning_points(ch)
+    counts = analysis.cohort_trial_counts(ch)
     for k, path in enumerate(files):
         ax = axes[k // ncol][k % ncol]
         z = np.load(path, allow_pickle=False)
@@ -497,7 +469,7 @@ def plot_moving_reliability_depth(stem="lfp_reliability_moving_depth", band="low
     save_pair(fig, stem)
 
 
-def plot_moving_vs_units(stem="lfp_reliability_moving_vs_units"):
+def plot_moving_vs_units(cohort_name="task", stem="lfp_reliability_moving_vs_units"):
     """The LFP moving metric beside the single-unit one, same window, same epochs.
 
     ``figures/stability_by_animal.csv`` is written by IntegratedAll_v1 from exactly
@@ -506,7 +478,7 @@ def plot_moving_vs_units(stem="lfp_reliability_moving_vs_units"):
     control, which removes the part of the correlation that any two trials of that
     signal would share.
     """
-    lfp_path = config.RESULTS_DIR / "lfp_arms_moving_reliability_epochs.csv"
+    lfp_path = config.RESULTS_DIR / f"lfp_arms_moving_reliability_epochs_{cohort_name}.csv"
     unit_path = Path(config.PKG_DIR).parent / "figures" / "stability_by_animal.csv"
     if not lfp_path.exists() or not unit_path.exists():
         print("[plot] moving-vs-units needs both tables; skipping")
@@ -514,7 +486,8 @@ def plot_moving_vs_units(stem="lfp_reliability_moving_vs_units"):
     with lfp_path.open() as fh:
         lfp = list(csv.DictReader(fh))
     with unit_path.open() as fh:
-        units = [r for r in csv.DictReader(fh) if r["group"].startswith("Task")]
+        want = "Task" if cohort_name == "task" else "Control 1"
+        units = [r for r in csv.DictReader(fh) if r["group"].startswith(want)]
 
     epochs3 = ["Naive", "Intermediate", "Expert"]
     areas = [a for a in AREA_ORDER if any(r["area"] == a for r in lfp)]
@@ -572,36 +545,49 @@ def plot_moving_vs_units(stem="lfp_reliability_moving_vs_units"):
 
 
 def main() -> None:
-    evo = load("evolution")
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
+    args = parser.parse_args()
+    c = args.cohort
+    tag = f"_{c}"
+
+    evo = load("evolution", c)
     if evo:
-        st = load_stats()
-        plot_evolution(evo, "z_corridor", "z_dark", "z log power", "lfp_evolution_z",
-                       "LFP band power across learning, per area (z-scored log power)\n"
+        st = load_stats(c)
+        plot_evolution(evo, "z_corridor", "z_dark", "z log power",
+                       f"lfp_evolution_z{tag}",
+                       f"LFP band power across learning, per area — {c.upper()} cohort "
+                       "(z-scored log power)\n"
                        "Δ and p(FDR) are the trials 4–10 → Expert paired test, "
-                       "BH-corrected over the 24-cell area × band family; ✱ = survives",
+                       "BH-corrected over the area × band family; ✱ = survives",
                        stats=st)
         plot_evolution(evo, "z_corridor_speed_resid", "z_dark",
-                       "z log power, speed removed", "lfp_evolution_speed_residual",
-                       "The speed control: the same effect after the linear log-speed "
-                       "component is removed per channel\n"
-                       "running speed rises ~34% from the first trials to expert, "
-                       "so anything that vanishes here was speed",
-                       stats=st)
+                       "z log power, speed removed",
+                       f"lfp_evolution_speed_residual{tag}",
+                       f"The speed control — {c.upper()} cohort: the same effect after the "
+                       "linear log-speed component is removed per channel", stats=st)
         plot_evolution(evo, "frac_of_total_corridor", "frac_of_total_dark",
-                       "band / total power", "lfp_evolution_fraction",
-                       "The aperiodic guard: band power as a FRACTION of 1–150 Hz total\n"
-                       "a change here is a change in spectral shape, not in overall power",
-                       stats=st)
-        plot_speed(evo)
-    for name, fn in (("decoding", plot_decoding), ("reliability", plot_reliability),
-                     ("cca", plot_cca), ("cca", plot_cca_distance),
-                     ("moving_reliability", plot_moving_reliability),
-                     ("moving_reliability", plot_moving_reliability_absolute)):
-        rows = load(name)
+                       "band / total power", f"lfp_evolution_fraction{tag}",
+                       f"The aperiodic guard — {c.upper()} cohort: band power as a FRACTION "
+                       "of 1–150 Hz total", stats=st)
+        plot_speed(evo, stem=f"lfp_evolution_speed{tag}")
+    for name, fn, stem in (
+        ("decoding", plot_decoding, "lfp_decoding"),
+        ("reliability", plot_reliability, "lfp_reliability"),
+        ("cca", plot_cca, "lfp_cca"),
+        ("cca", plot_cca_distance, "lfp_cca_vs_distance"),
+        ("moving_reliability", plot_moving_reliability, "lfp_reliability_moving"),
+        ("moving_reliability", plot_moving_reliability_absolute,
+         "lfp_reliability_moving_session"),
+    ):
+        rows = load(name, c)
         if rows:
-            fn(rows)
-    plot_moving_reliability_depth()
-    plot_moving_vs_units()
+            fn(rows, stem=f"{stem}{tag}")
+    plot_moving_reliability_depth(c, stem=f"lfp_reliability_moving_depth{tag}")
+    plot_moving_vs_units(c, stem=f"lfp_reliability_moving_vs_units{tag}")
 
 
 if __name__ == "__main__":

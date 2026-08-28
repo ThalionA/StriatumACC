@@ -31,25 +31,29 @@ _LFP_RE = re.compile(
 PROBES = ("striatum", "visual")
 
 
-def parse_lfp_filename(name: str) -> tuple[int, str] | None:
+def parse_lfp_filename(name: str,
+                       mouse_ids: tuple[int, ...] | None = None) -> tuple[int, str] | None:
     """``(mouse_id, probe)`` for an LFP export filename, else ``None``.
 
     ``probe`` is ``"striatum"`` (probe 1: DMS/DLS/ACC) or ``"visual"``
     (probe 2: V1/CA1/DG). Files with no mouse prefix -- the superseded June
     copies and any download still in flight -- return ``None`` rather than being
-    guessed at, and so does a numeric prefix that is not a known task animal.
+    guessed at, and so does a prefix outside ``mouse_ids``. That last guard is
+    load-bearing in both cohorts: 507 (task) and 408 (control) each have an
+    export on disk but are absent from their organiser's analysis list.
     """
     match = _LFP_RE.match(Path(name).name)
     if match is None:
         return None
     mouse = int(match.group("mouse"))
-    if mouse not in config.TASK_MOUSE_IDS:
+    if mouse not in (config.TASK_MOUSE_IDS if mouse_ids is None else mouse_ids):
         return None
     return mouse, ("visual" if match.group("probe") else "striatum")
 
 
 def discover_lfp_files(
-    directory: str | Path, *, return_skipped: bool = False
+    directory: str | Path, mouse_ids: tuple[int, ...] | None = None, *,
+    return_skipped: bool = False
 ):
     """Map ``(mouse_id, probe) -> Path`` for every named export in ``directory``.
 
@@ -64,7 +68,7 @@ def discover_lfp_files(
     for path in sorted(directory.iterdir()):
         if not path.is_file():
             continue
-        key = parse_lfp_filename(path.name)
+        key = parse_lfp_filename(path.name, mouse_ids)
         if key is not None:
             found[key] = path
         elif "voltage_data" in path.name.lower():

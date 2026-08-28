@@ -1,11 +1,22 @@
 # striatum_lfp — voltage-export audit and provisional LFP pipeline
 
-Audits the 384-channel Neuropixels voltage exports and analyses band power as the
-analogue of unit firing rate. Provenance and 1 ms grid alignment were resolved on
+Audits the 384-channel Neuropixels voltage exports for both the task and
+Control 1 cohorts, and analyses band power as the analogue of unit firing rate. Provenance and 1 ms grid alignment were resolved on
 2026-08-11; the full 17-file cohort was inventoried and every filename verified
 against spiking on 2026-08-27. What is still gated is listed under Current gate.
 
 ## Data: verified facts (measured 2026-08-27 over the full cohort)
+- **Two cohorts.** Every driver takes `--cohort task|control`; outputs are
+  suffixed. `config.Cohort` holds what differs: mouse list, depth CSVs, the
+  probe-2 raw suffix (task `_V1_raw.mat`, control `_v1_raw.mat`), and the fact
+  that yoked controls inherit the task cohort's average learning point (41), so
+  their epochs are matched time windows rather than learning windows.
+- **Control 1: 8 usable exports** in `RawDataControl/LFP/` — 5 striatum (407,
+  513, 515, 817, 1205) and 3 visual (513, 515, 817). 408 has an export but is not
+  in the organiser's list and is dropped automatically. Control 2 has no voltage.
+  8/8 reproduce the MATLAB bin map to 0.0 ms; 7/8 identity-confirmed in all three
+  windows (817/striatum is 2/3 and weak — only 48 sorted units make its MUA
+  reference sparse). 407's export stops 26 min before its session does.
 - **18 named exports** in `RawData/LFP/`: 13 striatum probes (523, 614, 624, 727,
   730, 731, 822, 823, 1105, 1106, 1201, 1206, 1212) and 5 visual probes (1105,
   1106, 1201, 1206, 1212, suffixed `_v1`). Absent: 409, 418, 703 (probe 1 only). The file→mouse map comes from the filename now, not from file size —
@@ -47,7 +58,11 @@ verified physiologically. What remains gated is narrower and specific:
 - Any band overlapping 50 Hz or its harmonics before notching.
 - Cross-area coupling claims without both a trial-permutation null *and* the
   within-area split-half volume-conduction ceiling: DMS/DLS/ACC sit on one shank.
-- CA1 and DG cohort claims — n = 3.
+- CA1 and DG cohort claims — n = 3 per cohort.
+- Any "task animals differ from controls" claim on the LFP *spatial profile*
+  without the behavioural check: task animals run the corridor far more
+  stereotypically (speed-profile split-half r 0.98 vs 0.68) and faster (36 vs
+  21 cm/s), and the LFP profile tracks speed. Run the `behaviour` arm first.
 
 ## Layout
 `src/striatum_lfp/` — configuration, cohort discovery and file-identity

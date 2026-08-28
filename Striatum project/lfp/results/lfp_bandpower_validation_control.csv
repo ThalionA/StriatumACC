@@ -1,0 +1,9 @@
+cohort,mouse_id,probe,n_trials_matlab,n_good_trials_lfp,n_compared_cells,median_abs_diff_ms,p99_abs_diff_ms,max_abs_diff_ms,frac_within_1ms,n_matlab_only,n_lfp_only,n_trial_end_clipped
+control,1205,striatum,145,144,7197,0.0,0.0,0.0,1.0,0,0,144
+control,407,striatum,209,169,8428,0.0,0.0,0.0,1.0,0,0,169
+control,513,striatum,109,108,5400,0.0,0.0,0.0,1.0,0,0,108
+control,513,visual,109,108,5400,0.0,0.0,0.0,1.0,0,0,118
+control,515,striatum,132,131,6550,0.0,0.0,0.0,1.0,0,0,131
+control,515,visual,132,131,6550,0.0,0.0,0.0,1.0,0,0,139
+control,817,striatum,137,136,6795,0.0,0.0,0.0,1.0,0,0,136
+control,817,visual,137,136,6795,0.0,0.0,0.0,1.0,0,0,145

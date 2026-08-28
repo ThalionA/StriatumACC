@@ -21,15 +21,20 @@ figures/*.svg
 figures/**/*.png
 figures/**/*.svg
 
-# ...except the two cohort tables, which underwrite every number in the
-# 2026-08-27 NOTES entry and cost a full re-scan of ~90 GB to regenerate.
-!results/lfp_inventory.csv
-!results/lfp_identity_matrix.csv
-!results/lfp_arms_evolution.csv
-!results/lfp_arms_evolution_stats.csv
-!results/lfp_arms_decoding.csv
-!results/lfp_arms_reliability.csv
-!results/lfp_arms_cca.csv
-!results/lfp_bandpower_summary.csv
-!results/lfp_bandpower_validation.csv
-!results/lfp_arms_moving_reliability_epochs.csv
+# ...except the per-cohort result tables, which underwrite every number in the
+# NOTES entries and cost a full re-scan of ~140 GB of voltage to regenerate.
+!results/lfp_inventory_*.csv
+!results/lfp_identity_matrix_*.csv
+!results/lfp_bandpower_summary_*.csv
+!results/lfp_bandpower_validation_*.csv
+!results/lfp_arms_evolution_*.csv
+!results/lfp_arms_decoding_*.csv
+!results/lfp_arms_reliability_*.csv
+!results/lfp_arms_cca_*.csv
+!results/lfp_arms_moving_reliability_epochs_*.csv
+# The per-trial moving table is ~40k rows per cohort and is derivable from the
+# epoch rollup plus the cached band power; not tracked.
+results/lfp_arms_moving_reliability_task.csv
+results/lfp_arms_moving_reliability_control.csv
+!results/lfp_arms_behaviour_*.csv
+!results/lfp_group_contrast.csv

@@ -1,0 +1,12 @@
+[inventory] cohort=control: 8 named exports; skipped (not in this cohort's analysis list): ['408_voltage_data_384ch.mat']
+[inventory] cont 513/visual    done in   49.3s  LF/HF=   602.3  slope= -1.42  adj/dist r=0.99/-0.16  !! GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins
+[inventory] cont 513/striatum  done in   54.2s  LF/HF=   612.2  slope= -1.84  adj/dist r=0.94/-0.07
+[inventory] cont 407/striatum  done in   55.8s  LF/HF=   103.6  slope= -1.16  adj/dist r=0.78/0.01  !! GRID MISMATCH: LFP 8400000 samples vs binned_spikes 10080000 bins
+[inventory] cont 515/striatum  done in   57.4s  LF/HF=   680.9  slope= -2.05  adj/dist r=0.94/-0.02
+[inventory] cont 817/striatum  done in   58.8s  LF/HF=   244.5  slope= -1.48  adj/dist r=0.87/0.03
+[inventory] cont 515/visual    done in   61.1s  LF/HF=   495.2  slope= -1.62  adj/dist r=0.99/-0.17  !! GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins
+[inventory] cont 817/visual    done in   58.8s  LF/HF=   449.5  slope= -1.38  adj/dist r=0.99/-0.02  !! GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins
+[inventory] cont 1205/striatum  done in   54.8s  LF/HF=   153.5  slope= -1.35  adj/dist r=0.86/-0.04
+[inventory] all files in 2.8 min
+[inventory] duplicate fingerprints: none
+[inventory] wrote lfp_inventory_control.csv

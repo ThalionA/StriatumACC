@@ -43,24 +43,89 @@ TASK_MOUSE_IDS: tuple[int, ...] = (
 # channels == ONE probe, and the filename now states which: ``<mouse>_v1_...`` is
 # probe 2. The 2026-08 export also ships ``depth_to_save`` (0-3820 um), so the
 # geometry assumption below is checkable against the file rather than assumed.
-DEPTH_CSV = RAWDATA / "Neuropixels_Depth_Data.csv"
+DEPTH_CSV = RAWDATA / "Neuropixels_Depth_Data.csv"      # task; see Cohort below
 V1_CSV = RAWDATA / "Neuropixels_V1_Depth_Data.csv"
 
-# Per-mouse spike + behaviour bundle (VR_data, VR_times_synched, binned_spikes),
-# one per probe. ``<mouse>_raw.mat`` is probe 1; ``<mouse>_V1_raw.mat`` is probe 2
-# and exists only for the five dual-probe mice. Behaviour fields are identical in
-# both, so either file answers a behavioural question; spikes are probe-specific.
+# --- Cohorts -----------------------------------------------------------------
+# Task and Control 1 are the same experiment recorded in two groups, but they are
+# NOT interchangeable in code: the control probe-2 spike bundle is lowercase
+# (``513_v1_raw.mat`` vs the task's ``1105_V1_raw.mat``), the depth boundaries
+# live in separate CSVs, and epoch windows for yoked controls are anchored to the
+# TASK cohort's average learning point rather than to one of their own. Bundling
+# those differences here keeps every driver cohort-agnostic.
+# Control 2 is dark-only (no corridor) and ships no voltage export, so it has no
+# entry.
+
+
+@dataclass(frozen=True)
+class Cohort:
+    """Everything that differs between the task and control recordings."""
+
+    name: str
+    rawdata: Path
+    lfp_dir: Path
+    depth_csv: Path
+    v1_csv: Path
+    mouse_ids: tuple[int, ...]
+    preproc_mat: Path
+    v1_raw_suffix: str
+    #: Controls are yoked, so they take the task cohort's average learning point.
+    learning_point_source: str          # "per_animal" | "task_average"
+
+
+TASK = Cohort(
+    name="task",
+    rawdata=RAWDATA,
+    lfp_dir=LFP_DIR,
+    depth_csv=RAWDATA / "Neuropixels_Depth_Data.csv",
+    v1_csv=RAWDATA / "Neuropixels_V1_Depth_Data.csv",
+    # OrganiseStriatumDataIncV1.m:9 -- positional order into preprocessed_data.
+    mouse_ids=TASK_MOUSE_IDS,
+    preproc_mat=_PROJECT / "processed_data" / "preprocessed_data5cm.mat",
+    v1_raw_suffix="_V1_raw.mat",
+    learning_point_source="per_animal",
+)
+
+_CONTROL_RAW = _PROJECT / "RawDataControl"
+CONTROL = Cohort(
+    name="control",
+    rawdata=_CONTROL_RAW,
+    lfp_dir=_CONTROL_RAW / "LFP",
+    depth_csv=_CONTROL_RAW / "Neuropixels_Depth_Data_control.csv",
+    v1_csv=_CONTROL_RAW / "Neuropixels_V1_Depth_Data_control.csv",
+    # OrganiseStriatumDataControlIncV1.m:20. 408 has a raw bundle and an LFP
+    # export but is deliberately absent, exactly as 507 is on the task side.
+    mouse_ids=(407, 513, 515, 817, 1205),
+    preproc_mat=_PROJECT / "processed_data" / "preprocessed_data_control5cm.mat",
+    v1_raw_suffix="_v1_raw.mat",
+    learning_point_source="task_average",
+)
+
+COHORTS: dict[str, Cohort] = {c.name: c for c in (TASK, CONTROL)}
+
+
+def get_cohort(name: str) -> Cohort:
+    """Look up a cohort by name, failing loudly on a typo."""
+    if name not in COHORTS:
+        raise KeyError(f"unknown cohort {name!r}; expected one of {sorted(COHORTS)}")
+    return COHORTS[name]
+
+
+def raw_mat(mouse_id: int, probe: str = "striatum", cohort: Cohort = TASK) -> Path:
+    """Spike/behaviour bundle for one mouse and probe ("striatum" | "visual").
+
+    Behaviour fields are identical in both probes of a session, so either answers
+    a behavioural question; spikes are probe-specific.
+    """
+    suffix = "_raw.mat" if probe == "striatum" else cohort.v1_raw_suffix
+    return cohort.rawdata / f"{mouse_id}{suffix}"
+
+
+# Task-cohort convenience maps kept for the July drivers.
 RAW_MAT: dict[int, Path] = {m: RAWDATA / f"{m}_raw.mat" for m in TASK_MOUSE_IDS}
 V1_RAW_MAT: dict[int, Path] = {m: RAWDATA / f"{m}_V1_raw.mat" for m in TASK_MOUSE_IDS}
 
-
-def raw_mat(mouse_id: int, probe: str = "striatum") -> Path:
-    """Spike/behaviour bundle for one mouse and probe ("striatum" | "visual")."""
-    table = RAW_MAT if probe == "striatum" else V1_RAW_MAT
-    return table[mouse_id]
-# The cohort struct the spike tensor was built from (corridorData, learning point,
-# zscored_lick_errors, ...). Reused wholesale for the LFP drop-in behaviour fields.
-PREPROC_MAT = _PROJECT / "processed_data" / "preprocessed_data5cm.mat"
+PREPROC_MAT = TASK.preproc_mat        # backwards-compatible alias
 
 PKG_DIR = _PROJECT / "lfp"
 RESULTS_DIR = PKG_DIR / "results"
@@ -160,14 +225,14 @@ def lfp_path(mouse_id: int, probe: str = "striatum") -> Path:
     """Path to one mouse's LFP export for one probe, resolved by filename."""
     from .cohort import discover_lfp_files
 
-    return discover_lfp_files(LFP_DIR)[(mouse_id, probe)]
+    return discover_lfp_files(LFP_DIR, TASK_MOUSE_IDS)[(mouse_id, probe)]
 
 
 def lfp_mice(probe: str = "striatum") -> tuple[int, ...]:
     """Task mice with an LFP export for ``probe``, in cohort (positional) order."""
     from .cohort import discover_lfp_files
 
-    present = {m for (m, p) in discover_lfp_files(LFP_DIR) if p == probe}
+    present = {m for (m, p) in discover_lfp_files(LFP_DIR, TASK_MOUSE_IDS) if p == probe}
     return tuple(m for m in TASK_MOUSE_IDS if m in present)
 
 
@@ -179,7 +244,7 @@ def __getattr__(name: str):
 
         return {
             m: path.name
-            for (m, p), path in discover_lfp_files(LFP_DIR).items()
+            for (m, p), path in discover_lfp_files(LFP_DIR, TASK_MOUSE_IDS).items()
             if p == "striatum"
         }
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

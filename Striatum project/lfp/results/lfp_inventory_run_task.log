@@ -1,0 +1,22 @@
+[inventory] cohort=task: 18 named exports; skipped (not in this cohort's analysis list): []
+[inventory] task 624/striatum  done in   58.0s  LF/HF=   339.0  slope= -1.66  adj/dist r=0.90/0.01
+[inventory] task 730/striatum  done in   59.4s  LF/HF=    71.9  slope= -0.93  adj/dist r=0.83/-0.04
+[inventory] task 523/striatum  done in   59.7s  LF/HF=    89.2  slope= -0.91  adj/dist r=0.87/0.00
+[inventory] task 727/striatum  done in   59.7s  LF/HF=   359.1  slope= -1.69  adj/dist r=0.87/-0.04
+[inventory] task 614/striatum  done in   58.5s  LF/HF=    54.9  slope= -0.78  adj/dist r=0.83/0.01
+[inventory] task 731/striatum  done in   59.0s  LF/HF=   770.5  slope= -1.89  adj/dist r=0.95/-0.05
+[inventory] task 822/striatum  done in   57.7s  LF/HF= 21342.9  slope= -2.89  adj/dist r=0.85/-0.05
+[inventory] task 1106/striatum  done in   60.5s  LF/HF=   161.8  slope= -1.34  adj/dist r=0.85/0.06
+[inventory] task 1105/striatum  done in   62.6s  LF/HF=   989.1  slope= -2.05  adj/dist r=0.94/0.06
+[inventory] task 823/striatum  done in   61.4s  LF/HF=  1145.4  slope= -1.85  adj/dist r=0.52/0.11
+[inventory] task 1106/visual    done in   64.1s  LF/HF=   600.7  slope= -1.78  adj/dist r=0.94/-0.08
+[inventory] task 1105/visual    done in   65.4s  LF/HF=   633.1  slope= -2.07  adj/dist r=0.96/0.01
+[inventory] task 1201/striatum  done in   57.1s  LF/HF=   149.3  slope= -1.10  adj/dist r=0.91/-0.05
+[inventory] task 1206/striatum  done in   56.8s  LF/HF=   712.7  slope= -1.78  adj/dist r=0.86/-0.07
+[inventory] task 1212/striatum  done in   58.2s  LF/HF=   476.7  slope= -1.80  adj/dist r=0.84/0.13  !! GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins
+[inventory] task 1201/visual    done in   59.6s  LF/HF=   400.6  slope= -1.34  adj/dist r=0.97/-0.15
+[inventory] task 1206/visual    done in   58.6s  LF/HF=   454.2  slope= -1.46  adj/dist r=0.96/-0.04
+[inventory] task 1212/visual    done in   59.2s  LF/HF=   572.3  slope= -1.32  adj/dist r=0.96/-0.10  !! GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins
+[inventory] all files in 6.1 min
+[inventory] duplicate fingerprints: none
+[inventory] wrote lfp_inventory_task.csv

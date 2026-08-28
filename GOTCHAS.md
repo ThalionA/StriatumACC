@@ -80,3 +80,20 @@
   (0.0020, 0.0039, 0.0156, 0.0391, ...). An unchanged p across two runs is NOT evidence
   of unchanged data — medians moved by up to 40% under identical p-values in the
   2026-08-28 grid re-run. Compare medians and effect sizes, not p-values.
+- Control raw bundles use lowercase `<id>_v1_raw.mat` while task uses uppercase
+  `<id>_V1_raw.mat`, and the two cohorts' depth CSVs have overlapping mouse-number
+  ranges. Never resolve a control animal through a task path or CSV — pass a
+  `config.Cohort`. (2026-08-28)
+- Control mouse 408 has a raw bundle AND an LFP export but is absent from
+  `OrganiseStriatumDataControlIncV1.m:20` (as 507 is on the task side). Any cohort
+  built by scanning a directory picks it up. (2026-08-28)
+- Split-half reliability grows with trial count, so a task/control comparison of it
+  is confounded whenever the groups have different session lengths. Match n before
+  believing a group difference — and then check the BEHAVIOUR: task animals'
+  speed profile is far more stereotyped than yoked controls' (split-half r 0.98 vs
+  0.68), and the LFP spatial profile largely tracks speed, so a "more reliable LFP"
+  result can be entirely behavioural. (2026-08-28)
+- Yoked controls have no learning point. IntegratedAll_v1 gives them the TASK
+  cohort's average LP, so control "epochs" are matched time windows. A change that
+  appears in both groups over those windows is time in the apparatus, not learning
+  — which is exactly what the LFP gamma rise turned out to be. (2026-08-28)

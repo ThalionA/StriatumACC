@@ -64,18 +64,21 @@ def load_area_boundaries(
     probe: str = "striatum",
     depth_csv: Path | None = None,
     v1_csv: Path | None = None,
+    cohort=None,
 ) -> dict[str, tuple[float, float]]:
     """``{area: (start_um, end_um)}`` for one mouse and one probe.
 
-    ``probe="striatum"`` -> DMS/DLS/ACC from ``Neuropixels_Depth_Data.csv`` (all 4
-    LFP mice). ``probe="visual"`` -> V1/CA1/DG from ``Neuropixels_V1_Depth_Data.csv``
-    (only 1212). Areas with a blank CSV cell are omitted.
+    ``probe="striatum"`` -> DMS/DLS/ACC; ``probe="visual"`` -> V1/CA1/DG. The task
+    and control groups have separate CSVs with overlapping mouse-number ranges, so
+    pass ``cohort`` (default: task) rather than relying on the id to disambiguate.
+    Areas with a blank CSV cell are omitted -- e.g. control 407 has no ACC.
     """
+    ch = cohort or config.TASK
     if probe == "striatum":
-        path = Path(depth_csv or config.DEPTH_CSV)
+        path = Path(depth_csv or ch.depth_csv)
         table = _read_boundary_csv(path, _STRIATUM_AREAS)
     elif probe == "visual":
-        path = Path(v1_csv or config.V1_CSV)
+        path = Path(v1_csv or ch.v1_csv)
         table = _read_boundary_csv(path, _VISUAL_AREAS)
     else:
         raise ValueError(f"unknown probe {probe!r} (expected 'striatum' or 'visual')")

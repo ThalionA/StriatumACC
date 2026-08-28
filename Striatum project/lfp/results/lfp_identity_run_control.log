@@ -1,0 +1,74 @@
+[env] 513/striatum  t=3000s (6000, 96)   7.2s
+[env] 407/striatum  t=4800s (6000, 96)   7.6s
+[env] 407/striatum  t=1200s (6000, 96)   7.9s
+[env] 513/striatum  t=4800s (6000, 96)   7.4s
+[env] 407/striatum  t=3000s (6000, 96)   6.8s
+[env] 513/striatum  t=1200s (6000, 96)   7.3s
+[env] 515/striatum  t=3000s (6000, 96)   6.8s
+[env] 513/visual    t=4800s (6000, 96)   8.1s
+[env] 513/visual    t=1200s (6000, 96)   8.2s
+[env] 515/striatum  t=4800s (6000, 96)   7.4s
+[env] 513/visual    t=3000s (6000, 96)   7.1s
+[env] 515/striatum  t=1200s (6000, 96)   7.5s
+[env] 515/visual    t=1200s (6000, 96)   7.7s
+[env] 515/visual    t=4800s (6000, 96)   7.1s
+[env] 817/striatum  t=3000s (6000, 96)   7.0s
+[env] 515/visual    t=3000s (6000, 96)   7.0s
+[env] 817/striatum  t=4800s (6000, 96)   7.1s
+[env] 817/striatum  t=1200s (6000, 96)   7.7s
+[env] 817/visual    t=1200s (6000, 96)   6.8s
+[env] 817/visual    t=4800s (6000, 96)   7.0s
+[env] 1205/striatum  t=3000s (6000, 96)   6.8s
+[env] 817/visual    t=3000s (6000, 96)   6.8s
+[env] 1205/striatum  t=1200s (6000, 96)   6.9s
+[env] 1205/striatum  t=4800s (6000, 96)   6.8s
+[mua] 407/striatum  ok       0.6s
+[mua] 515/striatum  ok       0.7s
+[mua] 407/striatum  ok       0.6s
+[mua] 513/striatum  ok       1.2s
+[mua] 515/striatum  ok       0.7s
+[mua] 407/striatum  ok       0.6s
+[mua] 817/striatum  ok       0.2s
+[mua] 515/striatum  ok       0.6s
+[mua] 817/striatum  ok       0.2s
+[mua] 817/striatum  ok       0.2s
+[mua] 513/striatum  ok       1.1s
+[mua] 513/visual    ok       0.9s
+[mua] 1205/striatum  ok       1.2s
+[mua] 513/striatum  ok       1.1s
+[mua] 513/visual    ok       0.8s
+[mua] 515/visual    ok       0.7s
+[mua] 1205/striatum  ok       1.1s
+[mua] 513/visual    ok       0.8s
+[mua] 515/visual    ok       0.7s
+[mua] 515/visual    ok       0.7s
+[mua] 1205/striatum  ok       1.1s
+[mua] 817/visual    ok       0.8s
+[mua] 407/striatum  ok       0.6s
+[mua] 513/visual    ok       0.8s
+[mua] 817/visual    ok       0.8s
+[mua] 407/striatum  ok       0.6s
+[mua] 817/visual    ok       0.8s
+[mua] 513/visual    ok       0.8s
+[mua] 407/striatum  ok       0.6s
+[mua] 515/visual    ok       0.7s
+[mua] 817/visual    ok       0.8s
+[mua] 513/visual    ok       0.8s
+[mua] 515/visual    ok       0.7s
+[mua] 817/visual    ok       0.8s
+[mua] 515/visual    ok       0.7s
+[mua] 817/visual    ok       0.8s
+[identity] features in 1.2 min
+[identity] 407/striatum  CONFIRMED      t=1200s own= 7.41x (best 407  7.41x)  t=3000s own= 8.94x (best 407  8.94x)  t=4800s own= 3.06x (best 407  3.06x)
+           offset scan (raw |r| vs own MUA): +0s=0.2012, +600s=0.0295, +1500s=0.0444, +3000s=0.0258
+[identity] 513/striatum  CONFIRMED      t=1200s own=15.13x (best 513 15.13x)  t=3000s own=18.46x (best 513 18.46x)  t=4800s own= 4.39x (best 513  4.39x)
+[identity] 513/visual    CONFIRMED      t=1200s own= 8.00x (best 513  8.00x)  t=3000s own=10.50x (best 513 10.50x)  t=4800s own= 2.40x (best 513  2.40x)
+           offset scan (raw |r| vs own MUA): +0s=0.1326, +600s=0.0120, +1500s=0.0121, +3000s=0.0252
+[identity] 515/striatum  CONFIRMED      t=1200s own= 5.28x (best 515  5.28x)  t=3000s own=21.31x (best 515 21.31x)  t=4800s own= 4.95x (best 515  4.95x)
+[identity] 515/visual    CONFIRMED      t=1200s own=10.47x (best 515 10.47x)  t=3000s own=10.84x (best 515 10.84x)  t=4800s own= 5.32x (best 515  5.32x)
+           offset scan (raw |r| vs own MUA): +0s=0.1134, +600s=0.0072, +1500s=0.0139, +3000s=0.0149
+[identity] 817/striatum  MAJORITY(2/3)  t=1200s own= 0.99x (best 515  1.06x)  t=3000s own= 1.29x (best 817  1.29x)  t=4800s own= 2.93x (best 817  2.93x)
+[identity] 817/visual    CONFIRMED      t=1200s own= 3.47x (best 817  3.47x)  t=3000s own= 4.02x (best 817  4.02x)  t=4800s own= 2.98x (best 817  2.98x)
+           offset scan (raw |r| vs own MUA): +0s=0.0556, +600s=0.0154, +1500s=0.0162, +3000s=0.0225
+[identity] 1205/striatum  CONFIRMED      t=1200s own= 2.97x (best 1205  2.97x)  t=3000s own= 5.45x (best 1205  5.45x)  t=4800s own= 6.33x (best 1205  6.33x)
+[identity] 7/8 filenames confirmed in every window; not fully confirmed: [(817, 'striatum', 'MAJORITY(2/3)')]

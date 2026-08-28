@@ -1,0 +1,11 @@
+[bandpower] cohort=control: 8 files, bands ['theta', 'beta', 'low_gamma', 'high_gamma', 'total'], notch (50.0, 100.0, 150.0) Hz
+[bandpower] cont 515/striatum   131/ 132 good trials  100.0% cells filled  median 249 ms/bin     89 MB    507s
+[bandpower] cont 513/visual     108/ 109 good trials  100.0% cells filled  median 197 ms/bin     73 MB    508s
+[bandpower] cont 515/visual     131/ 132 good trials  100.0% cells filled  median 249 ms/bin     90 MB    511s
+[bandpower] cont 513/striatum   108/ 109 good trials  100.0% cells filled  median 197 ms/bin     74 MB    516s
+[bandpower] cont 407/striatum   169/ 200 good trials  99.7% cells filled  median 194 ms/bin    115 MB    572s  [TRUNCATED to 200 trials]
+[bandpower] cont 817/striatum   136/ 137 good trials  99.9% cells filled  median 267 ms/bin     92 MB    493s
+[bandpower] cont 1205/striatum   144/ 145 good trials  100.0% cells filled  median 267 ms/bin     98 MB    489s
+[bandpower] cont 817/visual     136/ 137 good trials  99.9% cells filled  median 267 ms/bin     93 MB    493s
+[bandpower] all files in 16.7 min
+[bandpower] wrote /Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/results/lfp_bandpower_summary.csv

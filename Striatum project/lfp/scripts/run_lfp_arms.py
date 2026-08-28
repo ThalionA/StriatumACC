@@ -37,13 +37,15 @@ from striatum_lfp import analysis, arms, config  # noqa: E402
 from striatum_lfp.analysis import log_power  # noqa: E402
 from striatum_lfp.decode import ridge_cv_decode  # noqa: E402
 
-IN_DIR = config.RESULTS_DIR / "lfp_band_trials"
+
 MIN_SITES = config.DEFAULT.min_sites          # 5 channels per area
 N_CCA_SHUFFLES = 20
 BIN_CM = analysis.BIN_SIZE_CM
 
 
-def analyse_one(path_str: str) -> dict[str, list[dict]]:
+def analyse_one(item) -> dict[str, list[dict]]:
+    path_str, cohort_name = item
+    ch = config.get_cohort(cohort_name)
     t0 = time.time()
     z = np.load(path_str, allow_pickle=False)
     mouse = int(z["mouse_id"])
@@ -53,8 +55,8 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
     dark = z["dark"].astype(np.float64)
     n_stored = corridor.shape[3]
 
-    lp = analysis.cohort_learning_points().get(mouse)
-    n_trials_matlab = min(analysis.cohort_trial_counts().get(mouse, n_stored), n_stored)
+    lp = analysis.cohort_learning_points(ch).get(mouse)
+    n_trials_matlab = min(analysis.cohort_trial_counts(ch).get(mouse, n_stored), n_stored)
     epochs = analysis.epoch_indices(lp, n_trials_matlab, naive_split=analysis.NAIVE_SPLIT)
     speed = analysis.bin_speed_cm_s(z["corridor_bin_start_ms"], z["corridor_bin_stop_ms"])
 
@@ -65,7 +67,7 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
 
     total_idx = band_names.index("total")
     rows = {"evolution": [], "decoding": [], "reliability": [], "cca": [],
-            "moving_reliability": [], "moving_reliability_epochs": []}
+            "moving_reliability": [], "moving_reliability_epochs": [], "behaviour": []}
     # The single-unit stability figures roll the same moving metric up over the
     # THREE-window epoch convention (IntegratedAll_v1.m:554 "the neural analyses
     # use the three-window convention"), not the four-window one the corridor-vs-
@@ -73,8 +75,8 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
     # table are the same statistic on the same windows and can sit side by side.
     epochs3 = analysis.epoch_indices(lp, n_trials_matlab)
     EPOCH3_NAMES = ("Naive", "Intermediate", "Expert")
-    base = {"mouse_id": mouse, "probe": probe, "learning_point": lp,
-            "n_trials": n_trials_matlab}
+    base = {"cohort": cohort_name, "mouse_id": mouse, "probe": probe,
+            "learning_point": lp, "n_trials": n_trials_matlab}
 
     # Precompute the z-scored log cubes once per (band, area).
     cubes: dict[tuple[str, str], np.ndarray] = {}
@@ -157,7 +159,8 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
                         obs = float(np.nanmean(np.nanmean(moving[:, idx], axis=0)))
                         shf = float(np.nanmean(np.nanmean(shuffled[:, idx], axis=0)))
                     rows["moving_reliability_epochs"].append({
-                        "group": "Task (LFP)", "area": area, "band": band,
+                        "group": f"{cohort_name.title()} (LFP)",
+                        "area": area, "band": band,
                         "epoch": ename, "animal": mouse, "probe": probe,
                         "n_channels": n_ch, "n_epoch_trials": int(idx.size),
                         "reliability": obs, "shuffle": shf,
@@ -232,6 +235,26 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
                     "chance_mae_bins": float(np.mean(np.abs(y - np.mean(y)))),
                 })
 
+    # --- 0. behaviour: how stereotyped is the traversal itself? --------------
+    # Load-bearing, not decorative. The LFP spatial profile largely tracks the
+    # speed profile (population-profile r ~ -0.9 for beta), so a group difference
+    # in LFP spatial reliability is only a neural claim if the two groups run the
+    # corridor the same way. Recorded once per animal, from the striatum probe,
+    # since both probes share one behavioural record.
+    if probe == "striatum":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            tr_all = np.arange(n_trials_matlab)[z["good_trials"][:n_trials_matlab]]
+            sp = speed[:, tr_all]
+            rows["behaviour"].append({
+                **base, "n_trials_used": int(tr_all.size),
+                "speed_profile_split_half_r": float(
+                    arms.split_half_reliability(sp[None, :, :])[0]),
+                "mean_speed_cm_s": float(np.nanmean(sp)),
+                "speed_bin_cv": float(np.nanmean(np.nanstd(sp, axis=1)
+                                                 / np.nanmean(sp, axis=1))),
+            })
+
     # --- 4. cross-area CCA ---------------------------------------------------
     for band in band_names:
         for a, b in itertools.combinations(sorted(areas), 2):
@@ -257,15 +280,15 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
                 "ceiling_b": arms.within_area_ceiling(Xb, g),
             })
 
-    print(f"[arms] {mouse}/{probe:9s} lp={lp} areas={sorted(areas)} "
+    print(f"[arms] {cohort_name[:4]:<4} {mouse}/{probe:9s} lp={lp} areas={sorted(areas)} "
           f"{len(rows['evolution'])}+{len(rows['decoding'])}+{len(rows['reliability'])}"
           f"+{len(rows['cca'])}+{len(rows['moving_reliability'])}"
-          f"+{len(rows['moving_reliability_epochs'])} rows  "
+          f"+{len(rows['moving_reliability_epochs'])}+{len(rows['behaviour'])} rows  "
           f"{time.time() - t0:5.0f}s", flush=True)
     return rows
 
 
-def write_evolution_stats(rows: list[dict]) -> None:
+def write_evolution_stats(rows: list[dict], cohort_name: str = "task") -> None:
     """Paired naive-to-expert test per area x band, BH-corrected over that family.
 
     The family is declared here and nowhere else: area x band, one test each,
@@ -303,12 +326,13 @@ def write_evolution_stats(rows: list[dict]) -> None:
             continue
         adjusted, reject = arms.fdr_bh(np.array([c["p_raw"] for c in cells]), q=0.05)
         for c, a, r in zip(cells, adjusted, reject):
+            c["cohort"] = cohort_name
             c["p_fdr"] = float(a)
             c["survives_fdr"] = bool(r)
             c["family_size"] = len(cells)
         out_rows += cells
 
-    out = config.RESULTS_DIR / "lfp_arms_evolution_stats.csv"
+    out = config.RESULTS_DIR / f"lfp_arms_evolution_stats_{cohort_name}.csv"
     with out.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(out_rows[0].keys()))
         w.writeheader()
@@ -329,23 +353,26 @@ def bandpower_bands(rows: list[dict]) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=6)
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
     args = parser.parse_args()
-    paths = sorted(str(p) for p in IN_DIR.glob("*.npz"))
-    print(f"[arms] {len(paths)} band-power files", flush=True)
+    in_dir = config.RESULTS_DIR / f"lfp_band_trials_{args.cohort}"
+    items = [(str(p), args.cohort) for p in sorted(in_dir.glob("*.npz"))]
+    print(f"[arms] cohort={args.cohort}: {len(items)} band-power files", flush=True)
 
     t0 = time.time()
-    with mp.Pool(min(args.jobs, len(paths))) as pool:
-        results = pool.map(analyse_one, paths)
+    with mp.Pool(min(args.jobs, len(items))) as pool:
+        results = pool.map(analyse_one, items)
     print(f"[arms] all files in {(time.time() - t0) / 60:.1f} min")
 
-    write_evolution_stats([r for res in results for r in res["evolution"]])
+    write_evolution_stats([r for res in results for r in res["evolution"]], args.cohort)
 
     for key in ("evolution", "decoding", "reliability", "cca", "moving_reliability",
-                "moving_reliability_epochs"):
+                "moving_reliability_epochs", "behaviour"):
         rows = [r for res in results for r in res[key]]
         if not rows:
             continue
-        out = config.RESULTS_DIR / f"lfp_arms_{key}.csv"
+        out = config.RESULTS_DIR / f"lfp_arms_{key}_{args.cohort}.csv"
         with out.open("w", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
             w.writeheader()

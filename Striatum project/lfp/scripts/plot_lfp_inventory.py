@@ -32,8 +32,8 @@ from striatum_lfp.figstyle import AREA_COLOUR, save_pair  # noqa: E402
 GAIN_SPLIT_RMS = 5e-5
 
 
-def load_rows():
-    with (config.RESULTS_DIR / "lfp_inventory.csv").open() as fh:
+def load_rows(cohort_name: str = "task"):
+    with (config.RESULTS_DIR / f"lfp_inventory_{cohort_name}.csv").open() as fh:
         rows = list(csv.DictReader(fh))
     for r in rows:
         r["mouse_id"] = int(r["mouse_id"])
@@ -51,7 +51,7 @@ def load_rows():
 
 # --- 1. coverage + per-file diagnostics --------------------------------------
 
-def plot_overview(rows, out="lfp_cohort_overview"):
+def plot_overview(rows, ch, out="lfp_cohort_overview"):
     fig, axes = plt.subplots(2, 3, figsize=(16, 8.5))
     labels = [r["label"] for r in rows]
     x = np.arange(len(rows))
@@ -60,9 +60,9 @@ def plot_overview(rows, out="lfp_cohort_overview"):
 
     # (a) coverage matrix over the full task cohort
     ax = axes[0, 0]
-    mice = list(config.TASK_MOUSE_IDS)
+    mice = list(ch.mouse_ids)
     have = {(r["mouse_id"], r["probe"]) for r in rows}
-    expect_visual = {int(m) for m in _v1_csv_mice()}
+    expect_visual = {int(m) for m in _v1_csv_mice(ch)}
     grid = np.full((2, len(mice)), np.nan)
     for j, m in enumerate(mice):
         grid[0, j] = 1.0 if (m, "striatum") in have else 0.0
@@ -73,7 +73,7 @@ def plot_overview(rows, out="lfp_cohort_overview"):
     ax.set_xticklabels(mice, rotation=90, fontsize=7)
     ax.set_yticks([0, 1])
     ax.set_yticklabels(["probe 1\n(DMS/DLS/ACC)", "probe 2\n(V1/CA1/DG)"], fontsize=7)
-    ax.set_title("(a) LFP coverage of the 16-animal task cohort\n"
+    ax.set_title(f"(a) LFP coverage of the {len(mice)}-animal {ch.name} cohort\n"
                  "green = downloaded, red = missing, white = no such probe", fontsize=9)
     ax.set_xlabel("mouse ID")
 
@@ -139,7 +139,7 @@ def plot_overview(rows, out="lfp_cohort_overview"):
     _xticks(ax, x, labels)
     ax.legend(fontsize=7)
 
-    fig.suptitle("New LFP cohort: coverage and signal character "
+    fig.suptitle(f"LFP {ch.name} cohort: coverage and signal character "
                  f"({len(rows)} files, 1 kHz, 384 ch)", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     save_pair(fig, out)
@@ -156,8 +156,8 @@ def _gain_handles():
             Patch(color="#d95319", label="2026-08 batch (high gain)")]
 
 
-def _v1_csv_mice():
-    with open(config.V1_CSV, newline="") as fh:
+def _v1_csv_mice(ch):
+    with open(ch.v1_csv, newline="") as fh:
         return [row["Mouse ID"] for row in csv.DictReader(fh) if row.get("Mouse ID")]
 
 
@@ -190,7 +190,7 @@ def plot_spectra(rows, z, out="lfp_spectra"):
 
 # --- 3. depth x frequency ----------------------------------------------------
 
-def plot_depth_frequency(rows, z, out="lfp_depth_by_frequency"):
+def plot_depth_frequency(rows, z, ch, out="lfp_depth_by_frequency"):
     n = len(rows)
     ncol = 6
     nrow = int(np.ceil(n / ncol))
@@ -212,7 +212,8 @@ def plot_depth_frequency(rows, z, out="lfp_depth_by_frequency"):
                            vmin=-2.5, vmax=2.5, shading="nearest")
         ax.set_xscale("log")
         try:
-            bounds = geometry.load_area_boundaries(r["mouse_id"], probe=r["probe"])
+            bounds = geometry.load_area_boundaries(r["mouse_id"], probe=r["probe"],
+                                               cohort=ch)
         except KeyError:
             bounds = {}
         for area, (lo, hi) in bounds.items():
@@ -263,8 +264,8 @@ def plot_integrity(rows, z, out="lfp_session_integrity"):
 
 # --- 5. identity matrix ------------------------------------------------------
 
-def plot_identity(out="lfp_identity_matrix"):
-    path = config.RESULTS_DIR / "lfp_identity_matrix.csv"
+def plot_identity(cohort_name="task", out="lfp_identity_matrix"):
+    path = config.RESULTS_DIR / f"lfp_identity_matrix_{cohort_name}.csv"
     if not path.exists():
         print("[plot] no identity matrix cached; skipping")
         return
@@ -311,13 +312,22 @@ def plot_identity(out="lfp_identity_matrix"):
 
 
 def main() -> None:
-    rows = load_rows()
-    z = np.load(config.RESULTS_DIR / "lfp_psd.npz")
-    plot_overview(rows, )
-    plot_spectra(rows, z)
-    plot_depth_frequency(rows, z)
-    plot_integrity(rows, z)
-    plot_identity()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
+    args = parser.parse_args()
+    ch = config.get_cohort(args.cohort)
+    tag = f"_{args.cohort}"
+
+    rows = load_rows(args.cohort)
+    z = np.load(config.RESULTS_DIR / f"lfp_psd_{args.cohort}.npz")
+    plot_overview(rows, ch, out=f"lfp_cohort_overview{tag}")
+    plot_spectra(rows, z, out=f"lfp_spectra{tag}")
+    plot_depth_frequency(rows, z, ch, out=f"lfp_depth_by_frequency{tag}")
+    plot_integrity(rows, z, out=f"lfp_session_integrity{tag}")
+    plot_identity(args.cohort, out=f"lfp_identity_matrix{tag}")
 
 
 if __name__ == "__main__":

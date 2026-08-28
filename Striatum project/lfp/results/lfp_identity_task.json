@@ -1,5 +1,6 @@
 [
   {
+    "cohort": "task",
     "mouse_id": 523,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -35,6 +36,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 614,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -70,6 +72,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 624,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -105,6 +108,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 727,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -140,6 +144,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 730,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -175,6 +180,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 731,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -210,6 +216,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 822,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -245,6 +252,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 823,
     "probe": "striatum",
     "verdict": "MAJORITY(2/3)",
@@ -280,6 +288,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1105,
     "probe": "striatum",
     "verdict": "MAJORITY(2/3)",
@@ -315,6 +324,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1105,
     "probe": "visual",
     "verdict": "CONFIRMED",
@@ -350,6 +360,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1106,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -385,6 +396,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1106,
     "probe": "visual",
     "verdict": "CONFIRMED",
@@ -420,6 +432,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1201,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -455,6 +468,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1201,
     "probe": "visual",
     "verdict": "CONFIRMED",
@@ -490,6 +504,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1206,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -525,6 +540,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1206,
     "probe": "visual",
     "verdict": "CONFIRMED",
@@ -560,6 +576,7 @@
     ]
   },
   {
+    "cohort": "task",
     "mouse_id": 1212,
     "probe": "striatum",
     "verdict": "CONFIRMED",
@@ -601,6 +618,7 @@
     }
   },
   {
+    "cohort": "task",
     "mouse_id": 1212,
     "probe": "visual",
     "verdict": "CONFIRMED",

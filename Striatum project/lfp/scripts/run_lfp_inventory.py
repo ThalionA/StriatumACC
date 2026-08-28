@@ -35,19 +35,19 @@ SPECTRAL_WINDOW_S = 10
 DEAD_CHANNEL_ZERO_FRACTION = 0.5   # a channel that is zero for most of the session
 
 
-def behaviour_bounds(mouse_id: int, probe: str):
+def behaviour_bounds(mouse_id: int, probe: str, ch):
     """First/last VR timestamp (s) and ``binned_spikes`` bin count for one probe."""
-    if not config.raw_mat(mouse_id, probe).exists():
+    if not config.raw_mat(mouse_id, probe, ch).exists():
         return None, None, None
-    beh = read_behaviour(mouse_id, probe)
+    beh = read_behaviour(mouse_id, probe, ch)
     vr = beh["vr_times_s"]
     return float(vr.min()), float(vr.max()), beh["n_spike_bins"]
 
 
-def area_counts(mouse_id: int, probe: str, depth: np.ndarray, n_channels: int):
+def area_counts(mouse_id: int, probe: str, depth: np.ndarray, n_channels: int, ch):
     """Channels per area, using the same depth boundaries the sorted units use."""
     try:
-        bounds = geometry.load_area_boundaries(mouse_id, probe=probe)
+        bounds = geometry.load_area_boundaries(mouse_id, probe=probe, cohort=ch)
     except KeyError:
         return {}, [f"mouse {mouse_id} absent from the {probe} depth CSV"]
     depths = depth if depth.size == n_channels else geometry.channel_depths(n_channels)
@@ -59,7 +59,8 @@ def area_counts(mouse_id: int, probe: str, depth: np.ndarray, n_channels: int):
 
 
 def inventory_one(item) -> dict:
-    (mouse_id, probe), path = item
+    (mouse_id, probe), path, cohort_name = item
+    ch = config.get_cohort(cohort_name)
     t0 = time.time()
     path = Path(path)
     notes: list[str] = []
@@ -85,7 +86,7 @@ def inventory_one(item) -> dict:
     if integ["nonfinite_fraction"] > 0:
         notes.append(f"non-finite values present ({integ['nonfinite_fraction']:.2e})")
 
-    vr_first, vr_last, n_bins = behaviour_bounds(mouse_id, probe)
+    vr_first, vr_last, n_bins = behaviour_bounds(mouse_id, probe, ch)
     grid_ok = None if n_bins is None else bool(struct["n_samples"] == n_bins)
     if grid_ok is False:
         notes.append(
@@ -102,10 +103,12 @@ def inventory_one(item) -> dict:
                                      first=first, last=last)
     spec = inventory.spectral_profile(path, starts, win, fs=FS)
 
-    counts, area_notes = area_counts(mouse_id, probe, struct["depth"], struct["n_channels"])
+    counts, area_notes = area_counts(mouse_id, probe, struct["depth"],
+                                     struct["n_channels"], ch)
     notes += area_notes
 
     row = {
+        "cohort": cohort_name,
         "mouse_id": mouse_id,
         "probe": probe,
         "file": path.name,
@@ -154,7 +157,7 @@ def inventory_one(item) -> dict:
         "depth": struct["depth"],
         "window_starts": starts,
     }
-    print(f"[inventory] {mouse_id}/{probe:9s} done in {row['elapsed_s']:6.1f}s"
+    print(f"[inventory] {cohort_name[:4]:<4} {mouse_id}/{probe:9s} done in {row['elapsed_s']:6.1f}s"
           f"  LF/HF={row['lf_hf_ratio']:8.1f}  slope={row['loglog_slope_2_40hz']:6.2f}"
           f"  adj/dist r={row['adjacent_r']:.2f}/{row['distant_r']:.2f}"
           + (f"  !! {row['notes']}" if row["notes"] else ""), flush=True)
@@ -166,16 +169,21 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=6)
     parser.add_argument("--only", type=str, default="",
                         help="comma-separated mouse ids to restrict to")
+    parser.add_argument("--cohort", type=str, default="task",
+                        choices=sorted(config.COHORTS))
     args = parser.parse_args()
+    ch = config.get_cohort(args.cohort)
 
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    found, skipped = cohort.discover_lfp_files(config.LFP_DIR, return_skipped=True)
+    found, skipped = cohort.discover_lfp_files(ch.lfp_dir, ch.mouse_ids,
+                                               return_skipped=True)
     if args.only:
         keep = {int(x) for x in args.only.split(",")}
         found = {k: v for k, v in found.items() if k[0] in keep}
 
-    print(f"[inventory] {len(found)} named exports; skipped (no mouse in name): {skipped}")
-    items = [(k, str(v)) for k, v in sorted(found.items())]
+    print(f"[inventory] cohort={args.cohort}: {len(found)} named exports; "
+          f"skipped (not in this cohort's analysis list): {skipped}")
+    items = [(k, str(v), args.cohort) for k, v in sorted(found.items())]
 
     t0 = time.time()
     with mp.Pool(min(args.jobs, len(items))) as pool:
@@ -184,18 +192,19 @@ def main() -> None:
 
     rows = [r["row"] for r in results]
     fields = list(rows[0].keys())
-    with (config.RESULTS_DIR / "lfp_inventory.csv").open("w", newline="") as fh:
+    with (config.RESULTS_DIR / f"lfp_inventory_{args.cohort}.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
-    (config.RESULTS_DIR / "lfp_inventory.json").write_text(json.dumps(rows, indent=2, default=str))
+    (config.RESULTS_DIR / f"lfp_inventory_{args.cohort}.json").write_text(
+        json.dumps(rows, indent=2, default=str))
 
     bundle = {}
     for r in results:
         tag = f"{r['row']['mouse_id']}_{r['row']['probe']}"
         for name, arr in r["arrays"].items():
             bundle[f"{tag}__{name}"] = arr
-    np.savez_compressed(config.RESULTS_DIR / "lfp_psd.npz", **bundle)
+    np.savez_compressed(config.RESULTS_DIR / f"lfp_psd_{args.cohort}.npz", **bundle)
 
     # Duplicate detection: two names for one recording is the failure mode that
     # cost the July audit a mouse (614/731), so it is checked, not assumed away.
@@ -204,7 +213,7 @@ def main() -> None:
         seen.setdefault(row["fingerprint"], []).append(f"{row['mouse_id']}/{row['probe']}")
     dupes = {k: v for k, v in seen.items() if len(v) > 1}
     print(f"[inventory] duplicate fingerprints: {dupes if dupes else 'none'}")
-    print(f"[inventory] wrote {config.RESULTS_DIR}/lfp_inventory.csv")
+    print(f"[inventory] wrote lfp_inventory_{args.cohort}.csv")
 
 
 if __name__ == "__main__":

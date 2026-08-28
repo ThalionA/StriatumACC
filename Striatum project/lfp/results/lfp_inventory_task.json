@@ -1,5 +1,6 @@
 [
   {
+    "cohort": "task",
     "mouse_id": 523,
     "probe": "striatum",
     "file": "523_voltage_data_384ch.mat",
@@ -29,7 +30,7 @@
     "common_mean_residual": 0.12028796198502635,
     "common_median_residual": 0.06373078371219064,
     "fingerprint": "7b4e8cf430a821e478be6264b9a1b699ffe4a7a7",
-    "elapsed_s": 51.92377805709839,
+    "elapsed_s": 59.70052409172058,
     "notes": "",
     "line_ratio_50Hz": 6.183683385128266,
     "line_ratio_75Hz": 0.9752223272277579,
@@ -42,6 +43,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 614,
     "probe": "striatum",
     "file": "614_voltage_data_384ch.mat",
@@ -71,7 +73,7 @@
     "common_mean_residual": 0.14660026150413008,
     "common_median_residual": 0.06264004062640892,
     "fingerprint": "a7d617faf132da70fec69e80578606558f3c01a3",
-    "elapsed_s": 51.5026957988739,
+    "elapsed_s": 58.45084810256958,
     "notes": "",
     "line_ratio_50Hz": 2.003627595441924,
     "line_ratio_75Hz": 1.0313069167179807,
@@ -84,6 +86,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 624,
     "probe": "striatum",
     "file": "624_voltage_data_384ch.mat",
@@ -113,7 +116,7 @@
     "common_mean_residual": 0.15141766672841028,
     "common_median_residual": 0.053539487638024186,
     "fingerprint": "e2a101503e6becb95487dd8d6782e026c29dda1c",
-    "elapsed_s": 50.947317123413086,
+    "elapsed_s": 58.01279926300049,
     "notes": "",
     "line_ratio_50Hz": 1.8526661997814233,
     "line_ratio_75Hz": 1.0635090353840064,
@@ -126,6 +129,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 727,
     "probe": "striatum",
     "file": "727voltage_data_384ch.mat",
@@ -155,7 +159,7 @@
     "common_mean_residual": 0.15653086423551243,
     "common_median_residual": 0.06021820339692548,
     "fingerprint": "ff4f4f400c819ed8705095dcfc0da419bad0bb73",
-    "elapsed_s": 51.90538811683655,
+    "elapsed_s": 59.73381018638611,
     "notes": "",
     "line_ratio_50Hz": 5.882381549719776,
     "line_ratio_75Hz": 1.037827271453732,
@@ -168,6 +172,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 730,
     "probe": "striatum",
     "file": "730_voltage_data_384ch.mat",
@@ -197,7 +202,7 @@
     "common_mean_residual": 0.16278493832065777,
     "common_median_residual": 0.06152019171884837,
     "fingerprint": "d913905027bc09e2990235e57e0939f8ebb4816e",
-    "elapsed_s": 51.451958894729614,
+    "elapsed_s": 59.39914679527283,
     "notes": "",
     "line_ratio_50Hz": 13.760866296151864,
     "line_ratio_75Hz": 1.0315879618832842,
@@ -210,6 +215,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 731,
     "probe": "striatum",
     "file": "731_voltage_data_384ch.mat",
@@ -239,7 +245,7 @@
     "common_mean_residual": 0.165354506005852,
     "common_median_residual": 0.03632267143643848,
     "fingerprint": "68efa639b8d0012590039e1f6c5da1cf6fc6be4b",
-    "elapsed_s": 51.50722908973694,
+    "elapsed_s": 58.98654007911682,
     "notes": "",
     "line_ratio_50Hz": 1.8417939269346677,
     "line_ratio_75Hz": 0.9931994182347911,
@@ -252,6 +258,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 822,
     "probe": "striatum",
     "file": "822_voltage_data_384ch.mat",
@@ -281,7 +288,7 @@
     "common_mean_residual": 2.4155394937927497,
     "common_median_residual": 0.03393559628018215,
     "fingerprint": "fd3bb764ff889aad41bc52c0b270121f913e9926",
-    "elapsed_s": 51.86616516113281,
+    "elapsed_s": 57.665077924728394,
     "notes": "",
     "line_ratio_50Hz": 16.139918467640655,
     "line_ratio_75Hz": 1.0501235463826193,
@@ -294,6 +301,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 823,
     "probe": "striatum",
     "file": "823_voltage_data_384ch.mat",
@@ -323,7 +331,7 @@
     "common_mean_residual": 0.17951613565362118,
     "common_median_residual": 0.03037838671545523,
     "fingerprint": "4fa6d9439d12a7cdf660611ad771e5718d90af55",
-    "elapsed_s": 51.41256308555603,
+    "elapsed_s": 61.406240940093994,
     "notes": "",
     "line_ratio_50Hz": 1.44637995909423,
     "line_ratio_75Hz": 1.0101792173276642,
@@ -336,6 +344,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1105,
     "probe": "striatum",
     "file": "1105_voltage_data_384ch.mat",
@@ -365,7 +374,7 @@
     "common_mean_residual": 0.8319108979082586,
     "common_median_residual": 0.03249363531319928,
     "fingerprint": "b18c4e9b1ecb311cbf2a42d7334a6ecc8bcf936c",
-    "elapsed_s": 56.649996757507324,
+    "elapsed_s": 62.64291310310364,
     "notes": "",
     "line_ratio_50Hz": 1097.1975736192703,
     "line_ratio_75Hz": 1.0041479516464036,
@@ -378,6 +387,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1105,
     "probe": "visual",
     "file": "1105_v1_voltage_data_384ch.mat",
@@ -407,7 +417,7 @@
     "common_mean_residual": 1.1795917290226228,
     "common_median_residual": 0.03652165313574904,
     "fingerprint": "75a64769e3b01240f50ad665d9ed6103fe26009e",
-    "elapsed_s": 55.84872794151306,
+    "elapsed_s": 65.38033604621887,
     "notes": "",
     "line_ratio_50Hz": 1347.6513601665333,
     "line_ratio_75Hz": 0.985814677852658,
@@ -420,6 +430,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1106,
     "probe": "striatum",
     "file": "1106_voltage_data_384ch.mat",
@@ -449,7 +460,7 @@
     "common_mean_residual": 0.13580968297526314,
     "common_median_residual": 0.07536227412761769,
     "fingerprint": "2eea57f86ff6dca7c701eda53dbfbb270a22b218",
-    "elapsed_s": 54.717444896698,
+    "elapsed_s": 60.519538164138794,
     "notes": "",
     "line_ratio_50Hz": 10.704444927665943,
     "line_ratio_75Hz": 1.0373099872150515,
@@ -462,6 +473,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1106,
     "probe": "visual",
     "file": "1106_v1_voltage_data_384ch.mat",
@@ -491,7 +503,7 @@
     "common_mean_residual": 0.6358508308192651,
     "common_median_residual": 0.05400127260818059,
     "fingerprint": "a70f9de6adf2cda5e1becbea3832be027ccdf5da",
-    "elapsed_s": 54.69293165206909,
+    "elapsed_s": 64.148512840271,
     "notes": "",
     "line_ratio_50Hz": 449.9719425488495,
     "line_ratio_75Hz": 0.9372224263626885,
@@ -504,6 +516,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1201,
     "probe": "striatum",
     "file": "1201_voltage_data_384ch.mat",
@@ -533,7 +546,7 @@
     "common_mean_residual": 0.13143691287711962,
     "common_median_residual": 0.05963210407815278,
     "fingerprint": "d55965a1eb92f1f78c2a58bb625f962cb940cd11",
-    "elapsed_s": 54.58895206451416,
+    "elapsed_s": 57.143316984176636,
     "notes": "",
     "line_ratio_50Hz": 14.61104040386002,
     "line_ratio_75Hz": 0.923660734827185,
@@ -546,6 +559,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1201,
     "probe": "visual",
     "file": "1201_v1_voltage_data_384ch.mat",
@@ -575,7 +589,7 @@
     "common_mean_residual": 0.21825791948704476,
     "common_median_residual": 0.028422269703129992,
     "fingerprint": "f20012025e697a1edbcb6995281fcfc94f8d7eba",
-    "elapsed_s": 56.218915700912476,
+    "elapsed_s": 59.61974811553955,
     "notes": "",
     "line_ratio_50Hz": 66.70383767249915,
     "line_ratio_75Hz": 1.0338836691926638,
@@ -588,6 +602,7 @@
     "n_ch_DG": 42
   },
   {
+    "cohort": "task",
     "mouse_id": 1206,
     "probe": "striatum",
     "file": "1206_voltage_data_384ch.mat",
@@ -617,7 +632,7 @@
     "common_mean_residual": 0.1997902547376249,
     "common_median_residual": 0.06816698750398648,
     "fingerprint": "0100897143eae773b0009734f578c8fd50c35c45",
-    "elapsed_s": 53.58300518989563,
+    "elapsed_s": 56.81766200065613,
     "notes": "",
     "line_ratio_50Hz": 8.009330132816949,
     "line_ratio_75Hz": 1.0012011354073374,
@@ -630,6 +645,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1206,
     "probe": "visual",
     "file": "1206_v1_voltage_data_384ch.mat",
@@ -659,7 +675,7 @@
     "common_mean_residual": 0.18396343428042378,
     "common_median_residual": 0.03402144249425823,
     "fingerprint": "70af2c109c7431c515320c4ebe724acd20b4b813",
-    "elapsed_s": 55.53633713722229,
+    "elapsed_s": 58.62148475646973,
     "notes": "",
     "line_ratio_50Hz": 1.4780044249725348,
     "line_ratio_75Hz": 1.007318532078173,
@@ -672,6 +688,7 @@
     "n_ch_DG": 78
   },
   {
+    "cohort": "task",
     "mouse_id": 1212,
     "probe": "striatum",
     "file": "1212_voltage_data_384ch.mat",
@@ -701,7 +718,7 @@
     "common_mean_residual": 0.3399788002561306,
     "common_median_residual": 0.08408418462325146,
     "fingerprint": "89ed854185da9275cf7689d8b3d0239588db5955",
-    "elapsed_s": 54.77329206466675,
+    "elapsed_s": 58.19548296928406,
     "notes": "GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins",
     "line_ratio_50Hz": 160.9211897616843,
     "line_ratio_75Hz": 0.9833337686269616,
@@ -714,6 +731,7 @@
     "n_ch_DG": 0
   },
   {
+    "cohort": "task",
     "mouse_id": 1212,
     "probe": "visual",
     "file": "1212_v1_voltage_data_384ch.mat",
@@ -743,7 +761,7 @@
     "common_mean_residual": 0.3019518073442767,
     "common_median_residual": 0.035856097827181126,
     "fingerprint": "c3e9b31d23f3931a59e58867c15b388250d4c90c",
-    "elapsed_s": 55.84692192077637,
+    "elapsed_s": 59.227160930633545,
     "notes": "GRID MISMATCH: LFP 8400000 samples vs binned_spikes 11400000 bins",
     "line_ratio_50Hz": 1.4515775395451964,
     "line_ratio_75Hz": 0.963129761919067,
