@@ -240,3 +240,28 @@ def test_a_trial_ending_exactly_at_the_last_sample_is_not_truncated():
 
 def test_truncated_trials_none_when_the_session_fits():
     assert not bandpower.truncated_trials(np.arange(10, dtype=float), n_npx=1000).any()
+
+
+# --- coupling envelope now reuses band_power_series (dedup, 2026-08-28) -----
+
+def test_coupling_envelope_equals_binned_band_power_root():
+    """The refactor must not change the statistic, only where it is defined."""
+    from striatum_lfp.cohort import bin_mean
+
+    rng = np.random.default_rng(0)
+    block = rng.normal(size=(5_000, 8))
+    power = bandpower.band_power_series(block, (30.0, 90.0), fs=1000)
+    expected = np.sqrt(bin_mean(power, 100))
+    assert expected.shape == (50, 8)
+    assert (expected >= 0).all()
+
+
+def test_band_power_series_uses_the_shared_sos_designer():
+    from striatum_lfp.features import design_band_sos
+    from scipy.signal import sosfiltfilt
+
+    rng = np.random.default_rng(1)
+    x = rng.normal(size=(2_000, 3))
+    sos = design_band_sos((15.0, 30.0), fs=1000, order=4)
+    np.testing.assert_allclose(bandpower.band_power_series(x, (15.0, 30.0), fs=1000),
+                               np.square(sosfiltfilt(sos, x, axis=0)))

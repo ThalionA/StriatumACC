@@ -29,6 +29,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import bandpower, cohort, config, geometry  # noqa: E402
+from striatum_lfp.analysis import read_behaviour  # noqa: E402
 from striatum_lfp.reader import DATASET  # noqa: E402
 
 FS = config.FS
@@ -39,31 +40,6 @@ MAX_TRIALS = 200
 BLOCK_SAMPLES = 210_000          # 5000 x 42-row HDF5 chunks
 PAD_SAMPLES = 3_000              # >= 3 s: covers the 1 Hz filter transient
 OUT_DIR = config.RESULTS_DIR / "lfp_band_trials"
-
-
-def read_behaviour(mouse_id: int, probe: str) -> dict:
-    """VR position/world/trial on the millisecond grid, plus the recording crop.
-
-    Column order follows ``OrganiseStriatumDataIncV1.m``:225-260 -- VR_data row 2
-    is position, row 5 world, row 7 trial (rows here are h5py columns 1, 4, 6).
-    """
-    path = config.raw_mat(mouse_id, probe)
-    with h5py.File(path, "r") as handle:
-        vr_times_s = np.asarray(handle["VR_times_synched"]).ravel().astype(float)
-        vr = np.asarray(handle["VR_data"])
-        n_spike_bins = int(handle["binned_spikes"].shape[0])
-    if vr.shape[0] < vr.shape[1]:            # stored (n_rows, n_frames)
-        vr = vr.T
-    return {
-        "vr_times_s": vr_times_s,
-        "position": vr[:, 1].astype(float),
-        "world": vr[:, 4].astype(float),
-        "trial": vr[:, 6].astype(float),
-        "n_spike_bins": n_spike_bins,
-        # OrganiseStriatumDataIncV1.m:186-189, converted to a 0-based offset.
-        "crop_start0": max(0, int(np.ceil(vr_times_s[0] * 1000.0)) - 1),
-        "crop_end0": int(np.floor(vr_times_s[-1] * 1000.0)) - 1,
-    }
 
 
 def build_segments(beh: dict, n_lfp_samples: int) -> dict:

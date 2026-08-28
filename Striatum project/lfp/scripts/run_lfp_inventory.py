@@ -22,12 +22,12 @@ import sys
 import time
 from pathlib import Path
 
-import h5py
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import cohort, config, geometry, inventory  # noqa: E402
+from striatum_lfp.analysis import read_behaviour  # noqa: E402
 
 FS = config.FS
 SPECTRAL_WINDOWS = 12
@@ -37,13 +37,11 @@ DEAD_CHANNEL_ZERO_FRACTION = 0.5   # a channel that is zero for most of the sess
 
 def behaviour_bounds(mouse_id: int, probe: str):
     """First/last VR timestamp (s) and ``binned_spikes`` bin count for one probe."""
-    path = config.raw_mat(mouse_id, probe)
-    if not path.exists():
+    if not config.raw_mat(mouse_id, probe).exists():
         return None, None, None
-    with h5py.File(path, "r") as handle:
-        vr = np.asarray(handle["VR_times_synched"]).ravel().astype(float)
-        n_bins = int(handle["binned_spikes"].shape[0])
-    return float(vr.min()), float(vr.max()), n_bins
+    beh = read_behaviour(mouse_id, probe)
+    vr = beh["vr_times_s"]
+    return float(vr.min()), float(vr.max()), beh["n_spike_bins"]
 
 
 def area_counts(mouse_id: int, probe: str, depth: np.ndarray, n_channels: int):

@@ -34,35 +34,13 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import analysis, arms, config  # noqa: E402
+from striatum_lfp.analysis import log_power  # noqa: E402
 from striatum_lfp.decode import ridge_cv_decode  # noqa: E402
 
 IN_DIR = config.RESULTS_DIR / "lfp_band_trials"
 MIN_SITES = config.DEFAULT.min_sites          # 5 channels per area
 N_CCA_SHUFFLES = 20
 BIN_CM = analysis.BIN_SIZE_CM
-
-
-def log_power(x: np.ndarray) -> np.ndarray:
-    """log10 power, with non-positive cells (empty bins) left as nan.
-
-    Band power is close to lognormal over three orders of magnitude, and the two
-    export batches differ ~1000x in absolute power, so every downstream statistic
-    works on the log and then z-scores it per channel.
-    """
-    with np.errstate(divide="ignore", invalid="ignore"):
-        out = np.log10(x)
-    out[~np.isfinite(out)] = np.nan
-    return out
-
-
-def zscore_channels(x: np.ndarray) -> np.ndarray:
-    """Z-score each channel over all its (bin, trial) cells."""
-    flat = x.reshape(x.shape[0], -1)
-    mean = np.nanmean(flat, axis=1)
-    sd = np.nanstd(flat, axis=1)
-    sd = np.where(sd > 0, sd, np.nan)
-    shape = (x.shape[0],) + (1,) * (x.ndim - 1)
-    return (x - mean.reshape(shape)) / sd.reshape(shape)
 
 
 def analyse_one(path_str: str) -> dict[str, list[dict]]:
@@ -86,7 +64,15 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
     centre = {a: float(np.median(depths[m])) for a, m in areas.items()}
 
     total_idx = band_names.index("total")
-    rows = {"evolution": [], "decoding": [], "reliability": [], "cca": []}
+    rows = {"evolution": [], "decoding": [], "reliability": [], "cca": [],
+            "moving_reliability": [], "moving_reliability_epochs": []}
+    # The single-unit stability figures roll the same moving metric up over the
+    # THREE-window epoch convention (IntegratedAll_v1.m:554 "the neural analyses
+    # use the three-window convention"), not the four-window one the corridor-vs-
+    # dark figures use. Match it, so figures/stability_by_animal.csv and the LFP
+    # table are the same statistic on the same windows and can sit side by side.
+    epochs3 = analysis.epoch_indices(lp, n_trials_matlab)
+    EPOCH3_NAMES = ("Naive", "Intermediate", "Expert")
     base = {"mouse_id": mouse, "probe": probe, "learning_point": lp,
             "n_trials": n_trials_matlab}
 
@@ -140,6 +126,53 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
                         "mean_speed_cm_s": float(np.nanmean(speed[:, tr])),
                     })
 
+            # --- 3b. moving-window reliability -------------------------------
+            # The project's own trial-to-trial stability metric, on the project's
+            # own window: mean pairwise correlation of the spatial profiles in a
+            # 5-trial window centred on each trial and clipped at the edges
+            # (IntegratedAll_v1.m:565-630 via batch_triu_corr_mean.m).
+            #
+            # ONE DELIBERATE DIFFERENCE. MATLAB substitutes 0 for a missing bin
+            # before z-scoring, because 0 Hz is a meaningful firing rate. Log
+            # power has no zero, so the NaN is left to reach the z-score step
+            # inside batch_triu_corr_mean, where it becomes that trial's own mean
+            # -- the neutral fill. It affects 0.2-3% of cells.
+            keep = np.arange(min(n_trials_matlab, n_stored))
+            cube_all = zc[:, :, keep]
+            if cube_all.shape[2] >= 2:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    moving = arms.moving_window_reliability(cube_all)
+                    shuffled = arms.moving_window_reliability(
+                        arms.shuffle_trials(cube_all, np.random.default_rng(0)))
+                for ei, ename in enumerate(EPOCH3_NAMES):
+                    idx = epochs3[ei] - 1
+                    idx = idx[(idx >= 0) & (idx < cube_all.shape[2])]
+                    if idx.size == 0:
+                        continue
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        # Mean over channels then over the epoch's trials, as
+                        # IntegratedAll_v1.m:648 averages over units.
+                        obs = float(np.nanmean(np.nanmean(moving[:, idx], axis=0)))
+                        shf = float(np.nanmean(np.nanmean(shuffled[:, idx], axis=0)))
+                    rows["moving_reliability_epochs"].append({
+                        "group": "Task (LFP)", "area": area, "band": band,
+                        "epoch": ename, "animal": mouse, "probe": probe,
+                        "n_channels": n_ch, "n_epoch_trials": int(idx.size),
+                        "reliability": obs, "shuffle": shf,
+                        "obs_minus_shuffle": obs - shf,
+                    })
+                for ti in range(cube_all.shape[2]):
+                    rows["moving_reliability"].append({
+                        **base, "area": area, "band": band,
+                        "trial": ti + 1,
+                        "trial_rel_lp": (ti + 1 - lp) if lp else "",
+                        "n_channels": n_ch,
+                        "reliability": float(np.nanmedian(moving[:, ti])),
+                        "reliability_shuffled": float(np.nanmedian(shuffled[:, ti])),
+                    })
+
             # --- 2. decoding + 3. reliability --------------------------------
             windows = [("All", np.arange(n_trials_matlab))] + [
                 (name, epochs[ei]) for ei, name in enumerate(analysis.EPOCH_NAMES)
@@ -153,7 +186,7 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
                     half = arms.split_half_reliability(sub)
-                    pair = arms.mean_pairwise_trial_r(sub)
+                    pair = arms.batch_triu_corr_mean(sub)
                 # A reliable SPATIAL profile is not automatically position coding:
                 # if band power tracks running speed, and the animal is reliably
                 # slow at the same places, the profile is a speed profile. Report
@@ -173,7 +206,7 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
                     "split_half_r": float(np.nanmedian(half)),
                     "split_half_r_p25": float(np.nanpercentile(half, 25)),
                     "split_half_r_p75": float(np.nanpercentile(half, 75)),
-                    "mean_pairwise_r": float(np.nanmedian(pair)),
+                    "mean_pairwise_r": float(np.nanmedian(pair)),   # batch_triu_corr_mean
                 })
 
                 X, y, groups = arms.design_matrix(sub, trials=np.arange(tr.size))
@@ -226,7 +259,9 @@ def analyse_one(path_str: str) -> dict[str, list[dict]]:
 
     print(f"[arms] {mouse}/{probe:9s} lp={lp} areas={sorted(areas)} "
           f"{len(rows['evolution'])}+{len(rows['decoding'])}+{len(rows['reliability'])}"
-          f"+{len(rows['cca'])} rows  {time.time() - t0:5.0f}s", flush=True)
+          f"+{len(rows['cca'])}+{len(rows['moving_reliability'])}"
+          f"+{len(rows['moving_reliability_epochs'])} rows  "
+          f"{time.time() - t0:5.0f}s", flush=True)
     return rows
 
 
@@ -305,7 +340,8 @@ def main() -> None:
 
     write_evolution_stats([r for res in results for r in res["evolution"]])
 
-    for key in ("evolution", "decoding", "reliability", "cca"):
+    for key in ("evolution", "decoding", "reliability", "cca", "moving_reliability",
+                "moving_reliability_epochs"):
         rows = [r for res in results for r in res[key]]
         if not rows:
             continue

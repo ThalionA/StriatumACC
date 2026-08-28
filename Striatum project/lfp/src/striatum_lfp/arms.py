@@ -87,38 +87,6 @@ def split_half_reliability(cube: np.ndarray, *, spearman_brown: bool = True) -> 
         return np.where(r > -1, 2 * r / (1 + r), np.nan)
 
 
-def mean_pairwise_trial_r(cube: np.ndarray, max_trials: int = 40) -> np.ndarray:
-    """Mean correlation between every pair of single-trial spatial profiles.
-
-    The project's own convention for trial-to-trial similarity
-    (``batch_triu_corr_mean.m``). Capped at ``max_trials`` because the pair count
-    grows quadratically and the estimate stops moving well before then.
-    """
-    cube = np.asarray(cube, dtype=float)
-    n_ch, _, n_tr = cube.shape
-    if n_tr < 2:
-        return np.full(n_ch, np.nan)
-    use = np.linspace(0, n_tr - 1, min(n_tr, max_trials)).astype(int)
-    out = np.full(n_ch, np.nan)
-    for c in range(n_ch):
-        profiles = cube[c][:, use].T                       # (trial, bin)
-        ok = np.all(np.isfinite(profiles), axis=1)
-        profiles = profiles[ok]
-        if profiles.shape[0] < 2 or profiles.shape[1] < 3:
-            continue
-        centred = profiles - profiles.mean(axis=1, keepdims=True)
-        sd = centred.std(axis=1)
-        if np.any(sd == 0):
-            centred = centred[sd > 0]
-            sd = sd[sd > 0]
-        if centred.shape[0] < 2:
-            continue
-        corr = (centred @ centred.T) / (centred.shape[1] * np.outer(sd, sd))
-        iu = np.triu_indices(corr.shape[0], k=1)
-        out[c] = float(np.nanmean(corr[iu]))
-    return out
-
-
 def heldout_cca_grouped(A: np.ndarray, B: np.ndarray, groups: np.ndarray, *,
                         k: int = 5, seed: int = 0, test_size: float = 0.5) -> float:
     """Top canonical correlation between ``A`` and ``B``, evaluated out of sample.
@@ -262,3 +230,84 @@ def fdr_bh(pvalues: np.ndarray, q: float = 0.05):
     adj[order] = np.clip(ranked, 0, 1)
     adjusted[ok] = adj
     return adjusted, np.nan_to_num(adjusted, nan=1.0) <= q
+
+
+# --- The project's own moving-window reliability -----------------------------
+# Ported from batch_triu_corr_mean.m and the stability section of
+# IntegratedAll_v1.m:565-630, so the LFP trace is the same statistic on the same
+# window as the single-unit one and the two can be put on the same axes.
+
+MOVING_WINDOW_TRIALS = 5        # IntegratedAll_v1.m:565, ProcessStriatumTask.m:901
+
+
+def batch_triu_corr_mean(cube: np.ndarray) -> np.ndarray:
+    """Per-cell mean of the off-diagonal Pearson correlations between trials.
+
+    Faithful port of ``batch_triu_corr_mean.m``: z-score each trial's profile
+    across bins (a zero-SD profile gets SD 1 and NaNs become 0, exactly as the
+    MATLAB does), form ``Z' Z / (bins - 1)``, and average the strict upper
+    triangle. A cell whose pairs are all undefined returns ``nan`` rather than 0.
+
+    ``cube`` is ``(n_cells, n_bins, n_trials_in_window)``.
+    """
+    cube = np.asarray(cube, dtype=float)
+    n_cells, n_bins, w = cube.shape
+    if w < 2 or n_bins < 2 or n_cells == 0:
+        return np.full(n_cells, np.nan)
+
+    mu = np.nanmean(cube, axis=1, keepdims=True)
+    sd = np.nanstd(cube, axis=1, ddof=1, keepdims=True)
+    flat = np.all(~np.isfinite(sd) | (sd == 0), axis=(1, 2))
+    sd = np.where((sd == 0) | ~np.isfinite(sd), 1.0, sd)
+    z = (cube - mu) / sd
+    z = np.nan_to_num(z, nan=0.0)
+
+    corr = np.matmul(z.transpose(0, 2, 1), z) / (n_bins - 1)   # (cells, w, w)
+    iu = np.triu_indices(w, k=1)
+    out = corr[:, iu[0], iu[1]].mean(axis=1)
+    out[flat] = np.nan
+    return out
+
+
+def moving_window_indices(t: int, n_trials: int, window_size: int) -> np.ndarray:
+    """Trial indices of the centred window at ``t``, clipped at both edges.
+
+    ``max(1, t - half) : min(n, t + half)`` with ``half = floor(w / 2)``, in
+    0-based form. Clipping rather than padding means the first and last two
+    trials are averaged over 3 or 4 pairs instead of 5 -- noisier, not absent.
+    """
+    half = window_size // 2
+    return np.arange(max(0, t - half), min(n_trials - 1, t + half) + 1)
+
+
+def moving_window_reliability(cube: np.ndarray, *,
+                              window_size: int = MOVING_WINDOW_TRIALS) -> np.ndarray:
+    """Reliability at every trial from a centred, edge-clipped trial window.
+
+    Returns ``(n_cells, n_trials)``. At each trial the statistic is the mean
+    pairwise correlation between the spatial profiles of the trials in the
+    window -- the same quantity the single-unit stability figures plot, on the
+    same 5-trial window.
+    """
+    if window_size < 3 or window_size % 2 == 0:
+        raise ValueError(f"window_size must be odd and >= 3; got {window_size}")
+    cube = np.asarray(cube, dtype=float)
+    n_cells, _, n_trials = cube.shape
+    out = np.full((n_cells, n_trials), np.nan)
+    for t in range(n_trials):
+        idx = moving_window_indices(t, n_trials, window_size)
+        if idx.size < 2:
+            continue
+        out[:, t] = batch_triu_corr_mean(cube[:, :, idx])
+    return out
+
+
+def shuffle_trials(cube: np.ndarray, rng) -> np.ndarray:
+    """Permute the trial axis -- the control IntegratedAll_v1.m:620 uses.
+
+    Reliability is computed on a *window* of neighbouring trials, so permuting
+    trial order destroys any trend or local similarity while leaving each single
+    trial's profile untouched. Whatever the shuffled trace still shows is what
+    the metric returns for unrelated trials of this data.
+    """
+    return cube[:, :, rng.permutation(cube.shape[2])]

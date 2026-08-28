@@ -25,23 +25,11 @@ from matplotlib.colors import LogNorm  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import config, geometry  # noqa: E402
+from striatum_lfp.figstyle import AREA_COLOUR, save_pair  # noqa: E402
 
-MAX_PNG_PX = 1600
-AREA_COLOUR = {"DMS": "#0072b2", "DLS": "#77ac30", "ACC": "#d95319",
-               "V1": "#7e2f8e", "CA1": "#cc1a33", "DG": "#33b3b3"}
 # The two gain regimes found by the inventory: the 2026-07 batch stores ~30x
 # smaller voltages than the 2026-08 batch, so absolute power is not comparable.
 GAIN_SPLIT_RMS = 5e-5
-
-
-def save_pair(fig, stem: str) -> None:
-    """Save ``stem.svg`` + ``stem.png``, PNG capped at 1600 px on its long side."""
-    config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    fig.savefig(config.FIGURES_DIR / f"{stem}.svg")
-    long_in = max(fig.get_size_inches())
-    fig.savefig(config.FIGURES_DIR / f"{stem}.png", dpi=min(150, MAX_PNG_PX / long_in))
-    plt.close(fig)
-    print(f"[plot] {stem}.svg + .png", flush=True)
 
 
 def load_rows():

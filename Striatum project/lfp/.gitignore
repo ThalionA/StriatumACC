@@ -32,3 +32,4 @@ figures/**/*.svg
 !results/lfp_arms_cca.csv
 !results/lfp_bandpower_summary.csv
 !results/lfp_bandpower_validation.csv
+!results/lfp_arms_moving_reliability_epochs.csv

@@ -1,141 +1,145 @@
-[env] 727/striatum  t=1200s (6000, 96)   8.8s
-[env] 523/striatum  t=1200s (6000, 96)   8.8s
-[env] 614/striatum  t=1200s (6000, 96)   9.0s
-[env] 730/striatum  t=1200s (6000, 96)   9.0s
-[env] 731/striatum  t=1200s (6000, 96)   9.0s
-[env] 624/striatum  t=1200s (6000, 96)   9.1s
-[env] 727/striatum  t=3000s (6000, 96)   8.1s
-[env] 523/striatum  t=3000s (6000, 96)   8.2s
-[env] 614/striatum  t=3000s (6000, 96)   8.3s
-[env] 730/striatum  t=3000s (6000, 96)   8.3s
-[env] 731/striatum  t=3000s (6000, 96)   8.3s
-[env] 624/striatum  t=3000s (6000, 96)   8.4s
-[env] 727/striatum  t=4800s (6000, 96)   8.1s
-[env] 523/striatum  t=4800s (6000, 96)   8.2s
-[env] 614/striatum  t=4800s (6000, 96)   8.3s
-[env] 730/striatum  t=4800s (6000, 96)   8.3s
-[env] 731/striatum  t=4800s (6000, 96)   8.3s
-[env] 624/striatum  t=4800s (6000, 96)   8.5s
-[env] 822/striatum  t=1200s (6000, 96)   8.3s
-[env] 823/striatum  t=1200s (6000, 96)   8.3s
-[env] 1105/striatum  t=1200s (6000, 96)   8.6s
-[env] 1105/visual    t=1200s (6000, 96)   8.6s
-[env] 1106/striatum  t=1200s (6000, 96)   8.6s
-[env] 1106/visual    t=1200s (6000, 96)   8.7s
-[env] 822/striatum  t=3000s (6000, 96)   8.3s
-[env] 823/striatum  t=3000s (6000, 96)   8.2s
-[env] 1105/visual    t=3000s (6000, 96)   8.7s
-[env] 1106/striatum  t=3000s (6000, 96)   8.6s
-[env] 1105/striatum  t=3000s (6000, 96)   8.7s
-[env] 1106/visual    t=3000s (6000, 96)   8.7s
-[env] 822/striatum  t=4800s (6000, 96)   8.2s
-[env] 823/striatum  t=4800s (6000, 96)   8.2s
-[env] 1106/striatum  t=4800s (6000, 96)   8.5s
-[env] 1105/visual    t=4800s (6000, 96)   8.6s
-[env] 1105/striatum  t=4800s (6000, 96)   8.7s
-[env] 1106/visual    t=4800s (6000, 96)   8.7s
-[env] 1201/striatum  t=1200s (6000, 96)   8.3s
-[env] 1206/striatum  t=1200s (6000, 96)   8.3s
-[env] 1206/visual    t=1200s (6000, 96)   8.6s
-[env] 1212/striatum  t=1200s (6000, 96)   8.5s
-[env] 1212/visual    t=1200s (6000, 96)   8.6s
-[env] 1206/striatum  t=3000s (6000, 96)   8.1s
-[env] 1201/striatum  t=3000s (6000, 96)   8.1s
-[env] 1212/striatum  t=3000s (6000, 96)   8.4s
-[env] 1206/visual    t=3000s (6000, 96)   8.5s
-[env] 1212/visual    t=3000s (6000, 96)   8.5s
-[env] 1206/striatum  t=4800s (6000, 96)   8.1s
-[env] 1201/striatum  t=4800s (6000, 96)   8.1s
-[env] 1212/striatum  t=4800s (6000, 96)   8.4s
-[env] 1206/visual    t=4800s (6000, 96)   8.5s
-[env] 1212/visual    t=4800s (6000, 96)   8.5s
+[env] 730/striatum  t=1200s (6000, 96)   7.1s
+[env] 727/striatum  t=1200s (6000, 96)   7.1s
+[env] 614/striatum  t=1200s (6000, 96)   7.2s
+[env] 523/striatum  t=1200s (6000, 96)   7.3s
+[env] 624/striatum  t=1200s (6000, 96)   7.4s
+[env] 730/striatum  t=3000s (6000, 96)   6.7s
+[env] 727/striatum  t=3000s (6000, 96)   6.7s
+[env] 614/striatum  t=3000s (6000, 96)   6.7s
+[env] 523/striatum  t=3000s (6000, 96)   6.8s
+[env] 624/striatum  t=3000s (6000, 96)   6.9s
+[env] 730/striatum  t=4800s (6000, 96)   6.6s
+[env] 727/striatum  t=4800s (6000, 96)   6.6s
+[env] 614/striatum  t=4800s (6000, 96)   6.6s
+[env] 523/striatum  t=4800s (6000, 96)   6.8s
+[env] 624/striatum  t=4800s (6000, 96)   6.9s
+[env] 731/striatum  t=1200s (6000, 96)   6.7s
+[env] 823/striatum  t=1200s (6000, 96)   6.7s
+[env] 822/striatum  t=1200s (6000, 96)   6.8s
+[env] 1105/striatum  t=1200s (6000, 96)   6.9s
+[env] 1105/visual    t=1200s (6000, 96)   7.0s
+[env] 731/striatum  t=3000s (6000, 96)   6.6s
+[env] 823/striatum  t=3000s (6000, 96)   6.6s
+[env] 822/striatum  t=3000s (6000, 96)   6.7s
+[env] 1105/striatum  t=3000s (6000, 96)   6.9s
+[env] 1105/visual    t=3000s (6000, 96)   7.1s
+[env] 731/striatum  t=4800s (6000, 96)   6.6s
+[env] 823/striatum  t=4800s (6000, 96)   6.6s
+[env] 822/striatum  t=4800s (6000, 96)   6.7s
+[env] 1105/striatum  t=4800s (6000, 96)   7.0s
+[env] 1105/visual    t=4800s (6000, 96)   7.2s
+[env] 1106/striatum  t=1200s (6000, 96)   6.8s
+[env] 1106/visual    t=1200s (6000, 96)   6.8s
+[env] 1201/striatum  t=1200s (6000, 96)   6.7s
+[env] 1201/visual    t=1200s (6000, 96)   6.9s
+[env] 1206/striatum  t=1200s (6000, 96)   7.0s
+[env] 1106/striatum  t=3000s (6000, 96)   6.8s
+[env] 1201/striatum  t=3000s (6000, 96)   6.8s
+[env] 1106/visual    t=3000s (6000, 96)   6.9s
+[env] 1201/visual    t=3000s (6000, 96)   6.9s
+[env] 1206/striatum  t=3000s (6000, 96)   6.9s
+[env] 1106/striatum  t=4800s (6000, 96)   6.8s
+[env] 1201/striatum  t=4800s (6000, 96)   6.7s
+[env] 1106/visual    t=4800s (6000, 96)   6.8s
+[env] 1201/visual    t=4800s (6000, 96)   6.9s
+[env] 1206/striatum  t=4800s (6000, 96)   6.9s
+[env] 1206/visual    t=1200s (6000, 96)   6.8s
+[env] 1212/striatum  t=1200s (6000, 96)   6.8s
+[env] 1212/visual    t=1200s (6000, 96)   6.8s
+[env] 1212/striatum  t=3000s (6000, 96)   6.7s
+[env] 1206/visual    t=3000s (6000, 96)   6.8s
+[env] 1212/visual    t=3000s (6000, 96)   6.8s
+[env] 1212/striatum  t=4800s (6000, 96)   6.7s
+[env] 1206/visual    t=4800s (6000, 96)   6.7s
+[env] 1212/visual    t=4800s (6000, 96)   6.7s
 [mua] 731/striatum  ok       0.2s
 [mua] 731/striatum  ok       0.2s
-[mua] 731/striatum  ok       0.2s
-[mua] 624/striatum  ok       0.7s
 [mua] 822/striatum  ok       0.4s
-[mua] 727/striatum  ok       1.0s
+[mua] 624/striatum  ok       0.7s
 [mua] 523/striatum  ok       1.0s
 [mua] 822/striatum  ok       0.3s
-[mua] 624/striatum  ok       0.7s
 [mua] 822/striatum  ok       0.3s
 [mua] 614/striatum  ok       1.7s
+[mua] 727/striatum  ok       1.0s
 [mua] 823/striatum  ok       0.4s
-[mua] 727/striatum  ok       0.9s
 [mua] 523/striatum  ok       1.0s
-[mua] 624/striatum  ok       0.7s
-[mua] 730/striatum  ok       2.2s
-[mua] 823/striatum  ok       0.4s
-[mua] 1105/striatum  ok       0.3s
 [mua] 823/striatum  ok       0.3s
-[mua] 1105/striatum  ok       0.3s
-[mua] 1106/striatum  ok       0.3s
+[mua] 730/striatum  ok       2.1s
+[mua] 823/striatum  ok       0.3s
 [mua] 727/striatum  ok       0.9s
-[mua] 523/striatum  ok       1.0s
-[mua] 1106/striatum  ok       0.3s
 [mua] 1105/striatum  ok       0.3s
-[mua] 614/striatum  ok       1.6s
-[mua] 1212/striatum  ok       0.2s
+[mua] 523/striatum  ok       1.0s
+[mua] 1105/striatum  ok       0.3s
+[mua] 614/striatum  ok       1.5s
+[mua] 1105/striatum  ok       0.3s
+[mua] 727/striatum  ok       0.9s
 [mua] 1106/striatum  ok       0.3s
+[mua] 1106/striatum  ok       0.3s
+[mua] 624/striatum  ok       0.7s
+[mua] 1106/striatum  ok       0.3s
+[mua] 730/striatum  ok       2.0s
+[mua] 1201/striatum  ok       0.6s
+[mua] 614/striatum  ok       1.6s
+[mua] 624/striatum  ok       0.7s
 [mua] 1201/striatum  ok       0.6s
 [mua] 1212/striatum  ok       0.2s
 [mua] 1206/striatum  ok       0.6s
 [mua] 1212/striatum  ok       0.2s
+[mua] 1212/striatum  ok       0.2s
 [mua] 1201/striatum  ok       0.6s
-[mua] 418/striatum  ok       0.4s
+[mua] 409/striatum  ok       0.8s
+[mua] 1206/striatum  ok       0.6s
+[mua] 418/striatum  ok       0.3s
+[mua] 409/striatum  ok       0.7s
 [mua] 1206/striatum  ok       0.6s
 [mua] 409/striatum  ok       0.8s
+[mua] 1105/visual    ok       0.2s
 [mua] 730/striatum  ok       2.0s
-[mua] 418/striatum  ok       0.3s
-[mua] 1201/striatum  ok       0.6s
-[mua] 1206/striatum  ok       0.6s
-[mua] 418/striatum  ok       0.3s
-[mua] 614/striatum  ok       1.6s
-[mua] 409/striatum  ok       0.7s
-[mua] 1105/visual    ok       0.2s
-[mua] 1105/visual    ok       0.2s
-[mua] 1106/visual    ok       0.4s
 [mua] 703/striatum  ok       0.7s
+[mua] 731/striatum  ok       0.2s
 [mua] 1105/visual    ok       0.2s
+[mua] 418/striatum  ok       0.3s
+[mua] 1106/visual    ok       0.4s
+[mua] 1105/visual    ok       0.2s
+[mua] 418/striatum  ok       0.3s
 [mua] 1201/visual    ok       0.5s
 [mua] 1106/visual    ok       0.4s
-[mua] 409/striatum  ok       0.7s
-[mua] 1201/visual    ok       0.5s
 [mua] 1106/visual    ok       0.4s
-[mua] 1212/visual    ok       0.3s
 [mua] 703/striatum  ok       0.7s
 [mua] 1212/striatum  ok       0.2s
-[mua] 730/striatum  ok       2.0s
 [mua] 1212/visual    ok       0.3s
 [mua] 1212/striatum  ok       0.2s
+[mua] 1201/visual    ok       0.5s
+[mua] 1212/visual    ok       0.3s
+[mua] 1212/visual    ok       0.3s
+[mua] 703/striatum  ok       0.7s
+[mua] 1212/visual    ok       0.3s
 [mua] 1206/visual    ok       1.0s
 [mua] 1201/visual    ok       0.5s
+[mua] 1212/visual    ok       0.3s
 [mua] 1212/striatum  ok       0.2s
-[mua] 1212/visual    ok       0.4s
 [mua] 1212/visual    ok       0.3s
-[mua] 703/striatum  ok       0.7s
-[mua] 1212/visual    ok       0.3s
-[mua] 1212/visual    ok       0.3s
-[mua] 1206/visual    ok       1.0s
+[mua] 1206/visual    ok       0.9s
 [mua] 1206/visual    ok       0.9s
 [identity] features in 1.5 min
-[identity] 523/striatum  CONFIRMED      t=1200s own= 3.02x (best 523  3.02x)  t=3000s own= 4.80x (best 523  4.80x)  t=4800s own= 2.18x (best 523  2.18x)
-[identity] 614/striatum  CONFIRMED      t=1200s own= 2.21x (best 614  2.21x)  t=3000s own= 5.11x (best 614  5.11x)  t=4800s own= 5.28x (best 614  5.28x)
-[identity] 624/striatum  CONFIRMED      t=1200s own=12.68x (best 624 12.68x)  t=3000s own=12.49x (best 624 12.49x)  t=4800s own=18.35x (best 624 18.35x)
-[identity] 727/striatum  CONFIRMED      t=1200s own= 4.88x (best 727  4.88x)  t=3000s own= 5.36x (best 727  5.36x)  t=4800s own= 8.07x (best 727  8.07x)
-[identity] 730/striatum  CONFIRMED      t=1200s own= 1.99x (best 730  1.99x)  t=3000s own= 1.34x (best 730  1.34x)  t=4800s own= 1.70x (best 730  1.70x)
-[identity] 731/striatum  CONFIRMED      t=1200s own=14.79x (best 731 14.79x)  t=3000s own=44.61x (best 731 44.61x)  t=4800s own=15.06x (best 731 15.06x)
-[identity] 822/striatum  CONFIRMED      t=1200s own=14.85x (best 822 14.85x)  t=3000s own=15.21x (best 822 15.21x)  t=4800s own= 9.66x (best 822  9.66x)
-[identity] 823/striatum  MAJORITY(2/3)  t=1200s own= 4.56x (best 823  4.56x)  t=3000s own= 2.61x (best 823  2.61x)  t=4800s own= 4.90x (best 624  5.61x)
-[identity] 1105/striatum  MAJORITY(2/3)  t=1200s own= 9.17x (best 1105  9.17x)  t=3000s own= 5.13x (best 1105  5.13x)  t=4800s own= 2.45x (best 409  2.87x)
-[identity] 1105/visual    CONFIRMED      t=1200s own=15.20x (best 1105 15.20x)  t=3000s own= 3.18x (best 1105  3.18x)  t=4800s own= 4.42x (best 1105  4.42x)
-[identity] 1106/striatum  CONFIRMED      t=1200s own= 4.81x (best 1106  4.81x)  t=3000s own= 9.20x (best 1106  9.20x)  t=4800s own=11.00x (best 1106 11.00x)
-[identity] 1106/visual    CONFIRMED      t=1200s own= 5.12x (best 1106  5.12x)  t=3000s own= 3.98x (best 1106  3.98x)  t=4800s own= 7.26x (best 1106  7.26x)
-[identity] 1201/striatum  CONFIRMED      t=1200s own= 4.99x (best 1201  4.99x)  t=3000s own= 4.01x (best 1201  4.01x)  t=4800s own= 5.07x (best 1201  5.07x)
-[identity] 1206/striatum  CONFIRMED      t=1200s own=15.45x (best 1206 15.45x)  t=3000s own= 9.99x (best 1206  9.99x)  t=4800s own=14.23x (best 1206 14.23x)
-[identity] 1206/visual    CONFIRMED      t=1200s own=21.44x (best 1206 21.44x)  t=3000s own=11.12x (best 1206 11.12x)  t=4800s own=15.20x (best 1206 15.20x)
-[identity] 1212/striatum  CONFIRMED      t=1200s own=18.13x (best 1212 18.13x)  t=3000s own=14.75x (best 1212 14.75x)  t=4800s own= 7.15x (best 1212  7.15x)
-           offset scan (raw |r| vs own MUA): +0s=0.2633, +600s=0.0141, +1500s=0.0184, +3000s=0.0114
-[identity] 1212/visual    CONFIRMED      t=1200s own=11.85x (best 1212 11.85x)  t=3000s own=14.98x (best 1212 14.98x)  t=4800s own=10.82x (best 1212 10.82x)
-           offset scan (raw |r| vs own MUA): +0s=0.1721, +600s=0.0241, +1500s=0.0176, +3000s=0.0141
-[identity] 15/17 filenames confirmed in every window; not fully confirmed: [(823, 'striatum', 'MAJORITY(2/3)'), (1105, 'striatum', 'MAJORITY(2/3)')]
+[identity] 523/striatum  CONFIRMED      t=1200s own= 3.18x (best 523  3.18x)  t=3000s own= 4.34x (best 523  4.34x)  t=4800s own= 2.05x (best 523  2.05x)
+[identity] 614/striatum  CONFIRMED      t=1200s own= 2.19x (best 614  2.19x)  t=3000s own= 5.24x (best 614  5.24x)  t=4800s own= 4.60x (best 614  4.60x)
+[identity] 624/striatum  CONFIRMED      t=1200s own=12.98x (best 624 12.98x)  t=3000s own=14.06x (best 624 14.06x)  t=4800s own=19.53x (best 624 19.53x)
+[identity] 727/striatum  CONFIRMED      t=1200s own= 4.82x (best 727  4.82x)  t=3000s own= 5.06x (best 727  5.06x)  t=4800s own= 8.43x (best 727  8.43x)
+[identity] 730/striatum  CONFIRMED      t=1200s own= 2.01x (best 730  2.01x)  t=3000s own= 1.32x (best 730  1.32x)  t=4800s own= 1.63x (best 730  1.63x)
+[identity] 731/striatum  CONFIRMED      t=1200s own=14.91x (best 731 14.91x)  t=3000s own=42.07x (best 731 42.07x)  t=4800s own=16.18x (best 731 16.18x)
+[identity] 822/striatum  CONFIRMED      t=1200s own=17.55x (best 822 17.55x)  t=3000s own=15.46x (best 822 15.46x)  t=4800s own=11.23x (best 822 11.23x)
+[identity] 823/striatum  MAJORITY(2/3)  t=1200s own= 4.59x (best 823  4.59x)  t=3000s own= 2.63x (best 823  2.63x)  t=4800s own= 5.03x (best 624  5.74x)
+[identity] 1105/striatum  MAJORITY(2/3)  t=1200s own= 8.04x (best 1105  8.04x)  t=3000s own= 5.72x (best 1105  5.72x)  t=4800s own= 2.59x (best 409  2.96x)
+[identity] 1105/visual    CONFIRMED      t=1200s own=13.54x (best 1105 13.54x)  t=3000s own= 3.52x (best 1105  3.52x)  t=4800s own= 4.32x (best 1105  4.32x)
+[identity] 1106/striatum  CONFIRMED      t=1200s own= 4.73x (best 1106  4.73x)  t=3000s own= 9.64x (best 1106  9.64x)  t=4800s own=11.09x (best 1106 11.09x)
+[identity] 1106/visual    CONFIRMED      t=1200s own= 5.40x (best 1106  5.40x)  t=3000s own= 4.00x (best 1106  4.00x)  t=4800s own= 6.97x (best 1106  6.97x)
+[identity] 1201/striatum  CONFIRMED      t=1200s own= 5.04x (best 1201  5.04x)  t=3000s own= 3.78x (best 1201  3.78x)  t=4800s own= 5.14x (best 1201  5.14x)
+[identity] 1201/visual    CONFIRMED      t=1200s own= 2.96x (best 1201  2.96x)  t=3000s own= 2.54x (best 1201  2.54x)  t=4800s own= 4.49x (best 1201  4.49x)
+[identity] 1206/striatum  CONFIRMED      t=1200s own=15.88x (best 1206 15.88x)  t=3000s own=10.41x (best 1206 10.41x)  t=4800s own=14.83x (best 1206 14.83x)
+[identity] 1206/visual    CONFIRMED      t=1200s own=22.21x (best 1206 22.21x)  t=3000s own=11.53x (best 1206 11.53x)  t=4800s own=15.82x (best 1206 15.82x)
+[identity] 1212/striatum  CONFIRMED      t=1200s own=16.72x (best 1212 16.72x)  t=3000s own=15.78x (best 1212 15.78x)  t=4800s own= 5.53x (best 1212  5.53x)
+           offset scan (raw |r| vs own MUA): +0s=0.2316, +600s=0.0122, +1500s=0.0155, +3000s=0.0101
+[identity] 1212/visual    CONFIRMED      t=1200s own=11.66x (best 1212 11.66x)  t=3000s own=15.66x (best 1212 15.66x)  t=4800s own= 8.03x (best 1212  8.03x)
+           offset scan (raw |r| vs own MUA): +0s=0.1616, +600s=0.0222, +1500s=0.0177, +3000s=0.0123
+[identity] 16/18 filenames confirmed in every window; not fully confirmed: [(823, 'striatum', 'MAJORITY(2/3)'), (1105, 'striatum', 'MAJORITY(2/3)')]

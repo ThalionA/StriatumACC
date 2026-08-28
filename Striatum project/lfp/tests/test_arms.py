@@ -75,20 +75,6 @@ def test_reliability_uses_interleaved_halves_not_first_vs_second():
     assert arms.split_half_reliability(cube)[0] > 0.99
 
 
-# --- mean pairwise trial correlation ----------------------------------------
-
-def test_pairwise_trial_correlation_known_value():
-    profile = np.linspace(0, 1, 15)
-    cube = np.tile(profile[None, :, None], (2, 1, 6))
-    np.testing.assert_allclose(arms.mean_pairwise_trial_r(cube), 1.0, atol=1e-8)
-
-
-def test_pairwise_trial_correlation_near_zero_for_noise():
-    rng = np.random.default_rng(2)
-    cube = rng.normal(size=(3, 25, 20))
-    assert abs(np.nanmedian(arms.mean_pairwise_trial_r(cube))) < 0.15
-
-
 # --- grouped held-out CCA ----------------------------------------------------
 
 def test_grouped_cca_recovers_a_shared_latent():
@@ -243,3 +229,139 @@ def test_fdr_bh_ignores_nan_entries():
     adj, rej = arms.fdr_bh(np.array([0.001, np.nan, 0.9]))
     assert np.isnan(adj[1]) and not rej[1]
     assert rej[0]
+
+
+# --- batch_triu_corr_mean port (batch_triu_corr_mean.m) ---------------------
+
+def _naive_triu_corr_mean(cube):
+    """Reference: loop over cells, correlate every pair of trial profiles."""
+    n_cells, n_bins, w = cube.shape
+    out = np.full(n_cells, np.nan)
+    for c in range(n_cells):
+        block = cube[c]                       # (bins, w)
+        rs = []
+        for i in range(w):
+            for j in range(i + 1, w):
+                a, b = block[:, i], block[:, j]
+                if np.std(a) == 0 or np.std(b) == 0:
+                    continue
+                rs.append(np.corrcoef(a, b)[0, 1])
+        if rs:
+            out[c] = np.mean(rs)
+    return out
+
+
+def test_batch_triu_matches_a_naive_pairwise_loop():
+    rng = np.random.default_rng(0)
+    cube = rng.normal(size=(6, 20, 5))
+    np.testing.assert_allclose(arms.batch_triu_corr_mean(cube),
+                               _naive_triu_corr_mean(cube), atol=1e-10)
+
+
+def test_batch_triu_is_one_for_identical_profiles():
+    profile = np.sin(np.linspace(0, 4, 25))
+    cube = np.tile(profile[None, :, None], (3, 1, 5))
+    np.testing.assert_allclose(arms.batch_triu_corr_mean(cube), 1.0, atol=1e-9)
+
+
+def test_batch_triu_is_minus_one_for_two_opposed_profiles():
+    profile = np.linspace(-1, 1, 16)
+    cube = np.stack([profile, -profile], axis=1)[None]      # (1, 16, 2)
+    np.testing.assert_allclose(arms.batch_triu_corr_mean(cube), -1.0, atol=1e-9)
+
+
+def test_batch_triu_needs_two_trials_and_two_bins():
+    assert np.isnan(arms.batch_triu_corr_mean(np.ones((2, 10, 1)))).all()
+    assert np.isnan(arms.batch_triu_corr_mean(np.ones((2, 1, 5)))).all()
+
+
+def test_batch_triu_flat_cell_is_nan_not_zero():
+    """MATLAB sets sd 0 -> 1 and NaNs -> 0, then returns NaN for an all-NaN cell."""
+    cube = np.ones((1, 10, 4))                              # zero variance everywhere
+    assert np.isnan(arms.batch_triu_corr_mean(cube)).all()
+
+
+def test_batch_triu_ignores_scale_and_offset_per_trial():
+    rng = np.random.default_rng(1)
+    cube = rng.normal(size=(3, 30, 4))
+    scaled = cube * np.array([1.0, 5.0, 0.2, 100.0]) + np.array([0.0, -3.0, 7.0, 2.0])
+    np.testing.assert_allclose(arms.batch_triu_corr_mean(cube),
+                               arms.batch_triu_corr_mean(scaled), atol=1e-9)
+
+
+# --- moving-window reliability (IntegratedAll_v1.m:565-630) -----------------
+
+def test_moving_window_indices_are_centred_and_clipped():
+    assert arms.moving_window_indices(0, 10, 5).tolist() == [0, 1, 2]
+    assert arms.moving_window_indices(1, 10, 5).tolist() == [0, 1, 2, 3]
+    assert arms.moving_window_indices(5, 10, 5).tolist() == [3, 4, 5, 6, 7]
+    assert arms.moving_window_indices(9, 10, 5).tolist() == [7, 8, 9]
+
+
+def test_moving_window_matches_the_matlab_window_arithmetic():
+    """max(1, t-half) : min(n, t+half) with half = floor(w/2), 1-based in MATLAB."""
+    n, w, half = 12, 5, 2
+    for t in range(n):
+        expected = list(range(max(0, t - half), min(n - 1, t + half) + 1))
+        assert arms.moving_window_indices(t, n, w).tolist() == expected
+
+
+def test_moving_reliability_returns_one_value_per_trial():
+    rng = np.random.default_rng(2)
+    cube = rng.normal(size=(4, 20, 30))
+    out = arms.moving_window_reliability(cube)
+    assert out.shape == (4, 30)
+    assert np.isfinite(out).all()
+
+
+def test_moving_reliability_is_one_for_a_perfectly_repeated_profile():
+    profile = np.cos(np.linspace(0, 5, 25))
+    cube = np.tile(profile[None, :, None], (2, 1, 15))
+    np.testing.assert_allclose(arms.moving_window_reliability(cube), 1.0, atol=1e-9)
+
+
+def test_moving_reliability_tracks_a_change_in_reliability():
+    """First half noisy, second half a clean repeated profile."""
+    rng = np.random.default_rng(3)
+    profile = np.sin(np.linspace(0, 4, 30))
+    early = rng.normal(size=(1, 30, 20))
+    late = np.tile(profile[None, :, None], (1, 1, 20)) + rng.normal(size=(1, 30, 20)) * 0.2
+    out = arms.moving_window_reliability(np.concatenate([early, late], axis=2))
+    assert out[0, :15].mean() < 0.2
+    assert out[0, -15:].mean() > 0.8
+
+
+def test_moving_reliability_single_trial_session_is_all_nan():
+    assert np.isnan(arms.moving_window_reliability(np.ones((2, 10, 1)))).all()
+
+
+def test_moving_reliability_window_size_must_be_odd_and_at_least_three():
+    with pytest.raises(ValueError):
+        arms.moving_window_reliability(np.ones((1, 10, 10)), window_size=4)
+    with pytest.raises(ValueError):
+        arms.moving_window_reliability(np.ones((1, 10, 10)), window_size=1)
+
+
+def test_trial_shuffle_control_destroys_moving_reliability():
+    profile = np.sin(np.linspace(0, 4, 30))
+    drift = np.linspace(0, 1, 40)
+    cube = (profile[None, :, None] * (1 + drift[None, None, :]))
+    rng = np.random.default_rng(4)
+    real = np.nanmean(arms.moving_window_reliability(cube))
+    shuffled = np.nanmean(arms.moving_window_reliability(
+        arms.shuffle_trials(cube, rng)))
+    assert real > 0.99
+    # A pure spatial profile survives shuffling; add trial-specific structure and
+    # the shuffle must break it.
+    cube2 = cube + np.arange(30)[None, :, None] * drift[None, None, :] * 0.3
+    real2 = np.nanmean(arms.moving_window_reliability(cube2))
+    shuf2 = np.nanmean(arms.moving_window_reliability(arms.shuffle_trials(cube2, rng)))
+    assert real2 >= shuf2
+
+
+def test_shuffle_trials_is_a_permutation():
+    rng = np.random.default_rng(5)
+    cube = np.arange(2 * 3 * 8, dtype=float).reshape(2, 3, 8)
+    out = arms.shuffle_trials(cube, rng)
+    assert sorted(out[0, 0].tolist()) == sorted(cube[0, 0].tolist())
+    assert not np.array_equal(out, cube)

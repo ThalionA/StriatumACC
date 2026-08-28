@@ -156,3 +156,29 @@ def test_joint_zscore_flat_channel_gives_nan_not_infinity():
     dark = np.ones((1, 2, 2))
     zc, _ = analysis.joint_zscore(corridor, dark)
     assert np.isnan(zc).all()
+
+
+# --- shared helpers hoisted out of the drivers (2026-08-28) -----------------
+
+def test_log_power_leaves_empty_bins_as_nan():
+    x = np.array([[1e-10, 0.0], [-1.0, 1e-12]])
+    out = analysis.log_power(x)
+    assert out[0, 0] == pytest.approx(-10.0)
+    assert out[1, 1] == pytest.approx(-12.0)
+    assert np.isnan(out[0, 1]) and np.isnan(out[1, 0])
+
+
+def test_log_power_preserves_shape_and_is_monotone():
+    x = np.array([1e-12, 1e-10, 1e-8])
+    out = analysis.log_power(x)
+    assert out.shape == x.shape
+    assert np.all(np.diff(out) > 0)
+
+
+def test_read_behaviour_matches_the_organiser_crop():
+    """crop_start0 is OrganiseStriatumDataIncV1's npx_start_frame, 0-based."""
+    beh = analysis.read_behaviour(727, "striatum")
+    assert beh["crop_start0"] == max(0, int(np.ceil(beh["vr_times_s"][0] * 1000.0)) - 1)
+    assert beh["n_spike_bins"] == 8_400_000
+    assert beh["position"].size == beh["world"].size == beh["trial"].size
+    assert beh["world"].max() > 6          # the corridor does open

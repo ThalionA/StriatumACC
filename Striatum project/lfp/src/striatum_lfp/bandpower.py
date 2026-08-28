@@ -25,7 +25,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.signal import butter, iirnotch, sosfiltfilt, tf2sos
+from scipy.signal import iirnotch, sosfiltfilt, tf2sos
+
+from .features import design_band_sos
 
 from . import config
 
@@ -175,7 +177,7 @@ def band_power_series(x: np.ndarray, band: tuple[float, float], *,
     series over a window equals that window's band power, so a unit-amplitude
     sinusoid inside the band reads 1/2.
     """
-    sos = butter(order, list(band), btype="band", fs=fs, output="sos")
+    sos = design_band_sos(band, fs=fs, order=order)
     return np.square(sosfiltfilt(sos, x, axis=0))
 
 

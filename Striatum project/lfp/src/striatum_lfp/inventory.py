@@ -25,8 +25,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-from scipy.ndimage import uniform_filter1d
-from scipy.signal import butter, sosfiltfilt, welch
+from scipy.signal import welch
 
 from . import config, geometry
 from .reader import DATASET
@@ -322,18 +321,18 @@ def coupling_envelope(path: Path, start: int, n_samples_win: int,
                       fs: int = config.FS, bin_ms: int = 100) -> np.ndarray:
     """High-frequency amplitude envelope, binned, for the file-identity test.
 
-    Uses a squared-and-smoothed envelope rather than a Hilbert transform: it is
-    equivalent once binned to ``bin_ms`` and avoids allocating a complex copy of
-    a multi-gigabyte block. ``channel_step`` subsamples channels -- the statistic
-    is a mean over channels, so a quarter of the probe is ample.
+    Reuses :func:`bandpower.band_power_series` -- squared zero-phase bandpass --
+    rather than a Hilbert transform, then averages each ``bin_ms`` window and
+    takes the root. Averaging over the bin *is* the smoothing, so no separate
+    smoothing pass is needed, and no complex copy of a multi-gigabyte block is
+    ever allocated. ``channel_step`` subsamples channels; the statistic is a mean
+    over channels, so a quarter of the probe is ample.
     """
+    from .bandpower import band_power_series
     from .cohort import bin_mean
 
-    sos = butter(4, list(band), btype="band", fs=fs, output="sos")
     with h5py.File(path, "r") as handle:
         block = np.asarray(handle[DATASET][start:start + n_samples_win, ::channel_step],
                            dtype=np.float64)
-    filtered = sosfiltfilt(sos, block, axis=0)
-    power = uniform_filter1d(np.square(filtered), int(fs * bin_ms / 1000),
-                             axis=0, mode="nearest")
-    return bin_mean(np.sqrt(power), int(fs * bin_ms / 1000))
+    power = band_power_series(block, band, fs=fs)
+    return np.sqrt(bin_mean(power, int(fs * bin_ms / 1000)))

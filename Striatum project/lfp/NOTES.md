@@ -1,5 +1,81 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-08-28 — 1201_v1 added; moving-window reliability ported from the unit code; dedup pass
+
+**Cohort is now 18 files.** `1201_v1_voltage_data_384ch.mat` landed and is in:
+13 striatum probes + **5 visual** (1105, 1106, 1201, 1206, 1212). Only 409, 418
+and 703 are still missing, all probe 1. 1201/visual is grid-compatible, clean
+(adjacent r 0.97, distant −0.15, 1/f slope −1.34) with a moderate 50 Hz excess
+(67×, notched like everything else), and it contributes **V1 102 / CA1 60 / DG 42**
+channels — which lifts CA1 and DG from n = 2 to n = 3. Identity: CONFIRMED in all
+three windows. Whole cohort re-validated: **18/18 reproduce the MATLAB bin map to
+0.0 ms** on median, p99 and max.
+
+**Moving-window reliability — the project's own metric, not a new one.**
+`arms.batch_triu_corr_mean` is a faithful port of `batch_triu_corr_mean.m`
+(z-score each trial profile across bins, SD 0 → 1, NaN → 0, `Z'Z/(bins-1)`, mean
+of the strict upper triangle, all-NaN cell → NaN), checked against a naive
+pairwise loop. `arms.moving_window_reliability` applies it on
+`max(1, t-2):min(n, t+2)` — the 5-trial centred, edge-clipped window from
+`IntegratedAll_v1.m:565-630` — with the same `randperm` trial-shuffle control.
+One deliberate deviation: MATLAB substitutes 0 for a missing bin before
+z-scoring because 0 Hz is a real firing rate; log power has no zero, so the NaN
+is left to reach the z-score step where it becomes that trial's own mean. It
+affects 0.2–3% of cells.
+
+Rolled up over the **three-window** epoch convention the neural analyses use
+(not the four-window corridor-vs-dark one) into
+`results/lfp_arms_moving_reliability_epochs.csv`, whose columns mirror
+`figures/stability_by_animal.csv` so the two tables are directly comparable.
+
+**The like-for-like result.** Same statistic, same window, same epochs, same
+animals, each minus its own trial-shuffled control:
+
+| area | single units | LFP theta | LFP low gamma |
+|---|---|---|---|
+| DMS | 0.125 / 0.152 / 0.135 | 0.007 / 0.030 / 0.025 | 0.018 / 0.010 / 0.007 |
+| DLS | 0.090 / 0.082 / 0.098 | 0.003 / 0.021 / 0.035 | 0.006 / 0.017 / 0.016 |
+| ACC | 0.151 / 0.128 / 0.096 | 0.018 / 0.019 / 0.015 | 0.014 / 0.018 / 0.009 |
+| V1  | 0.066 / 0.090 / 0.091 | 0.030 / 0.056 / 0.026 | 0.020 / 0.042 / 0.023 |
+| CA1 | 0.050 / 0.051 / 0.013 | 0.034 / 0.085 / 0.070 | 0.045 / 0.029 / 0.026 |
+
+(Naive / Intermediate / Expert.) **In striatum and ACC the LFP's single-trial
+spatial structure is 4–10× weaker than the spiking recorded on the same probe**;
+in V1 the gap narrows to ~1.5–2×, and in CA1 theta LFP exceeds the units — though
+CA1 is n = 2–3 and carries no claim. This reconciles the two reliability numbers
+that looked contradictory: the split-half figure (0.48–0.92) averages ~100 trials
+per half, so it measures the reproducibility of the *mean* profile; the moving
+metric measures whether any *single* trial resembles its neighbours, and there
+the LFP is weak. It also fits the small decoding effect (~1–2.5 cm of a 62 cm
+chance error).
+
+CA1 and DG are not drawn on the LP-aligned trace: only 2 of their animals have a
+learning point, below the 3-animal floor for a mean ± SEM.
+
+**Dedup pass** (no behaviour change intended, and none observed — the identity
+verdicts are byte-for-byte the same 16/18 CONFIRMED, only third-decimal shifts):
+- `figstyle.py` now owns `save_pair`, `AREA_COLOUR`, `AREA_ORDER`, `BAND_LABEL`,
+  `PLOT_BANDS`, `MAX_PNG_PX`; both plotting drivers had their own copies.
+- `analysis.log_power` and `analysis.read_behaviour` hoisted out of the drivers;
+  `run_lfp_inventory.behaviour_bounds` and the depth-heatmap panel now call them
+  instead of re-implementing.
+- `bandpower.band_power_series` uses the existing `features.design_band_sos`.
+- `inventory.coupling_envelope` now composes `band_power_series` + `bin_mean`
+  instead of repeating filter → square → smooth → root; the separate smoothing
+  pass was redundant before binning over the same width.
+- Deleted `arms.mean_pairwise_trial_r` (duplicated `batch_triu_corr_mean`, which
+  is the project's own version of the same statistic) and the unused
+  `zscore_channels`.
+
+208 tests pass.
+
+**New figures.** `lfp_reliability_moving` (LP-aligned trace, observed vs
+shuffled), `lfp_reliability_moving_session` (absolute trial, keeps the two
+non-learners), `lfp_reliability_moving_depth` (channel × trial image, the LFP
+analogue of `ProcessStriatumTask.m:997`'s neurons × trials panel),
+`lfp_reliability_moving_vs_units` (the table above).
+
+
 ## 2026-08-27 (b) — Band power as the firing-rate analogue: extraction, then four arms
 
 **The product.** `results/lfp_band_trials/<mouse>_<probe>.npz`, one per export:

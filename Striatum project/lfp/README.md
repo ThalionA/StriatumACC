@@ -6,10 +6,9 @@ analogue of unit firing rate. Provenance and 1 ms grid alignment were resolved o
 against spiking on 2026-08-27. What is still gated is listed under Current gate.
 
 ## Data: verified facts (measured 2026-08-27 over the full cohort)
-- **17 named exports** in `RawData/LFP/`: 13 striatum probes (523, 614, 624, 727,
-  730, 731, 822, 823, 1105, 1106, 1201, 1206, 1212) and 4 visual probes (1105,
-  1106, 1206, 1212, suffixed `_v1`). Absent: 409, 418, 703 (probe 1), 1201
-  (probe 2). The file→mouse map comes from the filename now, not from file size —
+- **18 named exports** in `RawData/LFP/`: 13 striatum probes (523, 614, 624, 727,
+  730, 731, 822, 823, 1105, 1106, 1201, 1206, 1212) and 5 visual probes (1105,
+  1106, 1201, 1206, 1212, suffixed `_v1`). Absent: 409, 418, 703 (probe 1 only). The file→mouse map comes from the filename now, not from file size —
   `lfp_mapping.txt` is superseded. Note 727's file has no underscore before
   `voltage`; use `cohort.parse_lfp_filename`, do not re-derive the pattern.
 - Every file is `data_to_save` = (8,400,000 × 384) float32, gzip, chunks (42, 384),
@@ -17,7 +16,7 @@ against spiking on 2026-08-27. What is still gated is listed under Current gate.
   `depth_to_save` = 0–3820 µm reproduces `geometry.channel_depths` exactly, so the
   2-channels-per-20 µm geometry behind the area mapping is measured, not assumed.
 - **Every filename has been verified against spiking** (`scripts/run_lfp_identity.py`):
-  each file's 30–90 Hz envelope beats every other animal's MUA in 3 (15 files) or
+  each file's 30–90 Hz envelope beats every other animal's MUA in 3 (16 files) or
   2 of 3 (823, 1105 striatum) independent windows. No duplicate content fingerprints.
 - 1212 is the one exception to grid compatibility: 8.4 M LFP samples against
   11.4 M spike bins. The offset scan places it at offset 0, so it is the truncated
@@ -33,8 +32,8 @@ against spiking on 2026-08-27. What is still gated is listed under Current gate.
   mid-session dropouts anywhere.
 - Referencing is per-session: common-*median* residual is 0.030–0.084 throughout,
   but the common-*mean* residual runs 0.12–0.18 (July) up to 2.42 (822).
-- Area coverage: DMS 13 animals, ACC 12, DLS 10, V1 4, CA1 2, DG 2. CA1/DG cannot
-  support a cohort claim.
+- Area coverage: DMS 13 animals, ACC 12, DLS 10, V1 5, CA1 3, DG 3. CA1/DG still
+  cannot support a cohort claim.
 
 ## Current gate
 
@@ -48,12 +47,15 @@ verified physiologically. What remains gated is narrower and specific:
 - Any band overlapping 50 Hz or its harmonics before notching.
 - Cross-area coupling claims without both a trial-permutation null *and* the
   within-area split-half volume-conduction ceiling: DMS/DLS/ACC sit on one shank.
-- CA1 and DG cohort claims — n = 2.
+- CA1 and DG cohort claims — n = 3.
 
 ## Layout
 `src/striatum_lfp/` — configuration, cohort discovery and file-identity
 statistics (`cohort.py`), geometry, out-of-core reading, per-file inventory
-(`inventory.py`), integrity/sanity helpers, provisional feature extraction, and
+(`inventory.py`), trial/spatial/dark binning of band power (`bandpower.py`),
+the shared epoch and learning-point layer (`analysis.py`), the decoding /
+reliability / CCA primitives (`arms.py`), shared figure conventions
+(`figstyle.py`), integrity/sanity helpers, provisional feature extraction, and
 quarantined learning helpers. `scripts/` contains reproducible audit drivers; `tests/` contains
 synthetic-ground-truth pytest checks. The old single-window `qc.py` thresholds
 are retained only as tested numerical primitives and are not an analysis gate.

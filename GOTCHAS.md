@@ -57,3 +57,9 @@
   a short export comes back looking like one that finishes exactly at the last
   sample. Only the UNCLIPPED VR time distinguishes them (`bandpower.truncated_trials`);
   this bites 1212, whose export stops 41 min before its session does. (2026-08-27)
+- Two reliability numbers on the same data can both be right and look contradictory:
+  split-half over ~100-trial halves measures the reproducibility of the MEAN spatial
+  profile (LFP: 0.48–0.92), while the project's 5-trial moving window measures whether
+  any SINGLE trial resembles its neighbours (LFP: 0.00–0.09 above shuffle). Say which
+  one a number is. The unit pipeline's `stability_by_animal.csv` is the second kind.
+  (2026-08-28)

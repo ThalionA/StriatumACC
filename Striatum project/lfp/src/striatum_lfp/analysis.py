@@ -153,3 +153,44 @@ def joint_zscore(corridor: np.ndarray, dark: np.ndarray):
     shape = (n_ch,) + (1,) * (corridor.ndim - 1)
     return ((corridor - mean.reshape(shape)) / sd.reshape(shape),
             (dark - mean.reshape(shape)) / sd.reshape(shape))
+
+
+def log_power(x: np.ndarray) -> np.ndarray:
+    """log10 of band power, with non-positive cells (empty bins) left as ``nan``.
+
+    Band power is close to lognormal over three orders of magnitude, and the two
+    export batches differ ~1000x in absolute power, so every downstream statistic
+    works on the log and then standardises it per channel.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = np.log10(x)
+    out[~np.isfinite(out)] = np.nan
+    return out
+
+
+def read_behaviour(mouse_id: int, probe: str = "striatum") -> dict:
+    """VR position/world/trial on the millisecond grid, plus the recording crop.
+
+    Column order follows ``OrganiseStriatumDataIncV1.m``:225-260 -- VR_data row 2
+    is position, row 5 world, row 7 trial (h5py columns 1, 4 and 6). ``crop_start0``
+    /``crop_end0`` are that script's ``npx_start_frame``/``npx_end_frame`` as
+    0-based offsets.
+    """
+    import h5py
+
+    path = config.raw_mat(mouse_id, probe)
+    with h5py.File(path, "r") as handle:
+        vr_times_s = np.asarray(handle["VR_times_synched"]).ravel().astype(float)
+        vr = np.asarray(handle["VR_data"])
+        n_spike_bins = int(handle["binned_spikes"].shape[0])
+    if vr.shape[0] < vr.shape[1]:            # stored (n_rows, n_frames)
+        vr = vr.T
+    return {
+        "vr_times_s": vr_times_s,
+        "position": vr[:, 1].astype(float),
+        "world": vr[:, 4].astype(float),
+        "trial": vr[:, 6].astype(float),
+        "n_spike_bins": n_spike_bins,
+        "crop_start0": max(0, int(np.ceil(vr_times_s[0] * 1000.0)) - 1),
+        "crop_end0": int(np.floor(vr_times_s[-1] * 1000.0)) - 1,
+    }
