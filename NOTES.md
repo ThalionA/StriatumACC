@@ -1,5 +1,55 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-07 — Meeting 28/08 items: LFP full-cohort re-run, Figure 1 scale + Control 2, Fig S1 checks
+
+Branch `meeting-2026-08-28-figures`. Meeting note (Nathalie, Zihao) filed in the
+vault as `2026-08-28-Striatum-Meeting` — the page reads 28/06 but the items it
+waits on (409/418/703 LFP) landed 08-28, so it is filed as August; rename if wrong.
+Next meeting 09/09 09:00.
+
+**LFP re-run (item 2).** The chain in `lfp/NOTES.md` 2026-09-07 was run end to end:
+16/16 task striatum probes, 1212 at full length. 18/21 files identity-confirmed in
+all three windows (418 joins 823/1105 at 2/3), 21/21 reproduce the MATLAB bin map to
+0.0 ms. **DLS theta strengthened**: task −0.186 vs control +0.076, p_FDR 0.049 → 0.022
+(speed-residualised 0.019), n 10 → 12 — still the only evolution cell where the
+groups differ; provisional flag lifted. **Decoding now differs task > control in 9/30
+cells** (ACC/DMS gamma, theta, total; q 0.02–0.04) — a threshold crossing with
+unchanged effect sizes (same cells sat at q 0.052–0.064 on 08-28), and it carries the
+same speed-stereotypy caveat as reliability, so it is not a neural claim. The
+08-28 sentence "decoding does not depend on reward" is withdrawn. Reliability 13/30,
+CCA 0/30, moving reliability 0/20 unchanged. Trap fixed on the way: the task-vs-control
+plot had the 08-28 numbers typed into its titles and re-plotted them over the new
+bars; titles are now computed from the table. 228 lfp tests pass.
+
+**Figure 1 (item 3) — `SpatioTemporalActivityEvolution.m` section 1.** (a) Task and
+Control panels of the same metric / aggregation / area now share y-limits (zone
+patches drawn after the link, exports deferred to that point); (b) Control 2 (dark-only,
+temporal bins) is overlaid: flat dashed per-epoch means in the epoch colours on the
+spatial panels, dashed area traces on the temporal panels, DMS/DLS/ACC only, pooled or
+hierarchical to match the panel. Regenerated headless (`processed_data/
+spatiotemporal_ctrl2_2026-09-07.log`), figure numbering unchanged, manuscript copies
+refreshed with `collect_manuscript_figures.py`. **Flag for the meeting:** Control 2's
+hierarchical DMS reference sits at 6–8 Hz against 1–4 Hz in both corridor cohorts
+because mouse 4 (session 1103) contributes 5 DMS units at 24 Hz mean / 16 Hz median
+unit; the other five Control 2 mice are 1.9–3.8 Hz. 1103's DMS band was re-drawn on
+08-10 (850–1050 µm); those 5 units look like the wrong band or FS cells. Left in the
+figure, not silently excluded — decide whether 1103 DMS stays.
+
+**Fig S1 (item 4) — `corridor_vs_dark_checks.py`** (h5py on the caches; LP port checked
+against MATLAB: 14/16 learners, mean LP 41.0). (a) **Velocity during dark:** the VR
+position keeps integrating the wheel in the dark, and animals run *faster* in the dark
+than in the corridor — task 26.8 vs 16.8 cm/s over the epoch windows, moving 94 % of
+dark time; dark speed rises 21 → 32 cm/s Naive → Expert while corridor speed stays
+15–18. Control 1: 18.6 vs 13.3. The dark ITI is not a stationary baseline; the
+CorridorVsDark header's "read the dark evolution as clean" is retracted (header
+amended). (b) **Z-scoring:** the figure's common per-unit z over both states preserves
+the sign of the raw corridor−dark contrast in 100 % of units; z-scoring each state on
+its own removes the session-mean offset by construction and leaves only the
+differential trend (ACC's contrast vanishes under it, DMS/DLS's early-trial dip
+survives). Four-convention comparison figures and CSVs in `figures/CorridorVsDark_*`.
+Which convention Fig S1 should use is a framing choice (offset vs trend) — the panel
+must say which. Item 1 (file organisation on the server) is Theo/Zihao's, untouched.
+
 ## 2026-08-12 — Cell types fixed; full regeneration; manuscript panel set
 
 **Cell-type classification was broken two ways in series** and is now fixed

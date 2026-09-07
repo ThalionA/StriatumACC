@@ -17,8 +17,15 @@
 %    denominator defect and is therefore speed-dependent; dark rate is spikes
 %    divided by a fixed 0.1 s bin (ProcessStriatumTask.m:185) and is unbiased.
 %    Running speed itself rises with learning, so the corridor arm's bias is
-%    not constant across epochs. Read the DARK evolution as clean, the CORRIDOR
-%    evolution as speed-confounded, and their difference as carrying both.
+%    not constant across epochs. Read the CORRIDOR evolution as
+%    speed-confounded and their difference as carrying both.
+%    The dark arm is NOT a stationary baseline either (checked 2026-09-07,
+%    corridor_vs_dark_checks.py): the VR position keeps integrating the wheel
+%    in the dark, and animals run FASTER in the dark than in the corridor
+%    (task 27 vs 17 cm/s over the epoch windows, moving 94% of dark time),
+%    with dark speed rising Naive -> Expert (21 -> 32 cm/s). The dark rate is
+%    an unbiased estimator, but any dark-vs-corridor or across-epoch
+%    difference still has a speed component.
 %
 % 2. Z-SCORING IS COMMON ACROSS THE TWO STATES, deliberately. Each unit is
 %    centred and scaled by its mean/SD pooled over corridor AND dark samples.

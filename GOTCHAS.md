@@ -97,3 +97,18 @@
   cohort's average LP, so control "epochs" are matched time windows. A change that
   appears in both groups over those windows is time in the apparatus, not learning
   — which is exactly what the LFP gamma rise turned out to be. (2026-08-28)
+- The 5 s dark inter-trial period is NOT a stationary baseline. The VR position
+  keeps integrating the wheel in the dark (`darkData.trial_position` runs 0 → ~150
+  a.u. before the corridor teleports it back to 0), and animals run FASTER in the
+  dark than in the corridor (task 27 vs 17 cm/s over the epoch windows, moving
+  94% of dark time), with dark speed rising Naive → Expert (21 → 32 cm/s). Any
+  dark-vs-corridor or dark-across-epoch rate difference carries a speed
+  component. `corridor_vs_dark_checks.py`. (2026-09-07)
+- Z-scoring each state on its own removes the session-mean corridor-vs-dark
+  offset by construction; only the differential across-epoch trend survives. The
+  common per-unit z over both states (CorridorVsDarkActivity.m) preserves the raw
+  contrast's sign in 100% of units. State which rule a panel uses. (2026-09-07)
+- `preprocessed_data*.mat` small fields (darkData positions/times, dark and
+  spatial rates, lick errors) can be read with h5py in seconds; MATLAB `load` of
+  the whole struct takes tens of GB. h5py returns MATLAB `(units x bins x trials)`
+  as `(trials x bins x units)` — transpose. (2026-09-07)

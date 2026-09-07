@@ -87,6 +87,65 @@ datasets = {1, 'Task'; 2, 'Control'};
 metrics  = {tensor_full_raw, 'Raw FR'; tensor_full_z, 'Z-Scored'};
 avg_methods = {'Pooled', 'Hierarchical'};
 
+% --- Control 2 (dark-only cohort) overlay (2026-09-07, meeting 2026-08-28) ---
+% Control 2 has no corridor, so it enters the spatial panels as flat per-epoch
+% reference lines and the temporal panels as its own dashed area traces.
+% Rates are per-unit means over its 50 temporal bins (PreprocessStriatumControl2,
+% Hz), restricted to the tensor's trial range and z-scored per unit over
+% bins x trials exactly as tensor_full_z above. Areas: DMS/DLS/ACC only.
+n_trials_tensor = size(tensor_full_raw, 3);
+ctrl2 = struct('area', {}, 'mouse', {}, 'raw', {}, 'z', {});
+if isfile(cfg.control2_data_file)
+    S2 = load(cfg.control2_data_file, 'preprocessed_data');
+    c2_areas = {'DMS', 'is_dms'; 'DLS', 'is_dls'; 'ACC', 'is_acc'};
+    for a2 = 1:size(c2_areas, 1)
+        rec = struct('area', c2_areas{a2, 1}, 'mouse', [], 'raw', [], 'z', []);
+        for m2 = 1:numel(S2.preprocessed_data)
+            d2  = S2.preprocessed_data(m2);
+            msk = logical(d2.(c2_areas{a2, 2}));
+            if ~any(msk), continue; end
+            fr = d2.firing_rates_per_bin(msk, :, :);
+            nt = min(n_trials_tensor, size(fr, 3));
+            fr = fr(:, :, 1:nt);
+            nu = size(fr, 1);
+            raw_tr = nan(nu, n_trials_tensor);
+            z_tr   = nan(nu, n_trials_tensor);
+            raw_tr(:, 1:nt) = reshape(mean(fr, 2, 'omitnan'), nu, nt);
+            for u = 1:nu
+                ud = fr(u, :, :); mu2 = mean(ud(:), 'omitnan'); sg2 = std(ud(:), 'omitnan');
+                if sg2 > 0
+                    z_tr(u, 1:nt) = reshape(mean((ud - mu2) / sg2, 2, 'omitnan'), 1, nt);
+                else
+                    z_tr(u, 1:nt) = 0;
+                end
+            end
+            rec.mouse = [rec.mouse; repmat(m2, nu, 1)];
+            rec.raw   = [rec.raw; raw_tr];
+            rec.z     = [rec.z; z_tr];
+        end
+        if ~isempty(rec.raw), ctrl2(end+1) = rec; end %#ok<SAGROW>
+    end
+    clear S2
+    fprintf('Control 2 overlay: %s\n', strjoin(arrayfun(@(r) sprintf('%s %d units / %d mice', ...
+        r.area, size(r.raw, 1), numel(unique(r.mouse))), ctrl2, 'UniformOutput', false), ', '));
+else
+    warning('SpatioTemporal:NoControl2', 'Control 2 file %s not found; overlay skipped.', cfg.control2_data_file);
+end
+
+% Axes are collected here so Task and Control panels of the same metric /
+% aggregation / area can be put on one y-scale after both are drawn; zone
+% patches and file exports are deferred to that point.
+sp_axes  = cell(size(metrics, 1), numel(avg_methods), size(datasets, 1));
+tp_axes  = cell(size(metrics, 1), numel(avg_methods), size(datasets, 1));
+for met_idx = 1:size(metrics, 1)
+    for avg_idx = 1:numel(avg_methods)
+        for ds_idx = 1:size(datasets, 1)
+            sp_axes{met_idx, avg_idx, ds_idx} = gobjects(1, num_areas);
+        end
+    end
+end
+fig_saves = cell(0, 2);
+
 for ds_idx = 1:size(datasets, 1)
     group_id = datasets{ds_idx, 1};
     ds_name  = datasets{ds_idx, 2};
@@ -113,10 +172,12 @@ for ds_idx = 1:size(datasets, 1)
             % -----------------------------------------------------------------
             fig_spatial = figure('Name', sprintf('%s: Spatial', fig_prefix), 'Position', [100, 100, 500 * num_areas, 450]);
             t_spatial = tiledlayout(1, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
+            ctrl2_drawn = false;
             
             for i_area = 1:num_areas
                 current_area = areas_in_data{i_area};
-                nexttile; hold on;
+                ax_sp = nexttile; hold on;
+                sp_axes{met_idx, avg_idx, ds_idx}(i_area) = ax_sp;
                 legend_handles_spatial = [];
                 
                 idx_target = group_mask & strcmp(lbls_full.area, current_area);
@@ -151,10 +212,20 @@ for ds_idx = 1:size(datasets, 1)
                     legend_handles_spatial(end+1) = h.mainLine;
                 end
                 
-                yl = ylim; y_p = [yl(1), yl(1), yl(2), yl(2)];
-                patch([v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
-                patch([r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, 'FaceAlpha', 0.2, 'EdgeColor', 'none');
-                uistack(legend_handles_spatial, 'top');
+                % Control 2 (dark-only) reference: flat per-epoch mean in the
+                % epoch colour, dashed. Zone patches are drawn after y-linking.
+                c2i = find(strcmp({ctrl2.area}, current_area), 1);
+                if ~isempty(c2i)
+                    if met_idx == 1, M2 = ctrl2(c2i).raw; else, M2 = ctrl2(c2i).z; end
+                    for i_epoch = 1:numel(epoch_trials)
+                        v2 = ctrl2_epoch(M2, ctrl2(c2i).mouse, epoch_trials{i_epoch}, avg_mode);
+                        if isfinite(v2)
+                            plot([0, size(current_tensor, 2)], [v2, v2], '--', ...
+                                'Color', epoch_colors{i_epoch}, 'LineWidth', 1.4, 'HandleVisibility', 'off');
+                            ctrl2_drawn = true;
+                        end
+                    end
+                end
                 
                 if strcmp(avg_mode, 'Pooled')
                     title(sprintf('%s (n=%d units)', current_area, sum(idx_target)));
@@ -166,12 +237,17 @@ for ds_idx = 1:size(datasets, 1)
             title(t_spatial, sprintf('%s: Spatial Tuning Evolution', fig_prefix), 'FontSize', 16);
             xlabel(t_spatial, 'Spatial Bin', 'FontSize', 12);
             ylabel(t_spatial, met_name, 'FontSize', 12);
-            lg_spatial = legend(legend_handles_spatial, epoch_names, 'Location', 'best');
+            legend_names_spatial = epoch_names;
+            if ctrl2_drawn
+                legend_handles_spatial(end+1) = plot(nan, nan, '--', 'Color', [0.3 0.3 0.3], 'LineWidth', 1.4);
+                legend_names_spatial{end+1} = 'Control 2 (dark-only), per-epoch mean';
+            end
+            lg_spatial = legend(legend_handles_spatial, legend_names_spatial, 'Location', 'best');
             
-            % Export Figure A
+            % Export Figure A (deferred until Task/Control y-scales are matched)
             % Standardise formatting for filesystem logic (removing spaces, brackets, etc)
             clean_name_spatial = regexprep(sprintf('%s_Spatial', fig_prefix), '[\[\]\s:]', '_'); 
-            save_to_svg(clean_name_spatial);
+            fig_saves(end+1, :) = {fig_spatial, clean_name_spatial};
 
             % -----------------------------------------------------------------
             % FIGURE B: TEMPORAL EVOLUTION BY AREA
@@ -179,6 +255,7 @@ for ds_idx = 1:size(datasets, 1)
             fig_temporal = figure('Name', sprintf('%s: Temporal', fig_prefix), 'Position', [200, 200, 900, 500]);
             hold on;
             legend_handles_temporal = [];
+            legend_names_temporal   = {};
             
             for i_area = 1:num_areas
                 current_area = areas_in_data{i_area};
@@ -209,6 +286,18 @@ for ds_idx = 1:size(datasets, 1)
                 h = shadedErrorBar(1:size(mean_time, 2), mean_time, sem_time, ...
                     'lineprops', {'-','Color', area_color, 'LineWidth', 2});
                 legend_handles_temporal(end+1) = h.mainLine;
+                legend_names_temporal{end+1}   = current_area;
+            end
+            
+            % Control 2 (dark-only) traces, dashed in the area colour.
+            for c2i = 1:numel(ctrl2)
+                if met_idx == 1, M2 = ctrl2(c2i).raw; else, M2 = ctrl2(c2i).z; end
+                [mu2, se2] = ctrl2_trials(M2, ctrl2(c2i).mouse, avg_mode);
+                if all(isnan(mu2)), continue; end
+                h = shadedErrorBar(1:numel(mu2), mu2, se2, ...
+                    'lineprops', {'--', 'Color', cfg.plot.colors.area_map(ctrl2(c2i).area), 'LineWidth', 1.5});
+                legend_handles_temporal(end+1) = h.mainLine;
+                legend_names_temporal{end+1}   = sprintf('%s (Control 2, dark-only)', ctrl2(c2i).area);
             end
             
             xline(0, 'k--', epoch_names{1}, 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
@@ -220,16 +309,63 @@ for ds_idx = 1:size(datasets, 1)
             xlabel('Aligned Trial Number');
             ylabel(sprintf('Mean %s (Averaged over Space)', met_name));
             xlim([0, size(current_tensor, 3)]);
-            legend(legend_handles_temporal, areas_in_data, 'Location', 'northwest');
+            legend(legend_handles_temporal, legend_names_temporal, 'Location', 'northwest');
             box on; hold off;
+            tp_axes{met_idx, avg_idx, ds_idx} = gca;
 
-            % Export Figure B
+            % Export Figure B (deferred until Task/Control y-scales are matched)
             clean_name_temporal = regexprep(sprintf('%s_Temporal', fig_prefix), '[\[\]\s:]', '_'); 
-            save_to_svg(clean_name_temporal);
+            fig_saves(end+1, :) = {fig_temporal, clean_name_temporal};
             
         end % End loop averaging methods
     end % End loop metrics
 end % End loop datasets
+
+% --- Match y-scales between Task and Control (2026-09-07, meeting 2026-08-28) ---
+% Same metric, same aggregation, same area -> same y-limits across cohorts, so a
+% Task/Control pair reads on one scale. Zone patches are drawn here, after the
+% link, so they span the final limits. Empty tiles (no units) are ignored.
+for met_idx = 1:size(metrics, 1)
+    for avg_idx = 1:numel(avg_methods)
+        for i_area = 1:num_areas
+            axs = gobjects(0);
+            for ds_idx = 1:size(datasets, 1)
+                a = sp_axes{met_idx, avg_idx, ds_idx};
+                if numel(a) >= i_area && isgraphics(a(i_area)) && ~isempty(findobj(a(i_area), 'Type', 'line'))
+                    axs(end+1) = a(i_area); %#ok<AGROW>
+                end
+            end
+            if isempty(axs), continue; end
+            if numel(axs) == 1
+                yl = ylim(axs);
+            else
+                yls = cell2mat(get(axs, 'YLim'));
+                yl  = [min(yls(:, 1)), max(yls(:, 2))];
+            end
+            set(axs, 'YLim', yl);
+            y_p = [yl(1), yl(1), yl(2), yl(2)];
+            for k = 1:numel(axs)
+                patch(axs(k), [v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], ...
+                      'FaceAlpha', 0.5, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+                patch(axs(k), [r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, ...
+                      'FaceAlpha', 0.2, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+                uistack(findobj(axs(k), 'Type', 'line'), 'top');
+            end
+        end
+        axs = gobjects(0);
+        for ds_idx = 1:size(datasets, 1)
+            a = tp_axes{met_idx, avg_idx, ds_idx};
+            if ~isempty(a) && isgraphics(a), axs(end+1) = a; end %#ok<AGROW>
+        end
+        if numel(axs) > 1
+            yls = cell2mat(get(axs, 'YLim'));
+            set(axs, 'YLim', [min(yls(:, 1)), max(yls(:, 2))]);
+        end
+    end
+end
+for k = 1:size(fig_saves, 1)
+    save_to_svg(fig_saves{k, 2}, fig_saves{k, 1});
+end
 fprintf('--- Comprehensive Spatiotemporal Plots Complete ---\n\n');
 
 %% ================= Comprehensive Spatiotemporal Visualization (Increase/Decrease/Maintain) =================
@@ -2046,3 +2182,37 @@ save_all_open_figures('spatiotemporal');
 
 % Restore figure visibility for interactive work.
 clear fig_guard
+
+%% ---- Local functions (Control 2 overlay helpers, 2026-09-07) ----
+function [mu, se] = ctrl2_trials(M, mouse, avg_mode)
+% Per-trial mean and SEM of Control 2 unit x trial rates M, pooled over units
+% or hierarchical over mice (unit-mean per mouse first). NaN-padded trials
+% beyond a mouse's session are omitted.
+    if strcmp(avg_mode, 'Pooled')
+        mu = mean(M, 1, 'omitnan');
+        se = std(M, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(M), 1));
+    else
+        um = unique(mouse);
+        mm = nan(numel(um), size(M, 2));
+        for i = 1:numel(um)
+            mm(i, :) = mean(M(mouse == um(i), :), 1, 'omitnan');
+        end
+        mu = mean(mm, 1, 'omitnan');
+        se = std(mm, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(mm), 1));
+    end
+end
+
+function v = ctrl2_epoch(M, mouse, trs, avg_mode)
+% Scalar Control 2 rate over the trial window TRS: mean over units (Pooled) or
+% mean over mice of each mouse's unit-mean (Hierarchical).
+    trs = trs(trs <= size(M, 2));
+    if isempty(trs), v = NaN; return; end
+    per_unit = mean(M(:, trs), 2, 'omitnan');
+    if strcmp(avg_mode, 'Pooled')
+        v = mean(per_unit, 'omitnan');
+    else
+        um = unique(mouse);
+        mm = arrayfun(@(m) mean(per_unit(mouse == m), 'omitnan'), um);
+        v = mean(mm, 'omitnan');
+    end
+end
