@@ -1,0 +1,33 @@
+=== /opt/anaconda3/bin/python scripts/run_lfp_arms.py --jobs 6 --cohort task @ 12:45:35 ===
+[arms] cohort=task: 21 band-power files
+[arms] task 1106/visual    lp=67 areas=['V1'] 20+20+20+0+945+15+0 rows      4s
+[arms] task 1105/visual    lp=44 areas=['V1'] 20+20+20+0+1000+15+0 rows      6s
+[arms] task 1206/striatum  lp=None areas=['DMS'] 10+10+10+0+520+5+1 rows      2s
+[arms] task 1212/striatum  lp=23 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+2325+45+1 rows     57s
+[arms] task 1206/visual    lp=None areas=['CA1', 'DG', 'V1'] 30+30+30+15+1560+15+0 rows     59s
+[arms] task 1201/striatum  lp=84 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     66s
+[arms] task 1105/striatum  lp=44 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     70s
+[arms] task 1106/striatum  lp=67 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+2835+45+1 rows     72s
+[arms] task 1201/visual    lp=84 areas=['CA1', 'DG', 'V1'] 60+60+60+15+3000+45+0 rows     84s
+[arms] task 624/striatum  lp=32 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+1065+45+1 rows     33s
+[arms] task 418/striatum  lp=26 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+2130+45+1 rows     59s
+[arms] task 1212/visual    lp=23 areas=['CA1', 'DG', 'V1'] 60+60+60+15+2325+45+0 rows     64s
+[arms] task 409/striatum  lp=39 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     65s
+[arms] task 703/striatum  lp=None areas=['ACC', 'DMS'] 20+20+20+5+1090+10+1 rows     20s
+[arms] task 614/striatum  lp=44 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     69s
+[arms] task 731/striatum  lp=36 areas=['ACC', 'DMS'] 40+40+40+5+760+30+1 rows     18s
+[arms] task 523/striatum  lp=22 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     78s
+[arms] task 823/striatum  lp=14 areas=['ACC', 'DMS'] 40+40+40+5+2000+30+1 rows     25s
+[arms] task 822/striatum  lp=33 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+1350+45+1 rows     37s
+[arms] task 727/striatum  lp=53 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     59s
+[arms] task 730/striatum  lp=54 areas=['ACC', 'DLS', 'DMS'] 60+60+60+15+3000+45+1 rows     60s
+[arms] all files in 3.1 min
+[arms] wrote lfp_arms_evolution_stats_task.csv: 7/48 cells survive BH-FDR at q=0.05
+[arms] wrote lfp_arms_evolution_task.csv (1020 rows)
+[arms] wrote lfp_arms_decoding_task.csv (1020 rows)
+[arms] wrote lfp_arms_reliability_task.csv (1020 rows)
+[arms] wrote lfp_arms_cca_task.csv (240 rows)
+[arms] wrote lfp_arms_moving_reliability_task.csv (43905 rows)
+[arms] wrote lfp_arms_moving_reliability_epochs_task.csv (750 rows)
+[arms] wrote lfp_arms_behaviour_task.csv (16 rows)
+--- exit 0 @ 12:48:46 ---

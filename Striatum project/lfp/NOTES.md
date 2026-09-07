@@ -1,5 +1,58 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-07 (b) — Full task cohort re-run: 16/16 striatum, 1212 at full length
+
+The recipe in the previous entry was run end to end (`results/rerun_chain_2026-09-07.sh`,
+log alongside; 21 min). Every `*_task.csv`, `lfp_group_contrast.csv` and the task /
+task-vs-control figures are regenerated; the per-step `lfp_*_run_task.log` files are
+the chain log split by step (the unsuffixed task logs are removed). 228 tests pass.
+
+**Data.** 21 named exports, none skipped, no duplicate fingerprints. Identity:
+**18/21 confirmed in all three windows**; 409, 703 and both 1212 probes are 3/3, and
+418 joins 823/1105 as MAJORITY(2/3) — at t = 1200 s 822's MUA edges it (3.48× vs
+3.24×), the other two windows are 14.7× and 8.3×, so the filename stands. 1212 is now
+11.4 M samples on both probes with VR ending at 10,879 s inside the grid — the
+truncation is gone and its expert trials are in (154 trials, LP 23). Band power for
+409 / 418 / 703 / 1212: 99.7–99.9 % of cells filled; **21/21 files reproduce the MATLAB
+bin map to 0.0 ms**. 409's `[TRUNCATED to 200 trials]` is the driver's 200-trial cap,
+not a short export (VR ends at 7806 s of 8400). Per-area N is now DMS 16, ACC 15,
+DLS 12, V1 5, CA1 3, DG 3.
+
+**What moved, like-for-like (same estimator, same families, 3 more animals + 1212's
+expert end):**
+
+1. **DLS theta strengthened.** Task −0.186 vs control +0.076, p = 0.0011,
+   **p_FDR = 0.022** (was 0.049 on n = 10); speed-residualised p_FDR = 0.019 (was
+   0.051). It is still the only evolution cell where the groups differ — the second
+   "cell" in the contrast log is the same cell's speed-residualised metric. The
+   provisional flag on this result is lifted.
+2. **Decoding now differs task > control in 9/30 cells** (ACC θ/γL/γH/total, DMS
+   γL/γH/total, DLS γL, DG γH; q 0.02–0.04). This is a threshold crossing, not a new
+   effect: the same cells had p_raw 0.003–0.03 and q 0.052–0.064 on the 08-28 tables,
+   and the effect sizes are unchanged to the third decimal (e.g. ACC θ +0.062 vs
+   +0.012 both runs). The 08-28 sentence "position decoding does not depend on
+   reward" is therefore withdrawn; but the behavioural caveat that governs the
+   reliability arm applies here just as much — task animals' speed profile is more
+   stereotyped (0.98 vs 0.68) and the LFP profile tracks speed, so a decoding
+   advantage is expected from behaviour alone. Control n is 4–5. Not a neural claim.
+3. **Reliability 13/30, moving reliability 0/20, CCA 0/30, behaviour 2/3** — unchanged
+   in count and reading. Behaviour: speed-profile split-half r 0.98 vs 0.68
+   (p = 0.013), mean speed 36 vs 21 cm/s (p = 0.0007).
+4. Within-task evolution stats: 7/48 cells survive BH-FDR (was 2/48) — DLS theta
+   (both metrics) plus the gamma `frac_of_total` rises in DMS/DLS/ACC. The gamma rise
+   is present and larger in yoked controls (08-28 entry), so it stays "time in
+   apparatus", not learning.
+
+**Figure hygiene.** `plot_lfp_task_vs_control.py` had the 08-28 numbers typed into
+its panel titles ("no decoding cell differs", "p_FDR = 0.049"); the first re-plot
+carried them over unchanged on top of the new bars. Titles are now computed from the
+contrast table (counts, cell lists, p_FDR, behaviour numbers). Rule: never type a
+result into a title.
+
+**Still open.** 1212's expert end is in every table but its two "MAJORITY" peers
+(823, 1105) and 418 are worth an eyeball in the identity figure. CA1/DG remain n = 3.
+
+
 ## 2026-09-07 — STALE RESULTS WARNING: the data moved under the committed tables
 
 Housekeeping session (consolidate branches onto `main`). Checking every export on

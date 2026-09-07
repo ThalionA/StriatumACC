@@ -1,0 +1,10 @@
+=== /opt/anaconda3/bin/python scripts/run_lfp_bandpower.py --jobs 5 --cohort task --only 409,418,703,1212 @ 12:34:46 ===
+[bandpower] cohort=task: 5 files, bands ['theta', 'beta', 'low_gamma', 'high_gamma', 'total'], notch (50.0, 100.0, 150.0) Hz
+[bandpower] task 409/striatum   200/ 200 good trials  99.7% cells filled  median 120 ms/bin    136 MB    313s  [TRUNCATED to 200 trials]
+[bandpower] task 418/striatum   141/ 142 good trials  99.9% cells filled  median 162 ms/bin     96 MB    442s
+[bandpower] task 703/striatum   108/ 109 good trials  99.8% cells filled  median 200 ms/bin     74 MB    453s
+[bandpower] task 1212/striatum   154/ 156 good trials  99.8% cells filled  median 263 ms/bin    106 MB    645s
+[bandpower] task 1212/visual     154/ 156 good trials  99.8% cells filled  median 263 ms/bin    106 MB    647s
+[bandpower] all files in 10.8 min
+[bandpower] wrote lfp_bandpower_summary_task.csv
+--- exit 0 @ 12:45:35 ---
