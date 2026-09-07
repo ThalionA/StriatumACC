@@ -5,6 +5,12 @@ Control 1 cohorts, and analyses band power as the analogue of unit firing rate. 
 2026-08-11; the full 17-file cohort was inventoried and every filename verified
 against spiking on 2026-08-27. What is still gated is listed under Current gate.
 
+> **⚠ The committed result tables are stale (checked 2026-09-07).** 1212 was
+> re-exported at full 11.4 M length on 08-30/31, and 409/418/703 arrived on
+> 08-28 completing the task striatum cohort at 16/16. Neither is reflected in
+> `results/*_task.csv` or the figures. See the NOTES top entry for the re-run
+> recipe and which conclusions are exposed.
+
 ## Data: verified facts (measured 2026-08-27 over the full cohort)
 - **Two cohorts.** Every driver takes `--cohort task|control`; outputs are
   suffixed. `config.Cohort` holds what differs: mouse list, depth CSVs, the

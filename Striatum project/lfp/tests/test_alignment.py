@@ -24,20 +24,23 @@ def test_grid_compatible_mice(mouse):
 
 
 @pytest.mark.parametrize("probe", ["striatum", "visual"])
-def test_1212_export_is_truncated_not_grid_compatible(probe):
-    """1212 is the one animal whose export is shorter than its session.
+def test_1212_full_session_export(probe):
+    """1212 was re-exported at full length on 2026-08-30/31; the gap is closed.
 
-    Its ``binned_spikes`` runs 11.4 M bins (190 min) but the 2026-08 export stops
-    at 8.4 M (140 min), so ~41 min of behaviour has no LFP. The offset scan in
-    ``scripts/run_lfp_identity.py`` places the export at offset 0, i.e. it is the
-    truncated head of the same session rather than a different recording -- but
-    the grid check must still fail, and trial-indexed analyses must exclude it.
+    The 2026-08 export stopped at 8.4 M samples against an 11.4 M-bin session, so
+    the last ~41 min of behaviour -- the expert end -- had no LFP, and every
+    trial-indexed result excluded it. The replacement runs the whole session and
+    is grid-compatible on both probes. Kept as a regression test because the
+    truncation was silent: index clipping made the short export look like a
+    session that happened to end exactly on the last sample (see
+    ``bandpower.truncated_trials``).
     """
     lfp = _lfp_path(1212, probe)
     raw = config.raw_mat(1212, probe)
     if lfp is None or not raw.exists():
         pytest.skip("LFP/raw data absent")
     a = align.check_alignment(1212, lfp_path=lfp, raw_mat=raw)
-    assert a.lfp_n_samples == 8_400_000
+    assert a.lfp_n_samples == 11_400_000
     assert a.spike_n_bins == 11_400_000
-    assert not a.ok
+    assert a.vr_max_ms <= a.lfp_n_samples
+    assert a.ok

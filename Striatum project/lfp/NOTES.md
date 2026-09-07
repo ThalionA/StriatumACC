@@ -1,5 +1,59 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-07 — STALE RESULTS WARNING: the data moved under the committed tables
+
+Housekeeping session (consolidate branches onto `main`). Checking every export on
+disk against `lfp_inventory_*.csv` turned up two changes since 2026-08-28, and
+**both invalidate part of the committed result set**. Nothing was re-run here.
+
+**1. 1212 was re-exported at full length** (striatum 2026-08-30 21:05, visual
+2026-08-31 11:01). It is now 11,400,000 samples on both probes and
+grid-compatible — the 41 min truncation that removed its expert end is gone.
+Every cached 1212 product predates this: `lfp_band_trials_task/1212_*.npz` were
+built from the 8.4 M export, so 1212's rows in the evolution, decoding,
+reliability, moving-reliability and CCA tables are all from the short session.
+`tests/test_alignment.py` asserted the truncation and now asserts the full-length
+export instead; the `truncated_trials` guard is kept as a regression test because
+the defect was silent (index clipping made a short export look like a session
+ending exactly on its last sample).
+
+**2. The three missing task animals arrived**: 409 (08-28 13:22), 418 (08-28
+14:24), 703 (08-28 17:45), all striatum, all 8,400,000 samples. **The task
+striatum cohort is now complete at 16/16.** None of them is in any committed
+table, so every per-area N in the 2026-08-27/28 entries is short by up to three
+animals — DMS 13 → 16, ACC 12 → 15, DLS 10 → 12 (703 has DMS only; 409/418 have
+all three).
+
+**What to re-run, in order** (roughly 30 min on this machine):
+
+```
+python scripts/run_lfp_inventory.py  --jobs 5 --cohort task
+python scripts/run_lfp_identity.py   --jobs 5 --cohort task
+python scripts/run_lfp_bandpower.py  --jobs 5 --cohort task --only 409,418,703,1212
+python scripts/validate_lfp_bandpower.py --cohort task
+python scripts/run_lfp_arms.py       --jobs 6 --cohort task
+python scripts/run_lfp_group_contrast.py
+python scripts/plot_lfp_arms.py --cohort task && python scripts/plot_lfp_task_vs_control.py
+```
+
+Control is unaffected — all 8 control exports are byte-for-byte as inventoried.
+
+**Which conclusions are at risk.** The group contrast is the exposed one: DLS
+theta was the single cell distinguishing task from yoked controls at p_FDR =
+0.049, on n = 10 task animals. Adding 409/418 to DLS and restoring 1212's expert
+trials will move it either way, and 0.049 has no margin. Treat that result as
+provisional until the re-run. The decoding result (13/24 cells, large margins)
+and the behavioural finding (speed-profile reliability 0.98 vs 0.68) are unlikely
+to turn on three animals, but they are not confirmed either.
+
+**Repo housekeeping.** `lfp-cohort-exploration` and `tcca-tom-sync` were both
+strict ancestors of the tip, so `main` was fast-forwarded onto it and both were
+deleted, local and remote. The two MATLAB regeneration chains
+(`processed_data/regen_chain*.sh`) are now tracked. One pre-existing stash from
+the deleted `cca-python-pipeline` branch was left alone — it is the only thing
+keeping commits 8e05ec0 ("Stage 1: residual CCA pipeline") and 738dc3a alive.
+
+
 ## 2026-08-28 (b) — Control LFP arrives; the cohort abstraction; what survives a yoked control
 
 **The task-only caveat is retired.** `RawDataControl/LFP/` holds 9 exports; 8 are
