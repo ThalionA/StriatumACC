@@ -1,5 +1,38 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-08 — All-results deck refreshed (387 slides); two coverage bugs in the builder
+
+`presentations/StriatumUpdate_20260908.pptx` — 24 sections, 363 figure slides, no
+text on figure slides. Verified at the file level, not by eye alone: python-pptx
+opens it (387 slides = 24 dividers + 363 pictures), and the md5 of every spot-checked
+panel matches the file on disk, including the four regenerated 09-07 sets.
+
+**New in this deck.** The LFP arm was never in it — four sections now: export
+integrity / identity / geometry (14), band power across learning for the task cohort
+(12), the yoked Control 1 cohort (14), and the task-vs-control contrast (2). Also new:
+corridor versus dark (17), carrying the 09-07 velocity and z-scoring checks.
+
+**Two builder bugs, both found by adding a coverage report.**
+1. `TCA pipeline outputs: combined tensor` matched `tca_(balanced|unbalanced)_NN_`,
+   but `Run_TCA_pipeline` saves the combined tensor as plain `tca_NN_`. The section
+   had been silently empty since it was written — **19 figures missing** from every
+   deck built with it, including the 08-11 one.
+2. Two corridor-vs-dark panels exist only under `save_all_open_figures` numbers
+   (`corridor_vs_dark_firing_rate`, `corridor_and_dark_fr_across_epochs`); the named
+   `CorridorVsDark_*` pattern alone would have dropped them.
+
+**Stale figures kept out on purpose.** LFP figures predating the 08-28 cohort split
+have no `_task`/`_control` suffix and are superseded by the suffixed pair; the July
+`decode_position` / `cca_cross_area` are the provisional 4-animal versions. The
+builder excludes them by rule (`LFP_SUPERSEDED`) and asserts none are embedded.
+
+**What the deck still leaves out**, now reported by the builder every run: 379 root
+figures, dominated by 2025-era legacy families (`mega*` 51, `decoder*` 40,
+`megamouse*` 12, `decoding*` 10, `cd_*` 12 — the coding-dimension family
+`documents/MANUSCRIPT_REPORT.md` already flags as un-inventoried) and by the named
+duplicates of numbered slots (`_Task*` 42, `_Control*` 42, `corridordark*` 12), which
+are the same figures saved twice by `save_to_svg` and `save_all_open_figures`.
+
 ## 2026-09-07 — Meeting 28/08 items: LFP full-cohort re-run, Figure 1 scale + Control 2, Fig S1 checks
 
 Branch `meeting-2026-08-28-figures`. Meeting note (Nathalie, Zihao) filed in the

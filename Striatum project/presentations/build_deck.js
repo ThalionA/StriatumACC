@@ -7,7 +7,8 @@ const FIG = path.join(ROOT, 'figures');
 const TFIG = path.join(ROOT, 'tcca', 'figures');
 const CFIG = path.join(ROOT, 'cca', 'figures');
 const RFIG = path.join(ROOT, 'rl_model', 'figures');
-const OUT = path.join(ROOT, 'presentations', 'StriatumUpdate_20260811.pptx');
+const LFIG = path.join(ROOT, 'lfp', 'figures');
+const OUT = path.join(ROOT, 'presentations', 'StriatumUpdate_20260908.pptx');
 
 // The four RS panels used to be excluded here because they rendered empty.
 // Fixed 2026-08-11/12 (probe-2 waveforms now loaded, cortical/hippocampal
@@ -50,6 +51,28 @@ const all = dedupeBySlot(
 );
 
 const pick = (re, sort = byNum) => all.filter(f => re.test(f)).sort(sort);
+
+// Same as `pick`, for a directory other than FIG. `order` optionally pins the
+// leading files; anything else matching falls in behind, alphabetically.
+function pickIn(dir, re, order = []) {
+  const match = typeof re === 'function' ? re : f => re.test(f);
+  const hits = fs.readdirSync(dir).filter(f => f.endsWith('.png') && match(f));
+  const rank = f => { const i = order.indexOf(f); return i < 0 ? order.length : i; };
+  return hits.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+             .map(f => path.join(dir, f));
+}
+
+// LFP figures predating the 2026-08-28 cohort split have no `_task`/`_control`
+// suffix and are superseded by the suffixed pair; the July decoding/CCA pair is
+// the provisional 4-animal version superseded by the full-cohort run. An "all
+// results" deck must not carry either. (2026-09-08)
+const LFP_SUPERSEDED = f => {
+  if (/^(decode_position|cca_cross_area)\.png$/.test(f)) return true;
+  const stem = f.replace(/\.png$/, '');
+  if (/_(task|control)$/.test(stem) || /_task_vs_control$/.test(stem)) return false;
+  return fs.existsSync(path.join(LFIG, `${stem}_task.png`)) ||
+         fs.existsSync(path.join(LFIG, `${stem}_control.png`));
+};
 const range = (pre, lo, hi) =>
   all.filter(f => f.startsWith(pre) && num(f) >= lo && num(f) <= hi).sort(byNum);
 
@@ -78,6 +101,15 @@ const SECTIONS = [
   { title: 'Spatiotemporal activity: control animals',
     files: pick(/^spatiotemporal_\d+_control_/).map(f => path.join(FIG, f)) },
 
+  { title: 'Corridor versus dark: is the dark ITI a baseline?',
+    files: pickIn(FIG, f => /^CorridorVsDark_/.test(f) ||
+                    /^corridordark_\d+_(?!corridordark_)/.test(f),
+                  ['CorridorVsDark_velocity.png',
+                   'CorridorVsDark_zscore_variants.png',
+                   'CorridorVsDark_zscore_variants_control1.png',
+                   'CorridorVsDark_RawFR_Hierarchical_byArea.png',
+                   'CorridorVsDark_ZScored_Hierarchical_byArea.png']) },
+
   { title: 'TCA: rank selection and components',
     files: ['tca_bic_diagnostics.png', 'tca_components_rank4.png', 'tca_components_rank5.png',
             'tca_unbalanced_components_rank4.png', 'tca_unbalanced_components_rank5.png',
@@ -91,7 +123,7 @@ const SECTIONS = [
            .filter(f => all.includes(f)).map(f => path.join(FIG, f)) },
 
   { title: 'TCA pipeline outputs: combined tensor',
-    files: pick(/^tca_(balanced|unbalanced)_\d+_/).map(f => path.join(FIG, f)) },
+    files: pick(/^tca_\d+_/).map(f => path.join(FIG, f)) },
 
   { title: 'TCA pipeline outputs: task-only and control-only tensors',
     files: pick(/^tca_(task|control)_unbalanced_\d+_/).map(f => path.join(FIG, f)) },
@@ -125,6 +157,30 @@ const SECTIONS = [
             'fig_real_latents_value.png', 'fig_real_latents_rpe.png',
             'fig_neural_encoding.png', 'fig_encoding_stats.png', 'fig_encoding_examples.png']
            .filter(f => fs.existsSync(path.join(RFIG, f))).map(f => path.join(RFIG, f)) },
+
+  { title: 'LFP: export integrity, file identity and geometry',
+    files: pickIn(LFIG, f => !LFP_SUPERSEDED(f) &&
+                    /^(sanity_audit_|signal_identity|lfp_(cohort_overview|spectra|session_integrity|identity_matrix|depth_by_frequency))/.test(f),
+                  ['sanity_audit_overview_v2.png', 'sanity_audit_raw_examples_v2.png',
+                   'sanity_audit_event_timing.png', 'signal_identity.png',
+                   'lfp_cohort_overview_task.png', 'lfp_identity_matrix_task.png']) },
+
+  { title: 'LFP band power across learning: task cohort (16/16, 1212 at full length)',
+    files: pickIn(LFIG, f => !LFP_SUPERSEDED(f) && /_task\.png$/.test(f) &&
+                    !/^(lfp_cohort_overview|lfp_spectra|lfp_session_integrity|lfp_identity_matrix|lfp_depth_by_frequency)/.test(f),
+                  ['lfp_evolution_z_task.png', 'lfp_evolution_speed_task.png',
+                   'lfp_evolution_speed_residual_task.png', 'lfp_evolution_fraction_task.png',
+                   'lfp_decoding_task.png', 'lfp_reliability_task.png', 'lfp_cca_task.png']) },
+
+  { title: 'LFP band power: yoked Control 1 cohort',
+    files: pickIn(LFIG, f => !LFP_SUPERSEDED(f) && /_control\.png$/.test(f) &&
+                    !/^(lfp_cohort_overview|lfp_spectra|lfp_session_integrity|lfp_identity_matrix|lfp_depth_by_frequency)/.test(f),
+                  ['lfp_evolution_z_control.png', 'lfp_decoding_control.png',
+                   'lfp_reliability_control.png', 'lfp_cca_control.png']) },
+
+  { title: 'LFP: task versus yoked control, and the one learning-specific effect',
+    files: pickIn(LFIG, /_task_vs_control\.png$/,
+                  ['lfp_task_vs_control.png', 'lfp_dls_theta_task_vs_control.png']) },
 ];
 
 const pres = new pptxgen();
@@ -169,4 +225,22 @@ pres.writeFile({ fileName: OUT }).then(() => {
   console.log(`sections: ${SECTIONS.filter(s => s.files.length).length}, figure slides: ${nFig}`);
   SECTIONS.filter(s => s.files.length).forEach(s =>
     console.log(`  ${String(s.files.length).padStart(3)}  ${s.title}`));
+
+  // Coverage: a deck that claims "all results" must be able to say what it
+  // leaves out. Unused figures are reported by family, not one by one.
+  const used = new Set(SECTIONS.flatMap(s => s.files));
+  for (const [label, dir] of [['figures/', FIG], ['lfp/figures/', LFIG]]) {
+    const unused = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.png') && !used.has(path.join(dir, f)));
+    if (!unused.length) continue;
+    const fams = new Map();
+    for (const f of unused) {
+      const fam = (f.match(/^([_A-Za-z0-9]+?)(?=_\d+_|_)/) || [null, f])[1];
+      fams.set(fam, (fams.get(fam) || 0) + 1);
+    }
+    const top = [...fams].sort((a, b) => b[1] - a[1]).slice(0, 12);
+    console.log(`not in the deck — ${label} ${unused.length} png:`);
+    console.log('  ' + top.map(([k, v]) => `${k}(${v})`).join(' ') +
+                (fams.size > top.length ? ` +${fams.size - top.length} more families` : ''));
+  }
 });

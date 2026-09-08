@@ -112,3 +112,13 @@
   spatial rates, lick errors) can be read with h5py in seconds; MATLAB `load` of
   the whole struct takes tens of GB. h5py returns MATLAB `(units x bins x trials)`
   as `(trials x bins x units)` — transpose. (2026-09-07)
+- Figures are saved twice under different names: `save_to_svg('<Name>')` writes
+  `figures/<Name>.png` and `save_all_open_figures('<prefix>')` writes
+  `figures/<prefix>_NN_<name>.png` for the same figure. Deck/collector selectors
+  must pick ONE family, and a few panels exist only under the numbered name
+  (two corridor-vs-dark panels do). Check both before concluding a figure is
+  absent. (2026-09-08)
+- A deck section whose glob matches nothing fails silently — `build_deck.js`
+  dropped 19 TCA pipeline figures for a month because the section matched
+  `tca_(balanced|unbalanced)_NN_` while the files are `tca_NN_`. The builder now
+  prints unused figures by family every run; read that report. (2026-09-08)
