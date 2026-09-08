@@ -76,6 +76,19 @@ quarantined learning helpers. `scripts/` contains reproducible audit drivers; `t
 synthetic-ground-truth pytest checks. The old single-window `qc.py` thresholds
 are retained only as tested numerical primitives and are not an analysis gate.
 
+## Running the pipeline
+```
+cd "Striatum project/lfp" && ./scripts/run_lfp_pipeline.sh
+```
+One command for the whole chain, in dependency order: inventory → identity →
+band power → validate → arms → task-vs-control contrast → figures. `--cohort
+task|control` limits it to one cohort (the contrast still needs both tables on
+disk and skips itself if one is missing), `--from <step>` resumes without
+repeating the expensive band-power step, `--only 409,418` limits band power to
+named animals, and `--list` prints the steps an invocation would run. Every run
+is logged to `results/pipeline_<timestamp>.log`. A failing step aborts the chain
+rather than letting the next one read a half-written table.
+
 ## Running tests
 ```
 cd "Striatum project/lfp" && /opt/anaconda3/bin/python -m pytest -q

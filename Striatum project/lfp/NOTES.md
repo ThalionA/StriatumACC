@@ -1,5 +1,57 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-08 — First-20-trials reliability, one pipeline entry point, project_cfg parity
+
+**New figure: `lfp_reliability_first20_task_vs_control`** (requested). Split-half
+reliability of the spatial band-power profile over the **first 20 trials of the
+session**, one panel per area, all five bands, task and Control 1 side by side on
+a **shared y-scale**, no shuffle series. The window is deliberately NOT
+learning-point aligned: controls have no learning point of their own (they inherit
+the task cohort's average, 41), so an aligned control window is a matched *time*
+window, not a matched level of performance. The first 20 trials are the same
+stretch of exposure in both cohorts and need no alignment assumption.
+
+Task exceeds control in every area and nearly every band (DMS theta +0.41 vs
++0.08; DLS beta +0.35 vs -0.03; ACC high gamma +0.42 vs -0.04; V1 and the
+hippocampal pair follow the same direction at n = 3-5). **This is the same
+behavioural confound as the epoch-aligned reliability arm, seen earlier in the
+session:** task animals already run the corridor more stereotypically than
+controls (speed-profile split-half r 0.98 vs 0.68), and the LFP spatial profile
+largely tracks speed. Read it as a behavioural difference read out through the
+LFP until a speed-matched control says otherwise.
+
+**Arms: a new "First 20" window.** `run_lfp_arms.py` gained an unaligned
+20-trial window alongside "All" and the four epochs, and the loop's index
+convention was unified — windows are 0-based at construction now, instead of
+"All" being 0-based and every other window silently decremented inside the body.
+**Verified value-preserving:** 1020 shared rows against the committed table,
+maximum absolute difference 0.00e+00 on every column, plus 270 new rows. The
+group contrast filters on `window == "All"` and is untouched: 2/56, 9/30, 13/30,
+0/20, 2/3, 0/30, identical to 09-07.
+
+### Interoperability
+- **`scripts/run_lfp_pipeline.sh` is now the single entry point** for the chain
+  the project convention requires. It replaces `results/rerun_chain_2026-09-07.sh`,
+  a dated one-off retyped from the NOTES recipe — the arrangement that lets a
+  step be skipped when recipe and script drift. `--cohort`, `--from`, `--only`,
+  `--list`; a failed step aborts; the cross-cohort contrast skips itself rather
+  than run against a stale partner table.
+- **`tests/test_project_cfg_parity.py`** parses `project_cfg.m` and asserts the
+  Python mirrors match it: `AU_TO_CM`, `max_bin`, the four learning-point
+  constants, the derived 5 cm grid and bin count, and the area list. The mirrors
+  were documented as "follows project_cfg.m" in comments, and a comment cannot
+  fail — when the grid was re-cut 2.5 cm → 5 cm on 2026-08-10 a stale mirror
+  would have gone on producing plausible numbers on the wrong grid. All 9 pass
+  today, so nothing has drifted.
+- **`preprocessed_data_control2.mat` now carries `mouseid`** and
+  `PreprocessStriatumControl2.m` takes its paths from `project_cfg` (its
+  `exist()` check pointed at `Striatum project/...` while load/save used a bare
+  filename, so it neither found nor wrote the file every consumer reads).
+  Regenerated and verified identical to the previous product on every array,
+  plus the new field.
+
+237 tests pass, 18 skipped (228 + the 9 new parity checks).
+
 ## 2026-09-07 (b) — Full task cohort re-run: 16/16 striatum, 1212 at full length
 
 The recipe in the previous entry was run end to end (`results/rerun_chain_2026-09-07.sh`,

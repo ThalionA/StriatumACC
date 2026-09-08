@@ -5,14 +5,22 @@ clc
 % Fixed number of temporal bins per trial
 num_temp_bins = 50;
 
+% Paths come from project_cfg, not from literals: the exist() check used to point
+% at 'Striatum project/preprocessed_data_control2.mat' while load/save used a bare
+% filename, so this script neither found nor wrote the file project_cfg declares
+% and every consumer reads. (2026-09-08)
+cfg = project_cfg();
+out_file = cfg.control2_data_file;
+raw_file = 'processed_data/all_data_control2.mat';
+
 % Check if preprocessed data exists
-if exist('Striatum project/preprocessed_data_control2.mat', 'file')
-    fprintf('Loading preprocessed data...\n');
-    load('preprocessed_data_control2.mat', 'preprocessed_data');
+if exist(out_file, 'file')
+    fprintf('Loading preprocessed data from %s...\n', out_file);
+    load(out_file, 'preprocessed_data');
     n_animals = numel(preprocessed_data);
 else
     if ~exist('all_data', 'var')
-        load('all_data_control2.mat');
+        load(raw_file);
     end
 
     % Firing rate threshold
@@ -98,7 +106,10 @@ else
             binned_times_per_trial{itrial} = (bin_edges(1:end-1) + bin_edges(2:end)) / 2; % Bin centres
         end
 
-        % Store results in preprocessed_data
+        % Store results in preprocessed_data. mouseid is carried through so
+        % consumers can select or exclude an animal by identity rather than by
+        % its index in the struct (2026-09-08).
+        preprocessed_data(ianimal).mouseid = all_data(ianimal).mouseid;
         preprocessed_data(ianimal).firing_rates_per_bin = firing_rates_per_bin;
         preprocessed_data(ianimal).is_dms = is_dms;
         preprocessed_data(ianimal).is_dls = is_dls;
@@ -108,7 +119,7 @@ else
     end
 
     % Save the preprocessed data
-    save('preprocessed_data_control2.mat', 'preprocessed_data', '-v7.3');
+    save(out_file, 'preprocessed_data', '-v7.3');
 end
 
 % Example visualisation of average firing rates per bin

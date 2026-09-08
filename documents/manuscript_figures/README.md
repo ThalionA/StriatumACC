@@ -23,7 +23,7 @@ the narrative claims, and three of the analyses are refuted; see
 | `Fig1E_RL_lick_profiles` | `Striatum project/rl_model/figures/fig_real_lick_profiles.png` | png | RL model per-epoch lick profiles vs data |
 | `Fig2C_activity_by_area_epoch_task` | `Striatum project/figures/spatiotemporal_03_task_raw_fr_hierarchical_spatial.png` | svg+png | Evolution of activity across epochs by area, task |
 | `Fig2C_activity_by_area_epoch_control` | `Striatum project/figures/spatiotemporal_11_control_raw_fr_hierarchical_spatial.png` | svg+png | Same, control |
-| `Fig2C_activity_by_area_and_type_task` | `Striatum project/figures/spatiotemporal_25_task_raw_fr_pooled_increasers_spatial.png` | svg+png | Activity by area x cell type (MSN/FS/TAN/RS) |
+| `Fig2C_activity_by_area_and_type_task` | `Striatum project/figures/spatiotemporal_33_task_raw_fr_pooled_increasers_spatial.png` | svg+png | Activity by area x cell type (MSN/FS/TAN/RS) |
 | `Fig2D_neural_stability_hierarchical` | `Striatum project/figures/integrated_09_stability_allgroups_hierarchical_zscored.png` | svg+png | Trial-to-trial reliability across epochs, animal-level, 3 groups |
 | `Fig2E_position_decoding_evolution` | `Striatum project/figures/integrated_11_ml_decoding_evolution_yoked.png` | svg+png | Position decoding across epochs, 3 groups |
 | `Fig2E_decoding_error_profile` | `Striatum project/figures/integrated_12_spatial_decoding_error_profile_across_corridor.png` | svg+png | Decoding error along the corridor |

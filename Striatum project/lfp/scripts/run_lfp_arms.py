@@ -37,6 +37,9 @@ from striatum_lfp import analysis, arms, config  # noqa: E402
 from striatum_lfp.analysis import log_power  # noqa: E402
 from striatum_lfp.decode import ridge_cv_decode  # noqa: E402
 
+# Length of the unaligned early-session window (see `windows` in run_one).
+FIRST_N_TRIALS = 20
+
 
 MIN_SITES = config.DEFAULT.min_sites          # 5 channels per area
 N_CCA_SHUFFLES = 20
@@ -177,11 +180,23 @@ def analyse_one(item) -> dict[str, list[dict]]:
                     })
 
             # --- 2. decoding + 3. reliability --------------------------------
-            windows = [("All", np.arange(n_trials_matlab))] + [
-                (name, epochs[ei]) for ei, name in enumerate(analysis.EPOCH_NAMES)
-            ]
+            # Windows are all 0-based here; `analysis.epoch_indices` returns 1-based
+            # MATLAB trial numbers, so it is converted once, at construction. (The
+            # loop used to special-case "All" as 0-based and subtract 1 from every
+            # other window inside the body, which is the kind of asymmetry that
+            # eventually gets a new window wrong.)
+            #
+            # "First 20" is deliberately NOT learning-point aligned: it is the first
+            # 20 trials of the session for every animal, so task and yoked control
+            # are compared over the same stretch of exposure rather than over
+            # windows defined by a learning point the controls do not have.
+            windows = [
+                ("All", np.arange(n_trials_matlab)),
+                ("First 20", np.arange(min(FIRST_N_TRIALS, n_trials_matlab))),
+            ] + [(name, np.asarray(epochs[ei], int) - 1)
+                 for ei, name in enumerate(analysis.EPOCH_NAMES)]
             for name, trials in windows:
-                tr = np.asarray(trials, int) - 1 if name != "All" else np.asarray(trials, int)
+                tr = np.asarray(trials, int)
                 tr = tr[(tr >= 0) & (tr < n_stored)]
                 if tr.size < 4:
                     continue

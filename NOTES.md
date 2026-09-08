@@ -1,5 +1,49 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-08 (b) — 1103 excluded, Control 2 split out, first-20-trials LFP reliability
+
+**Figure 1 (per Theo).** The Control 2 overlay added on 09-07 is **removed** from
+the task and Control 1 firing-rate panels — its 50 bins are temporal bins inside a
+dark trial, not 5 cm of corridor, so it never shared their axis. The matched
+task/control y-scales stay. Control 2 instead gets **its own figure set** with the
+same structure: metric x aggregation, the same epoch grouping, one panel per area.
+Eight new figures (`_Control_2__*_Dark{Profile,Evolution}`), captioned that trial
+number is NOT learning-point aligned — yoked controls have no learning point, so
+"Expert" there is a matched time window, not a matched level of performance.
+
+**1103 excluded** from Control 2, whole animal. Grounds, all three independent:
+Zihao's sheet marks the session "raw data lost (no waveform analysis)"; his unit
+counts (DMS 20 / DLS 8) put striatum at 100-820 um while the corrected depth CSV
+puts DMS at 850-1050 um, and nothing can arbitrate without waveforms; and every
+unit in that deep block fires at tens of Hz where the other Control 2 animals sit
+at 0.5-0.6 Hz per unit. It also has 16 trials, the shortest session. Control 2 is
+now 5 animals, DMS 92 units (was 97/6 animals), and its DMS reference sits at
+2-4 Hz instead of the 6-8 Hz that one animal was producing.
+
+The exclusion is by **mouse id, not struct position**: `PreprocessStriatumControl2.m`
+now carries `mouseid` into its product and takes its paths from `project_cfg`
+(its `exist()` check pointed at one path while load/save used another, so it
+neither found nor wrote the file every consumer reads). The product was
+regenerated and verified **identical on every array** to the previous one, plus
+the new field.
+
+**LFP (per Theo).** New `lfp_reliability_first20_task_vs_control`: trial-to-trial
+reliability over the first 20 trials, one panel per area, all five bands, task
+versus Control 1, shared y-scale, no shuffle series, no learning-point alignment.
+Task exceeds control almost everywhere — and it carries the same speed-stereotypy
+confound as the epoch-aligned arm, so it is not a neural claim. Details and the
+interoperability work (single pipeline entry point, `project_cfg` parity test) are
+in `Striatum project/lfp/NOTES.md` 2026-09-08.
+
+**Renumbering trap, hit and fixed.** Adding eight figures shifted every
+`save_all_open_figures` slot after 16, leaving 164 stale twins on disk under names
+that now point at different content (deleted after checking every stale slug is
+reproduced by the new sweep). `collect_manuscript_figures.py` pinned three panels
+by slot number and broke: it now resolves sweep figures by name, and reports
+0 or 2+ matches as a missing source rather than copying the wrong file. The deck
+gained a Control 2 section (its files matched the Control 1 selector) and is
+rebuilt at 398 slides / 373 figures.
+
 ## 2026-09-08 — All-results deck refreshed (387 slides); two coverage bugs in the builder
 
 `presentations/StriatumUpdate_20260908.pptx` — 24 sections, 363 figure slides, no

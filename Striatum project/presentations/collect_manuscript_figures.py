@@ -19,6 +19,27 @@ CFIG = PROJ / "cca" / "figures"
 RFIG = PROJ / "rl_model" / "figures"
 OUT = ROOT / "documents" / "manuscript_figures"
 
+
+def sweep(slug: str, directory: Path = FIG) -> Path:
+    """Resolve a `save_all_open_figures` figure by NAME, not by slot number.
+
+    Those files are `<prefix>_NN_<slug>.png`, and NN is just the figure's
+    position in the sweep: adding one figure to the plotting script renumbers
+    every slot after it. Pinning a panel to `spatiotemporal_25_...` therefore
+    silently points at different content the next time the figure set changes
+    (it did, on 2026-09-08, when the Control 2 figures were added and slot 25
+    became slot 33). The slug is stable, so match on that.
+
+    Returns the single match; on 0 or 2+ matches returns a path that does not
+    exist, so the caller's normal "source missing" report fires instead of a
+    wrong file being copied silently.
+    """
+    prefix, _, tail = slug.partition("_")
+    hits = sorted(directory.glob(f"{prefix}_*_{tail}.png"))
+    if len(hits) == 1:
+        return hits[0]
+    return directory / f"{slug}.png  [{len(hits)} matches]"
+
 # panel code -> (source file | None, what the panel is meant to show)
 PANELS: list[tuple[str, Path | None, str]] = [
     # ---------------- Figure 1: behaviour ----------------
@@ -50,11 +71,11 @@ PANELS: list[tuple[str, Path | None, str]] = [
      "Neuropixels track + Allen Atlas (histology; no code in repo)"),
     ("Fig2B_recording_examples",             None,
      "Example rasters/waveforms (no live code)"),
-    ("Fig2C_activity_by_area_epoch_task",    FIG / "spatiotemporal_03_task_raw_fr_hierarchical_spatial.png",
+    ("Fig2C_activity_by_area_epoch_task",    sweep("spatiotemporal_task_raw_fr_hierarchical_spatial"),
      "Evolution of activity across epochs by area, task"),
-    ("Fig2C_activity_by_area_epoch_control", FIG / "spatiotemporal_11_control_raw_fr_hierarchical_spatial.png",
+    ("Fig2C_activity_by_area_epoch_control", sweep("spatiotemporal_control_raw_fr_hierarchical_spatial"),
      "Same, control"),
-    ("Fig2C_activity_by_area_and_type_task", FIG / "spatiotemporal_25_task_raw_fr_pooled_increasers_spatial.png",
+    ("Fig2C_activity_by_area_and_type_task", sweep("spatiotemporal_task_raw_fr_pooled_increasers_spatial"),
      "Activity by area x cell type (MSN/FS/TAN/RS)"),
     ("Fig2D_neural_stability_hierarchical",  FIG / "integrated_09_stability_allgroups_hierarchical_zscored.png",
      "Trial-to-trial reliability across epochs, animal-level, 3 groups"),

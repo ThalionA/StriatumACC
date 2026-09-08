@@ -87,49 +87,64 @@ datasets = {1, 'Task'; 2, 'Control'};
 metrics  = {tensor_full_raw, 'Raw FR'; tensor_full_z, 'Z-Scored'};
 avg_methods = {'Pooled', 'Hierarchical'};
 
-% --- Control 2 (dark-only cohort) overlay (2026-09-07, meeting 2026-08-28) ---
-% Control 2 has no corridor, so it enters the spatial panels as flat per-epoch
-% reference lines and the temporal panels as its own dashed area traces.
-% Rates are per-unit means over its 50 temporal bins (PreprocessStriatumControl2,
-% Hz), restricted to the tensor's trial range and z-scored per unit over
-% bins x trials exactly as tensor_full_z above. Areas: DMS/DLS/ACC only.
+% --- Control 2 (dark-only cohort), loaded for its OWN figure set ---------
+% Control 2 has no corridor: its 50 bins are TEMPORAL bins within a dark trial,
+% so it cannot share an axis with the corridor cohorts and is no longer overlaid
+% on them (2026-09-08, per Theo). It is plotted separately at the end of this
+% section with the same epoch grouping. Areas: DMS/DLS/ACC only.
+%
+% EXCLUDED: 1103. Its whole probe is doubtful — Zihao's sheet marks the session
+% "raw data lost (no waveform analysis)"; his own unit counts (DMS 20 / DLS 8)
+% place striatum at 100-820 um while the corrected depth CSV places DMS at
+% 850-1050 um, and every unit in the deep block fires at tens of Hz where
+% Control 2's other animals sit at 0.5-0.6 Hz per unit. With no waveforms there
+% is nothing to arbitrate the two depth readings. 16 trials, the shortest session.
 n_trials_tensor = size(tensor_full_raw, 3);
+ctrl2_exclude = {'1103'};
 ctrl2 = struct('area', {}, 'mouse', {}, 'raw', {}, 'z', {});
 if isfile(cfg.control2_data_file)
     S2 = load(cfg.control2_data_file, 'preprocessed_data');
     c2_areas = {'DMS', 'is_dms'; 'DLS', 'is_dls'; 'ACC', 'is_acc'};
+    if ~isfield(S2.preprocessed_data, 'mouseid')
+        error('SpatioTemporal:Control2NoMouseId', ...
+              ['%s has no mouseid field, so animals can only be selected by ', ...
+               'position. Rerun PreprocessStriatumControl2 (it carries mouseid ', ...
+               'since 2026-09-08).'], cfg.control2_data_file);
+    end
+    c2_ids = {S2.preprocessed_data.mouseid};
+    keep_m = ~ismember(c2_ids, ctrl2_exclude);
+    fprintf('Control 2: %d animals (%s); excluded %s\n', sum(keep_m), ...
+            strjoin(c2_ids(keep_m), ', '), strjoin(ctrl2_exclude, ', '));
     for a2 = 1:size(c2_areas, 1)
         rec = struct('area', c2_areas{a2, 1}, 'mouse', [], 'raw', [], 'z', []);
-        for m2 = 1:numel(S2.preprocessed_data)
+        for m2 = find(keep_m)
             d2  = S2.preprocessed_data(m2);
             msk = logical(d2.(c2_areas{a2, 2}));
             if ~any(msk), continue; end
             fr = d2.firing_rates_per_bin(msk, :, :);
             nt = min(n_trials_tensor, size(fr, 3));
-            fr = fr(:, :, 1:nt);
             nu = size(fr, 1);
-            raw_tr = nan(nu, n_trials_tensor);
-            z_tr   = nan(nu, n_trials_tensor);
-            raw_tr(:, 1:nt) = reshape(mean(fr, 2, 'omitnan'), nu, nt);
+            % units x bins x trials, NaN-padded to the common trial axis.
+            raw_c = nan(nu, size(fr, 2), n_trials_tensor);
+            z_c   = nan(nu, size(fr, 2), n_trials_tensor);
+            raw_c(:, :, 1:nt) = fr(:, :, 1:nt);
             for u = 1:nu
-                ud = fr(u, :, :); mu2 = mean(ud(:), 'omitnan'); sg2 = std(ud(:), 'omitnan');
-                if sg2 > 0
-                    z_tr(u, 1:nt) = reshape(mean((ud - mu2) / sg2, 2, 'omitnan'), 1, nt);
-                else
-                    z_tr(u, 1:nt) = 0;
-                end
+                ud  = raw_c(u, :, :);
+                mu2 = mean(ud(:), 'omitnan');
+                sg2 = std(ud(:), 'omitnan');
+                if sg2 > 0, z_c(u, :, :) = (ud - mu2) / sg2; else, z_c(u, :, :) = 0; end
             end
             rec.mouse = [rec.mouse; repmat(m2, nu, 1)];
-            rec.raw   = [rec.raw; raw_tr];
-            rec.z     = [rec.z; z_tr];
+            rec.raw   = cat(1, rec.raw, raw_c);
+            rec.z     = cat(1, rec.z, z_c);
         end
         if ~isempty(rec.raw), ctrl2(end+1) = rec; end %#ok<SAGROW>
     end
     clear S2
-    fprintf('Control 2 overlay: %s\n', strjoin(arrayfun(@(r) sprintf('%s %d units / %d mice', ...
+    fprintf('Control 2 units: %s\n', strjoin(arrayfun(@(r) sprintf('%s %d units / %d mice', ...
         r.area, size(r.raw, 1), numel(unique(r.mouse))), ctrl2, 'UniformOutput', false), ', '));
 else
-    warning('SpatioTemporal:NoControl2', 'Control 2 file %s not found; overlay skipped.', cfg.control2_data_file);
+    warning('SpatioTemporal:NoControl2', 'Control 2 file %s not found; its figures are skipped.', cfg.control2_data_file);
 end
 
 % Axes are collected here so Task and Control panels of the same metric /
@@ -172,8 +187,6 @@ for ds_idx = 1:size(datasets, 1)
             % -----------------------------------------------------------------
             fig_spatial = figure('Name', sprintf('%s: Spatial', fig_prefix), 'Position', [100, 100, 500 * num_areas, 450]);
             t_spatial = tiledlayout(1, num_areas, 'TileSpacing', 'compact', 'Padding', 'compact');
-            ctrl2_drawn = false;
-            
             for i_area = 1:num_areas
                 current_area = areas_in_data{i_area};
                 ax_sp = nexttile; hold on;
@@ -212,21 +225,6 @@ for ds_idx = 1:size(datasets, 1)
                     legend_handles_spatial(end+1) = h.mainLine;
                 end
                 
-                % Control 2 (dark-only) reference: flat per-epoch mean in the
-                % epoch colour, dashed. Zone patches are drawn after y-linking.
-                c2i = find(strcmp({ctrl2.area}, current_area), 1);
-                if ~isempty(c2i)
-                    if met_idx == 1, M2 = ctrl2(c2i).raw; else, M2 = ctrl2(c2i).z; end
-                    for i_epoch = 1:numel(epoch_trials)
-                        v2 = ctrl2_epoch(M2, ctrl2(c2i).mouse, epoch_trials{i_epoch}, avg_mode);
-                        if isfinite(v2)
-                            plot([0, size(current_tensor, 2)], [v2, v2], '--', ...
-                                'Color', epoch_colors{i_epoch}, 'LineWidth', 1.4, 'HandleVisibility', 'off');
-                            ctrl2_drawn = true;
-                        end
-                    end
-                end
-                
                 if strcmp(avg_mode, 'Pooled')
                     title(sprintf('%s (n=%d units)', current_area, sum(idx_target)));
                 else
@@ -237,12 +235,7 @@ for ds_idx = 1:size(datasets, 1)
             title(t_spatial, sprintf('%s: Spatial Tuning Evolution', fig_prefix), 'FontSize', 16);
             xlabel(t_spatial, 'Spatial Bin', 'FontSize', 12);
             ylabel(t_spatial, met_name, 'FontSize', 12);
-            legend_names_spatial = epoch_names;
-            if ctrl2_drawn
-                legend_handles_spatial(end+1) = plot(nan, nan, '--', 'Color', [0.3 0.3 0.3], 'LineWidth', 1.4);
-                legend_names_spatial{end+1} = 'Control 2 (dark-only), per-epoch mean';
-            end
-            lg_spatial = legend(legend_handles_spatial, legend_names_spatial, 'Location', 'best');
+            lg_spatial = legend(legend_handles_spatial, epoch_names, 'Location', 'best');
             
             % Export Figure A (deferred until Task/Control y-scales are matched)
             % Standardise formatting for filesystem logic (removing spaces, brackets, etc)
@@ -287,17 +280,6 @@ for ds_idx = 1:size(datasets, 1)
                     'lineprops', {'-','Color', area_color, 'LineWidth', 2});
                 legend_handles_temporal(end+1) = h.mainLine;
                 legend_names_temporal{end+1}   = current_area;
-            end
-            
-            % Control 2 (dark-only) traces, dashed in the area colour.
-            for c2i = 1:numel(ctrl2)
-                if met_idx == 1, M2 = ctrl2(c2i).raw; else, M2 = ctrl2(c2i).z; end
-                [mu2, se2] = ctrl2_trials(M2, ctrl2(c2i).mouse, avg_mode);
-                if all(isnan(mu2)), continue; end
-                h = shadedErrorBar(1:numel(mu2), mu2, se2, ...
-                    'lineprops', {'--', 'Color', cfg.plot.colors.area_map(ctrl2(c2i).area), 'LineWidth', 1.5});
-                legend_handles_temporal(end+1) = h.mainLine;
-                legend_names_temporal{end+1}   = sprintf('%s (Control 2, dark-only)', ctrl2(c2i).area);
             end
             
             xline(0, 'k--', epoch_names{1}, 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
@@ -367,6 +349,94 @@ for k = 1:size(fig_saves, 1)
     save_to_svg(fig_saves{k, 2}, fig_saves{k, 1});
 end
 fprintf('--- Comprehensive Spatiotemporal Plots Complete ---\n\n');
+
+%% ================= Control 2 (dark-only cohort): its own figure set =================
+% Control 2 ran no corridor, so it has no spatial axis and cannot share one with
+% the task and Control 1 panels above. It gets the same treatment on its own
+% axis instead (2026-09-08, per Theo): the same metric x aggregation grid, the
+% same epoch grouping of trials, one panel per area.
+%
+% TWO DIFFERENCES FROM THE PANELS ABOVE, both forced by the cohort:
+%   1. The 50 bins are TEMPORAL bins spanning each dark trial, not 5 cm of
+%      corridor. There is no visual or reward zone to shade.
+%   2. Trial number is raw, not learning-point aligned. Yoked controls have no
+%      learning point, so "Expert" here is trials 21-30, a matched time window,
+%      NOT a matched level of performance.
+if ~isempty(ctrl2)
+    fprintf('--- Generating Control 2 (dark-only) figures ---\n');
+    c2_metrics = {'raw', 'Raw FR'; 'z', 'Z-Scored'};
+    for met_idx = 1:size(c2_metrics, 1)
+        fld      = c2_metrics{met_idx, 1};
+        met_name = c2_metrics{met_idx, 2};
+        for avg_idx = 1:numel(avg_methods)
+            avg_mode   = avg_methods{avg_idx};
+            fig_prefix = sprintf('[Control 2] %s - %s', met_name, avg_mode);
+            fprintf('Generating plots for: %s\n', fig_prefix);
+
+            % --- FIGURE A: within-trial temporal profile by area and epoch ---
+            figure('Name', sprintf('%s: Dark Profile', fig_prefix), ...
+                   'Position', [100, 100, 500 * numel(ctrl2), 450], 'Color', 'w');
+            t_prof = tiledlayout(1, numel(ctrl2), 'TileSpacing', 'compact', 'Padding', 'compact');
+            lh = []; lh_names = {};
+            for c2i = 1:numel(ctrl2)
+                nexttile; hold on;
+                cube = ctrl2(c2i).(fld);
+                lh = []; lh_names = {};
+                for i_epoch = 1:numel(epoch_trials)
+                    trs = epoch_trials{i_epoch};
+                    trs = trs(trs <= size(cube, 3));
+                    if isempty(trs), continue; end
+                    per_unit = mean(cube(:, :, trs), 3, 'omitnan');   % units x bins
+                    [mu, se] = c2_agg(per_unit, ctrl2(c2i).mouse, avg_mode);
+                    if all(isnan(mu)), continue; end
+                    h = shadedErrorBar(1:numel(mu), mu, se, ...
+                        'lineprops', {'-', 'Color', epoch_colors{i_epoch}, 'LineWidth', 2});
+                    lh(end+1) = h.mainLine;             %#ok<AGROW>
+                    lh_names{end+1} = epoch_names{i_epoch}; %#ok<AGROW>
+                end
+                if strcmp(avg_mode, 'Pooled')
+                    title(sprintf('%s (n=%d units)', ctrl2(c2i).area, size(cube, 1)));
+                else
+                    title(sprintf('%s (N=%d mice)', ctrl2(c2i).area, numel(unique(ctrl2(c2i).mouse))));
+                end
+                box on; xlim([0, size(cube, 2)]);
+            end
+            if ~isempty(lh), legend(lh, lh_names, 'Location', 'best'); end
+            title(t_prof, sprintf('%s: Dark-Period Temporal Profile', fig_prefix), 'FontSize', 16);
+            xlabel(t_prof, 'Temporal Bin within Dark Trial (1-50)', 'FontSize', 12);
+            ylabel(t_prof, met_name, 'FontSize', 12);
+            save_to_svg(regexprep(sprintf('%s_DarkProfile', fig_prefix), '[\[\]\s:]', '_'));
+
+            % --- FIGURE B: evolution across trials by area ---
+            figure('Name', sprintf('%s: Dark Evolution', fig_prefix), ...
+                   'Position', [200, 200, 900, 500], 'Color', 'w');
+            hold on; lh = []; lnames = {};
+            for c2i = 1:numel(ctrl2)
+                cube = ctrl2(c2i).(fld);
+                per_unit = reshape(mean(cube, 2, 'omitnan'), size(cube, 1), size(cube, 3));
+                [mu, se] = c2_agg(per_unit, ctrl2(c2i).mouse, avg_mode);
+                if all(isnan(mu)), continue; end
+                h = shadedErrorBar(1:numel(mu), mu, se, 'lineprops', ...
+                    {'-', 'Color', cfg.plot.colors.area_map(ctrl2(c2i).area), 'LineWidth', 2});
+                lh(end+1) = h.mainLine;                 %#ok<AGROW>
+                lnames{end+1} = ctrl2(c2i).area;        %#ok<AGROW>
+            end
+            epoch_marks = [0 3 10 20];
+            for k_mark = 1:numel(epoch_marks)
+                xline(epoch_marks(k_mark), 'k--', epoch_names{k_mark}, 'LineWidth', 1.5, ...
+                      'LabelHorizontalAlignment', 'right', 'LabelVerticalAlignment', 'bottom');
+            end
+            title(sprintf('%s: Dark-Period Evolution across Trials', fig_prefix));
+            xlabel('Trial Number (NOT learning-point aligned)');
+            ylabel(sprintf('Mean %s (averaged over the dark trial)', met_name));
+            xlim([0, n_trials_tensor]);
+            if ~isempty(lh), legend(lh, lnames, 'Location', 'northwest'); end
+            box on; hold off;
+            save_to_svg(regexprep(sprintf('%s_DarkEvolution', fig_prefix), '[\[\]\s:]', '_'));
+        end
+    end
+    fprintf('--- Control 2 Figures Complete ---\n\n');
+end
 
 %% ================= Comprehensive Spatiotemporal Visualization (Increase/Decrease/Maintain) =================
 fprintf('--- Generating Comprehensive Spatiotemporal Plots (Pooled vs Hierarchical) ---\n');
@@ -2183,36 +2253,26 @@ save_all_open_figures('spatiotemporal');
 % Restore figure visibility for interactive work.
 clear fig_guard
 
-%% ---- Local functions (Control 2 overlay helpers, 2026-09-07) ----
-function [mu, se] = ctrl2_trials(M, mouse, avg_mode)
-% Per-trial mean and SEM of Control 2 unit x trial rates M, pooled over units
-% or hierarchical over mice (unit-mean per mouse first). NaN-padded trials
-% beyond a mouse's session are omitted.
+%% ---- Local functions (Control 2 helpers) ----
+function [mu, se] = c2_agg(M, mouse, avg_mode)
+% Column-wise mean and SEM of a units x N matrix (N = bins or trials), pooled
+% over units or hierarchical over mice (each mouse's unit-mean first, so N is
+% the number of mice). Columns with no data return NaN rather than 0, and a SEM
+% needs at least two contributors.
     if strcmp(avg_mode, 'Pooled')
+        n  = sum(~isnan(M), 1);
         mu = mean(M, 1, 'omitnan');
-        se = std(M, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(M), 1));
+        se = std(M, 0, 1, 'omitnan') ./ sqrt(max(n, 1));
     else
         um = unique(mouse);
         mm = nan(numel(um), size(M, 2));
         for i = 1:numel(um)
             mm(i, :) = mean(M(mouse == um(i), :), 1, 'omitnan');
         end
+        n  = sum(~isnan(mm), 1);
         mu = mean(mm, 1, 'omitnan');
-        se = std(mm, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(mm), 1));
+        se = std(mm, 0, 1, 'omitnan') ./ sqrt(max(n, 1));
     end
-end
-
-function v = ctrl2_epoch(M, mouse, trs, avg_mode)
-% Scalar Control 2 rate over the trial window TRS: mean over units (Pooled) or
-% mean over mice of each mouse's unit-mean (Hierarchical).
-    trs = trs(trs <= size(M, 2));
-    if isempty(trs), v = NaN; return; end
-    per_unit = mean(M(:, trs), 2, 'omitnan');
-    if strcmp(avg_mode, 'Pooled')
-        v = mean(per_unit, 'omitnan');
-    else
-        um = unique(mouse);
-        mm = arrayfun(@(m) mean(per_unit(mouse == m), 'omitnan'), um);
-        v = mean(mm, 'omitnan');
-    end
+    mu(n == 0) = NaN;
+    se(n < 2)  = NaN;
 end

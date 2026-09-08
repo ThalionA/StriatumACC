@@ -99,7 +99,10 @@ const SECTIONS = [
     files: pick(/^spatiotemporal_\d+_task_/).map(f => path.join(FIG, f)) },
 
   { title: 'Spatiotemporal activity: control animals',
-    files: pick(/^spatiotemporal_\d+_control_/).map(f => path.join(FIG, f)) },
+    files: pick(/^spatiotemporal_\d+_control_(?!2_)/).map(f => path.join(FIG, f)) },
+
+  { title: 'Control 2 (dark-only cohort): dark-period profile and evolution',
+    files: pick(/^spatiotemporal_\d+_control_2_/).map(f => path.join(FIG, f)) },
 
   { title: 'Corridor versus dark: is the dark ITI a baseline?',
     files: pickIn(FIG, f => /^CorridorVsDark_/.test(f) ||
@@ -180,7 +183,8 @@ const SECTIONS = [
 
   { title: 'LFP: task versus yoked control, and the one learning-specific effect',
     files: pickIn(LFIG, /_task_vs_control\.png$/,
-                  ['lfp_task_vs_control.png', 'lfp_dls_theta_task_vs_control.png']) },
+                  ['lfp_task_vs_control.png', 'lfp_dls_theta_task_vs_control.png',
+                   'lfp_reliability_first20_task_vs_control.png']) },
 ];
 
 const pres = new pptxgen();

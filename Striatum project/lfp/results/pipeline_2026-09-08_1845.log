@@ -1,0 +1,105 @@
+cohorts: task control   steps: contrast plots   jobs: 5   only: all
+=== /opt/anaconda3/bin/python scripts/run_lfp_group_contrast.py @ 18:45:17 ===
+[contrast] evolution            2/56 cells differ between groups (BH q=0.05)
+              DLS     theta       task -0.1860 vs control +0.0758  p=0.0011 p_FDR=0.022  (n 12 vs 5)
+              DLS     theta       task -0.1806 vs control +0.0783  p=0.0010 p_FDR=0.019  (n 12 vs 5)
+[contrast] decoding             9/30 cells differ between groups (BH q=0.05)
+              ACC     high_gamma  task +0.0500 vs control +0.0170  p=0.0120 p_FDR=0.040  (n 15 vs 4)
+              ACC     low_gamma   task +0.0476 vs control +0.0077  p=0.0007 p_FDR=0.021  (n 15 vs 4)
+              ACC     theta       task +0.0619 vs control +0.0116  p=0.0033 p_FDR=0.024  (n 15 vs 4)
+              ACC     total       task +0.0681 vs control +0.0195  p=0.0037 p_FDR=0.024  (n 15 vs 4)
+              DG      high_gamma  task +0.0381 vs control -0.0001  p=0.0106 p_FDR=0.040  (n 3 vs 3)
+              DLS     low_gamma   task +0.0265 vs control +0.0052  p=0.0085 p_FDR=0.036  (n 12 vs 5)
+              DMS     high_gamma  task +0.0376 vs control +0.0078  p=0.0024 p_FDR=0.024  (n 16 vs 5)
+              DMS     low_gamma   task +0.0282 vs control +0.0046  p=0.0076 p_FDR=0.036  (n 16 vs 5)
+              DMS     total       task +0.0378 vs control +0.0108  p=0.0040 p_FDR=0.024  (n 16 vs 5)
+[contrast] reliability          13/30 cells differ between groups (BH q=0.05)
+              ACC     beta        task +0.5882 vs control +0.1367  p=0.0012 p_FDR=0.004  (n 15 vs 4)
+              ACC     high_gamma  task +0.6554 vs control +0.2212  p=0.0000 p_FDR=0.000  (n 15 vs 4)
+              ACC     low_gamma   task +0.5007 vs control +0.0207  p=0.0005 p_FDR=0.002  (n 15 vs 4)
+              CA1     high_gamma  task +0.7749 vs control +0.3738  p=0.0156 p_FDR=0.039  (n 3 vs 3)
+              DLS     beta        task +0.6782 vs control +0.0658  p=0.0007 p_FDR=0.002  (n 12 vs 5)
+              DLS     high_gamma  task +0.6463 vs control +0.1848  p=0.0001 p_FDR=0.001  (n 12 vs 5)
+              DLS     low_gamma   task +0.6097 vs control +0.0855  p=0.0000 p_FDR=0.000  (n 12 vs 5)
+              DLS     theta       task +0.7495 vs control +0.1876  p=0.0055 p_FDR=0.015  (n 12 vs 5)
+              DLS     total       task +0.7592 vs control +0.2473  p=0.0003 p_FDR=0.001  (n 12 vs 5)
+              DMS     beta        task +0.6328 vs control +0.0195  p=0.0000 p_FDR=0.000  (n 16 vs 5)
+              DMS     high_gamma  task +0.6312 vs control +0.1227  p=0.0000 p_FDR=0.000  (n 16 vs 5)
+              DMS     low_gamma   task +0.5065 vs control +0.0455  p=0.0000 p_FDR=0.000  (n 16 vs 5)
+              DMS     theta       task +0.7831 vs control +0.2282  p=0.0205 p_FDR=0.047  (n 16 vs 5)
+[contrast] moving_reliability   0/20 cells differ between groups (BH q=0.05)
+[contrast] behaviour            2/3 cells differ between groups (BH q=0.05)
+              behaviourspeed_profile_split_half_r task +0.9800 vs control +0.6753  p=0.0130 p_FDR=0.013  (n 16 vs 5)
+              behaviourmean_speed_cm_s task +36.0515 vs control +21.2100  p=0.0007 p_FDR=0.001  (n 16 vs 5)
+[contrast] cca                  0/30 cells differ between groups (BH q=0.05)
+[contrast] wrote lfp_group_contrast.csv (213 rows)
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_arms.py --cohort task @ 18:45:19 ===
+[plot] lfp_evolution_z_task.svg + .png
+[plot] lfp_evolution_speed_residual_task.svg + .png
+[plot] lfp_evolution_fraction_task.svg + .png
+[plot] lfp_evolution_speed_task.svg + .png
+[plot] lfp_decoding_task.svg + .png
+[plot] lfp_reliability_task.svg + .png
+[plot] lfp_cca_task.svg + .png
+[plot] lfp_cca_vs_distance_task.svg + .png
+[plot] lfp_reliability_moving_task.svg + .png
+[plot] lfp_reliability_moving_session_task.svg + .png
+[plot] lfp_reliability_moving_depth_task.svg + .png
+[plot] lfp_reliability_moving_vs_units_task.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_arms.py --cohort control @ 18:45:45 ===
+[plot] lfp_evolution_z_control.svg + .png
+[plot] lfp_evolution_speed_residual_control.svg + .png
+[plot] lfp_evolution_fraction_control.svg + .png
+[plot] lfp_evolution_speed_control.svg + .png
+[plot] lfp_decoding_control.svg + .png
+[plot] lfp_reliability_control.svg + .png
+[plot] lfp_cca_control.svg + .png
+[plot] lfp_cca_vs_distance_control.svg + .png
+[plot] lfp_reliability_moving_control.svg + .png
+[plot] lfp_reliability_moving_session_control.svg + .png
+[plot] lfp_reliability_moving_depth_control.svg + .png
+[plot] lfp_reliability_moving_vs_units_control.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_task_vs_control.py @ 18:46:01 ===
+[plot] lfp_task_vs_control.svg + .png
+[plot] lfp_dls_theta_task_vs_control.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_reliability_first20.py @ 18:46:03 ===
+[plot] task: 270 rows, window length [20] trials
+[plot] control: 115 rows, window length [20] trials
+[plot] lfp_reliability_first20_task_vs_control.svg + .png
+[plot] y-scale -0.66 to 0.83 on all 6 panels
+    DMS  theta       task +0.412 (n=16)   control +0.081 (n=5)
+    DMS  beta        task +0.326 (n=16)   control -0.136 (n=5)
+    DMS  low_gamma   task +0.242 (n=16)   control +0.055 (n=5)
+    DMS  high_gamma  task +0.318 (n=16)   control +0.055 (n=5)
+    DMS  total       task +0.489 (n=16)   control +0.288 (n=5)
+    DLS  theta       task +0.186 (n=12)   control -0.074 (n=5)
+    DLS  beta        task +0.353 (n=12)   control -0.032 (n=5)
+    DLS  low_gamma   task +0.253 (n=12)   control -0.005 (n=5)
+    DLS  high_gamma  task +0.330 (n=12)   control +0.057 (n=5)
+    DLS  total       task +0.310 (n=12)   control -0.056 (n=5)
+    ACC  theta       task +0.358 (n=15)   control +0.175 (n=4)
+    ACC  beta        task +0.190 (n=15)   control +0.086 (n=4)
+    ACC  low_gamma   task +0.180 (n=15)   control +0.003 (n=4)
+    ACC  high_gamma  task +0.424 (n=15)   control -0.041 (n=4)
+    ACC  total       task +0.510 (n=15)   control +0.280 (n=4)
+    V1   theta       task +0.476 (n=5)   control +0.046 (n=3)
+    V1   beta        task +0.515 (n=5)   control +0.292 (n=3)
+    V1   low_gamma   task +0.460 (n=5)   control +0.045 (n=3)
+    V1   high_gamma  task +0.527 (n=5)   control +0.332 (n=3)
+    V1   total       task +0.626 (n=5)   control +0.426 (n=3)
+    CA1  theta       task +0.640 (n=3)   control -0.002 (n=3)
+    CA1  beta        task +0.211 (n=3)   control -0.394 (n=3)
+    CA1  low_gamma   task +0.263 (n=3)   control +0.059 (n=3)
+    CA1  high_gamma  task +0.372 (n=3)   control +0.248 (n=3)
+    CA1  total       task +0.471 (n=3)   control +0.089 (n=3)
+    DG   theta       task +0.579 (n=3)   control +0.069 (n=3)
+    DG   beta        task +0.138 (n=3)   control -0.202 (n=3)
+    DG   low_gamma   task -0.028 (n=3)   control +0.059 (n=3)
+    DG   high_gamma  task +0.374 (n=3)   control +0.011 (n=3)
+    DG   total       task +0.326 (n=3)   control +0.094 (n=3)
+run:print:4: bad option: - 
+=== PIPELINE COMPLETE @ 18:46:04 ===

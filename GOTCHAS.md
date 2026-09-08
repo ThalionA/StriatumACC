@@ -122,3 +122,13 @@
   dropped 19 TCA pipeline figures for a month because the section matched
   `tca_(balanced|unbalanced)_NN_` while the files are `tca_NN_`. The builder now
   prints unused figures by family every run; read that report. (2026-09-08)
+- Adding a figure to a MATLAB plotting script RENUMBERS every `save_all_open_figures`
+  slot after it, so the previous sweep's files linger under names that now point at
+  different content. The deck builder dedupes by slot and takes the newest, but a
+  name-based lookup grabs the wrong vintage. After changing the figure set, delete
+  the `<prefix>_NN_*` files older than the sweep (check first that every stale slug
+  is reproduced by the new run). 164 such twins were removed on 2026-09-08.
+- `PreprocessStriatumControl2.m` checked `exist('Striatum project/preprocessed_data_control2.mat')`
+  while its load/save used a bare filename, so it neither found nor wrote the product
+  `project_cfg` declares. Paths in a pipeline script come from `project_cfg`, never
+  from a literal. (2026-09-08)
