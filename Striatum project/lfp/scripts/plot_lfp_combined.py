@@ -152,6 +152,7 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
     areas = [a for a in figstyle.AREA_ORDER
              if any(r["area"] == a for rows in per_cohort.values() for r in rows)]
     fig, axes = _grid(areas, len(BANDS))
+    counts: dict = {}
     x = np.arange(len(epochs))
     for bi, band in enumerate(BANDS):
         for ai, area in enumerate(areas):
@@ -164,9 +165,10 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
                     v = r.get("z_corridor", np.nan)
                     if np.isfinite(v):
                         per_epoch[r["epoch"]][int(r["mouse_id"])] = v
-                m, e = [], []
+                m, e, ns = [], [], []
                 for ep in epochs:
                     vals = list(per_epoch.get(ep, {}).values())
+                    ns.append(len(vals))
                     if len(vals) >= MIN_ANIMALS:
                         m.append(float(np.mean(vals)))
                         e.append(float(np.std(vals, ddof=1) / np.sqrt(len(vals))))
@@ -177,8 +179,24 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
                     continue
                 ax.errorbar(x, m, yerr=e, marker="o", ms=4, lw=1.6, capsize=3,
                             color=colour, label=label)
+                # Print the per-epoch animal count. A point is dropped when fewer
+                # than MIN_ANIMALS animals have it, and the reason is never the
+                # data being short: the Intermediate and Expert windows are
+                # LEARNING-POINT relative, so the two task non-learners (703 and
+                # 1206, which never reach criterion) have no such window at all.
+                # In CA1 and DG, where 1206 is one of only three task animals,
+                # that takes n to 2 and the line stops after "Trials 4-10".
+                counts.setdefault((area, band, key), ns)
             ax.axhline(0, color="k", lw=0.5, ls=":")
             ax.set_xticks(x)
+            lines = []
+            for key, label, colour in COHORTS:
+                ns = counts.get((area, band, key))
+                if ns:
+                    lines.append(f"{label.split()[0].lower()} N={'/'.join(map(str, ns))}")
+            if lines:
+                ax.text(0.02, 0.03, "\n".join(lines), transform=ax.transAxes,
+                        fontsize=5.5, color="0.35", va="bottom")
             if bi == 0:
                 ax.set_title(area, fontsize=11, fontweight="bold",
                              color=figstyle.AREA_COLOUR[area])
@@ -191,9 +209,13 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
     axes[0][0].legend(fontsize=8, frameon=False, loc="upper left")
     fig.suptitle(
         "LFP band power across learning: task versus yoked Control 1\n"
-        "z-scored log power in the corridor, animal means ± SEM, shared y-scale.\n"
+        "z-scored log power in the corridor, animal means ± SEM, shared y-scale. "
+        f"N per epoch is printed in each panel; a point needs {MIN_ANIMALS} animals to be drawn.\n"
+        "Intermediate and Expert are LEARNING-POINT relative, so the two task "
+        "non-learners (703, 1206) have no such window — in CA1/DG, where 1206 is "
+        "one of three animals, the task line therefore stops after trials 4-10.\n"
         "Control epochs are matched TIME windows: yoked controls have no learning "
-        "point and inherit the task cohort's average (41).", fontsize=12)
+        "point and inherit the task cohort's average (41).", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.90))
     figstyle.save_pair(fig, stem)
 

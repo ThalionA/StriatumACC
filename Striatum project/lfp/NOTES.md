@@ -1,5 +1,37 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-09 (b) — Why the CA1/DG task line stops after trials 4-10
+
+Not missing trials. Every animal has all of its trials; the **epochs are the
+problem, not the data**.
+
+`Intermediate` and `Expert` are defined RELATIVE TO THE LEARNING POINT
+(`lp-10 .. lp-1` and `lp .. lp+9`). Two task animals never reach criterion and
+have no learning point at all — **703 and 1206** (`lp=None` in the arms log) —
+so neither window exists for them and they contribute to `Trials 1-3` and
+`Trials 4-10` only. Measured from `lfp_arms_evolution_task.csv`:
+
+| area | animals, Trials 1-3 → Expert | who drops |
+|---|---|---|
+| DMS | 16 → 14 | 703, 1206 |
+| ACC | 15 → 14 | 703 |
+| DLS | 12 → 12 | — |
+| V1  | 5 → 4 | 1206 |
+| CA1 | 3 → **2** | 1206 |
+| DG  | 3 → **2** | 1206 |
+
+CA1 and DG have only three task probes (1201, 1206, 1212), and 1206 is one of
+them, so those two areas fall to n = 2 — below the three-animal floor the
+combined figures require before drawing a mean ± SEM. Hence the line stops.
+
+The figure now prints `task N=3/3/2/2` in each panel and says this in its
+caption, so the gap explains itself rather than reading as truncated data.
+
+**The session-aligned figure does not have this problem at all** — trial 1 is
+trial 1 for every animal, learner or not, so CA1 and DG are drawn across the
+whole 20-trial window with n = 3 throughout. That is a second reason to prefer
+the session axis for anything involving the small hippocampal cohort.
+
 ## 2026-09-09 — Corrected: the reliability figure Theo asked for is the MOVING one
 
 **I built the wrong figure yesterday.** "Trial-to-trial reliability in the first
