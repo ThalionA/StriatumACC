@@ -19,8 +19,19 @@ figs = figs(isgraphics(figs, 'figure'));          % drop stale/deleted handles
 [~, order] = sort([figs.Number]);
 figs = figs(order);
 n = 0;
+skipped = {};
 for k = 1:numel(figs)
     if ~isgraphics(figs(k), 'figure')
+        continue
+    end
+    % Already written by save_to_svg under its own descriptive name: saving it
+    % again here would put the same pixels on disk twice under two names, which
+    % is what this sweep used to do for every figure of three pipelines.
+    % The sweep remains the ONLY save path for Run_TCA_pipeline and
+    % ensemble_analysis, which name no figures, so it is not removed.
+    already = getappdata(figs(k), 'SaveToSvgNames');
+    if ~isempty(already)
+        skipped{end+1} = already{1}; %#ok<AGROW>
         continue
     end
     raw = get(figs(k), 'Name');
@@ -41,6 +52,11 @@ for k = 1:numel(figs)
         warning('save_all_open_figures:printFailed', ...
                 'Figure %d ("%s") not saved: %s', k, clean, err.message);
     end
+end
+if ~isempty(skipped)
+    fprintf(['Skipped %d figure(s) already saved by save_to_svg (e.g. %s) — ' ...
+             'they are on disk under their own names, not under a %s_NN_ one.\n'], ...
+            numel(skipped), skipped{1}, prefix);
 end
 fprintf('Saved %d of %d figures to figures/ with prefix "%s_" (svg+png pairs).\n', ...
         n, numel(figs), prefix);

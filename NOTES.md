@@ -1,5 +1,69 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-09 — Three-cohort y-scales, and the end of the double-saved figures
+
+**No figure is written twice any more.** Audited with a 14-agent workflow (5 script
+inventories, a repo-wide consumer sweep, a y-limit structural read, then an
+adversarial verify of each claim). Measured before the fix: **130 images existed
+under two names, pixel-identical, 59 MB.** Cause: `IntegratedAll_v1`,
+`SpatioTemporalActivityEvolution` and `CorridorVsDarkActivity` name and save every
+figure with `save_to_svg`, and then call `save_all_open_figures`, whose sweep saves
+all of them AGAIN under positional `<prefix>_NN_` names.
+
+Fix at the helper, not the call sites: `save_to_svg` records the name it wrote on the
+figure (`SaveToSvgNames` appdata) and `save_all_open_figures` skips any figure that
+carries one. The sweep therefore keeps working as the ONLY save path for
+`Run_TCA_pipeline` (19 figures) and `ensemble_analysis` (68), which name no figures —
+the verifiers confirmed those two would lose everything if the sweep were removed.
+The spatiotemporal run now ends `Skipped 106 figure(s) ... Saved 0 of 106`.
+
+**A silent overwrite the audit found.** Two pairs of sections wrote different figures
+under byte-identical name expressions: the two temporal-skewness sections, and the
+MeanDist histogram vs KDE sections. **14 figures were being overwritten**, and only
+the numbered sweep copy of the first of each pair survived — so removing the sweep
+without fixing this would have lost them. Suffixed `_SpaceAveraged` and `_KDE_`.
+
+**Y-limits now match across all three cohorts** (per Theo). The 2026-09-07 matcher
+only spanned Task and Control 1, and Control 2's figures were drawn afterwards on
+pure autoscale. The Control 2 block now runs BEFORE the matcher, its axes are
+captured and its saves deferred, and one pass sets the limits for all three — per
+area for the profile panels, per figure for the temporal-evolution panels, across
+Raw FR and Z-Scored, Pooled and Hierarchical. Matching is keyed by AREA NAME: section
+1's columns are alphabetical over all areas while Control 2 has only DMS/DLS/ACC, so
+index-matching would have paired the wrong areas.
+
+Effect, measured: Task DMS Raw FR moved from 1–5.5 to 1–8 to meet Control 2, ACC and
+DLS were already the widest. **The cost is real and is in the code comment**: on Raw
+FR the three cohorts sit at different absolute rates, so a union scale compresses
+whichever cohort is smaller. The Z-Scored panels are the ones to read when shape
+matters more than level.
+
+**Consumers migrated.** Only two things read the figures directory:
+`presentations/build_deck.js` and `presentations/collect_manuscript_figures.py`. Both
+now select the affected pipelines by descriptive name rather than slot number — the
+numbered→descriptive mapping was derived by PIXEL IDENTITY against the old files, not
+by guessing. `summary_01..03` still come from `make_summary_figs.py` (a second,
+independent producer of numbered names the first audit pass missed; the verifier
+caught it) and are untouched, as are `ensemble_*` and `tca_*`.
+
+**Cleanup: 294 files, 62 MB deleted** — 212 `spatiotemporal_NN_*` the script no longer
+writes, 74 `integrated_`/`corridordark_` files with a pixel-identical twin, 8 orphaned
+by the `_KDE_` rename. Two `corridordark_NN_` files were KEPT: they are the two panels
+with no descriptive save, and the sweep still writes them. **47 legacy stems from
+older versions of the script were deliberately NOT deleted** (`_*__Neuron_Types__*`,
+`_*__Density_*`, `_*__Distributions_*`) — they are not duplicates, they are output of
+code that no longer exists, and that is Theo's call.
+
+Deck rebuilt: 402 slides, 377 figures, spatiotemporal task/control back to 49 each
+(the 7 per cohort the collision fix restored). Manuscript panels: 40 collected, 0
+missing.
+
+**Still NOT matched across cohorts**, and worth a decision: the temporal-evolution
+figures in the later sections — subpopulation (Increasers/Decreasers/Maintainers),
+area x cell-type per modulation class, area x cell-type z-scored, and both skewness
+sections. Those link areas WITHIN one cohort or not at all, and none has a Control 2
+counterpart, so matching them would be Task vs Control 1 only.
+
 ## 2026-09-08 (b) — 1103 excluded, Control 2 split out, first-20-trials LFP reliability
 
 **Figure 1 (per Theo).** The Control 2 overlay added on 09-07 is **removed** from

@@ -52,6 +52,15 @@ const all = dedupeBySlot(
 
 const pick = (re, sort = byNum) => all.filter(f => re.test(f)).sort(sort);
 
+// Explicit list, in the order given, skipping anything absent. Used where a
+// section used to be a slot-number RANGE: since 2026-09-09 the figures that
+// carry their own descriptive name are no longer ALSO written under a
+// positional `<prefix>_NN_` name (they were, pixel-identically, 130 times over),
+// so a range has nothing to range over. Naming the files is also immune to the
+// renumbering that silently emptied the TCA section for a month.
+const named = (...stems) => stems.filter(f => all.includes(`${f}.png`))
+                                 .map(f => path.join(FIG, `${f}.png`));
+
 // Same as `pick`, for a directory other than FIG. `order` optionally pins the
 // leading files; anything else matching falls in behind, alphabetically.
 function pickIn(dir, re, order = []) {
@@ -84,25 +93,36 @@ const SECTIONS = [
     files: pick(/^compare_bin_sizes\.png$/).map(f => path.join(FIG, f)) },
 
   { title: 'Behaviour and learning trajectories',
-    files: range('integrated_', 1, 8).map(f => path.join(FIG, f)) },
+    files: named('Behavioral_Lick_Heatmaps_Group1', 'Behavioral_Lick_Heatmaps_Group2',
+                 'Behavioral_Lick_Heatmaps_Group3', 'Behavioral_ZError_AllTask',
+                 'Behavioral_Mouse3_VerticalAlign', 'Behavioral_Epoch_ZError',
+                 'Behavioral_Stability_AllGroups_Epochs',
+                 'Behavioural_Evolution_3Groups_Yoked') },
 
   { title: 'Trial-to-trial reliability of neural responses',
-    files: [...range('integrated_', 9, 10), ...range('integrated_', 23, 25)].map(f => path.join(FIG, f)) },
+    files: named('Stability_AllGroups_Hierarchical_ZScored', 'Stability_AllGroups_Pooled_ZScored',
+                 'Group_1_Cross_Modal_Correlations', 'Group_2_Cross_Modal_Correlations',
+                 'Group_3_Cross_Modal_Correlations') },
 
   { title: 'Position decoding and its evolution across learning',
-    files: range('integrated_', 11, 14).map(f => path.join(FIG, f)) },
+    files: named('Decoding_Evolution_3Groups_Yoked', 'Decoding_Spatial_Bin_Error_3Groups',
+                 'Decoding_Spatial_Entropy_Bin_Profile_3Groups',
+                 'Decoding_Lick_Prediction_3Groups') },
 
   { title: 'Spatial tuning by area',
-    files: range('integrated_', 15, 22).map(f => path.join(FIG, f)) },
+    files: named('Area_Activity_raw_Pooled', 'Area_Activity_raw_Pooled_TrialEvo',
+                 'Area_Activity_raw_Hierarchical', 'Area_Activity_raw_Hierarchical_TrialEvo',
+                 'Area_Activity_z_Pooled', 'Area_Activity_z_Pooled_TrialEvo',
+                 'Area_Activity_z_Hierarchical', 'Area_Activity_z_Hierarchical_TrialEvo') },
 
   { title: 'Spatiotemporal activity: task animals',
-    files: pick(/^spatiotemporal_\d+_task_/).map(f => path.join(FIG, f)) },
+    files: pick(/^_Task__/, (a, b) => a.localeCompare(b)).map(f => path.join(FIG, f)) },
 
   { title: 'Spatiotemporal activity: control animals',
-    files: pick(/^spatiotemporal_\d+_control_(?!2_)/).map(f => path.join(FIG, f)) },
+    files: pick(/^_Control__/, (a, b) => a.localeCompare(b)).map(f => path.join(FIG, f)) },
 
   { title: 'Control 2 (dark-only cohort): dark-period profile and evolution',
-    files: pick(/^spatiotemporal_\d+_control_2_/).map(f => path.join(FIG, f)) },
+    files: pick(/^_Control_2__/, (a, b) => a.localeCompare(b)).map(f => path.join(FIG, f)) },
 
   { title: 'Corridor versus dark: is the dark ITI a baseline?',
     files: pickIn(FIG, f => /^CorridorVsDark_/.test(f) ||

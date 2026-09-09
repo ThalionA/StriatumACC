@@ -21,18 +21,21 @@ OUT = ROOT / "documents" / "manuscript_figures"
 
 
 def sweep(slug: str, directory: Path = FIG) -> Path:
-    """Resolve a `save_all_open_figures` figure by NAME, not by slot number.
+    """Resolve a figure that is still written by `save_all_open_figures`.
 
-    Those files are `<prefix>_NN_<slug>.png`, and NN is just the figure's
-    position in the sweep: adding one figure to the plotting script renumbers
-    every slot after it. Pinning a panel to `spatiotemporal_25_...` therefore
-    silently points at different content the next time the figure set changes
-    (it did, on 2026-09-08, when the Control 2 figures were added and slot 25
-    became slot 33). The slug is stable, so match on that.
+    Those files are `<prefix>_NN_<slug>.png` and NN is only the figure's position
+    in the sweep, so pinning a panel to a slot number silently points at
+    different content whenever the figure set changes (it did, on 2026-09-08).
+    Match on the slug instead.
+
+    Only `ensemble_*` and `tca_*` still come through the sweep: since 2026-09-09
+    a figure that `save_to_svg` has already written is skipped by the sweep, so
+    the pipelines that name their own figures no longer produce a numbered twin.
+    Panels from those pipelines are referenced by their descriptive name.
 
     Returns the single match; on 0 or 2+ matches returns a path that does not
-    exist, so the caller's normal "source missing" report fires instead of a
-    wrong file being copied silently.
+    exist, so the caller's "source missing" report fires instead of a wrong file
+    being copied silently.
     """
     prefix, _, tail = slug.partition("_")
     hits = sorted(directory.glob(f"{prefix}_*_{tail}.png"))
@@ -45,19 +48,19 @@ PANELS: list[tuple[str, Path | None, str]] = [
     # ---------------- Figure 1: behaviour ----------------
     ("Fig1A_behaviour_schematic",            None,
      "Behaviour schematic + control groups (illustration; no code)"),
-    ("Fig1B_lick_heatmap_task",              FIG / "integrated_01_task_spatial_lick_rate_heatmaps.png",
+    ("Fig1B_lick_heatmap_task",              FIG / "Behavioral_Lick_Heatmaps_Group1.png",
      "Learning heatmap, task"),
-    ("Fig1B_lick_heatmap_control1",          FIG / "integrated_02_control_1_spatial_lick_rate_heatmaps.png",
+    ("Fig1B_lick_heatmap_control1",          FIG / "Behavioral_Lick_Heatmaps_Group2.png",
      "Learning heatmap, control 1"),
-    ("Fig1B_lick_heatmap_control2",          FIG / "integrated_03_control_2_temporal_lick_rate_heatmaps.png",
+    ("Fig1B_lick_heatmap_control2",          FIG / "Behavioral_Lick_Heatmaps_Group3.png",
      "Learning heatmap, control 2"),
-    ("Fig1B_performance_zerror_task",        FIG / "integrated_04_task_group_z_scored_lick_errors.png",
+    ("Fig1B_performance_zerror_task",        FIG / "Behavioral_ZError_AllTask.png",
      "Performance quantification (z-scored lick error) -> epochs"),
-    ("Fig1B_performance_by_epoch",           FIG / "integrated_06_z_scored_errors_by_epoch.png",
+    ("Fig1B_performance_by_epoch",           FIG / "Behavioral_Epoch_ZError.png",
      "Performance by epoch (defines Naive/Intermediate/Expert)"),
-    ("Fig1C_behavioural_stability_epochs",   FIG / "integrated_07_behavioral_stability_evolution_epochs.png",
+    ("Fig1C_behavioural_stability_epochs",   FIG / "Behavioral_Stability_AllGroups_Epochs.png",
      "Increasing stability of licks and velocity"),
-    ("Fig1C_behavioural_evolution_yoked",    FIG / "integrated_08_behavioural_evolution_across_yoked_epochs.png",
+    ("Fig1C_behavioural_evolution_yoked",    FIG / "Behavioural_Evolution_3Groups_Yoked.png",
      "Behavioural evolution across yoked epochs, all 3 groups"),
     ("Fig1D_optimality",                     None,
      "Optimality vs reward rate (legacy/optimality_analysis.m is orphaned)"),
@@ -71,19 +74,19 @@ PANELS: list[tuple[str, Path | None, str]] = [
      "Neuropixels track + Allen Atlas (histology; no code in repo)"),
     ("Fig2B_recording_examples",             None,
      "Example rasters/waveforms (no live code)"),
-    ("Fig2C_activity_by_area_epoch_task",    sweep("spatiotemporal_task_raw_fr_hierarchical_spatial"),
+    ("Fig2C_activity_by_area_epoch_task",    FIG / "_Task__Raw_FR_-_Hierarchical_Spatial.png",
      "Evolution of activity across epochs by area, task"),
-    ("Fig2C_activity_by_area_epoch_control", sweep("spatiotemporal_control_raw_fr_hierarchical_spatial"),
+    ("Fig2C_activity_by_area_epoch_control", FIG / "_Control__Raw_FR_-_Hierarchical_Spatial.png",
      "Same, control"),
-    ("Fig2C_activity_by_area_and_type_task", sweep("spatiotemporal_task_raw_fr_pooled_increasers_spatial"),
+    ("Fig2C_activity_by_area_and_type_task", FIG / "_Task__Raw_FR_-_Pooled_-_Increasers_Spatial_Area_x_Type.png",
      "Activity by area x cell type (MSN/FS/TAN/RS)"),
-    ("Fig2D_neural_stability_hierarchical",  FIG / "integrated_09_stability_allgroups_hierarchical_zscored.png",
+    ("Fig2D_neural_stability_hierarchical",  FIG / "Stability_AllGroups_Hierarchical_ZScored.png",
      "Trial-to-trial reliability across epochs, animal-level, 3 groups"),
-    ("Fig2E_position_decoding_evolution",    FIG / "integrated_11_ml_decoding_evolution_yoked.png",
+    ("Fig2E_position_decoding_evolution",    FIG / "Decoding_Evolution_3Groups_Yoked.png",
      "Position decoding across epochs, 3 groups"),
-    ("Fig2E_decoding_error_profile",         FIG / "integrated_12_spatial_decoding_error_profile_across_corridor.png",
+    ("Fig2E_decoding_error_profile",         FIG / "Decoding_Spatial_Bin_Error_3Groups.png",
      "Decoding error along the corridor"),
-    ("Fig2E_decoding_certainty_profile",     FIG / "integrated_13_spatial_certainty_profile_across_corridor.png",
+    ("Fig2E_decoding_certainty_profile",     FIG / "Decoding_Spatial_Entropy_Bin_Profile_3Groups.png",
      "Decoder certainty (normalised entropy) along the corridor"),
 
     # ---------------- Figure 3: TCA / ensembles ----------------

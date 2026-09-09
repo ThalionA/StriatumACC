@@ -132,3 +132,18 @@
   while its load/save used a bare filename, so it neither found nor wrote the product
   `project_cfg` declares. Paths in a pipeline script come from `project_cfg`, never
   from a literal. (2026-09-08)
+- Every figure from `IntegratedAll_v1`, `SpatioTemporalActivityEvolution` and
+  `CorridorVsDarkActivity` was written TWICE and pixel-identically: once under its
+  descriptive `save_to_svg` name, once under a positional `<prefix>_NN_` name by the
+  `save_all_open_figures` safety sweep. 130 images, 59 MB. `save_to_svg` now tags the
+  figure (`SaveToSvgNames` appdata) and the sweep skips tagged figures — so it stays
+  the only save path for `Run_TCA_pipeline` and `ensemble_analysis`, which name no
+  figures at all. Never add a sweep to a script whose figures are already named.
+  (2026-09-09)
+- Two pairs of sections in `SpatioTemporalActivityEvolution` built DIFFERENT figures
+  under byte-identical filename expressions, so the later save silently overwrote the
+  earlier: the two temporal-skewness sections, and the MeanDist histogram vs KDE
+  sections (14 figures). Only the numbered sweep copy of the first of each pair
+  survived. Fixed with `_SpaceAveraged` and `_KDE_` suffixes. When adding a section
+  that mirrors an existing one, grep its save name before reusing the expression.
+  (2026-09-09)

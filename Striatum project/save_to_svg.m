@@ -23,4 +23,13 @@ pos = get(fig, 'Position');                    % [x y w h] in pixels
 longest = max(pos(3:4));
 dpi = floor(min(150, 1600 / max(longest, 1) * 96));
 print(fig, fullfile(out_dir, [name '.png']), '-dpng', sprintf('-r%d', max(dpi, 60)));
+% Mark the figure as already written, so save_all_open_figures' safety sweep
+% does not save it a SECOND time under a positional name. Before 2026-09-09
+% every figure from IntegratedAll_v1, SpatioTemporalActivityEvolution and
+% CorridorVsDarkActivity existed twice on disk, pixel-identical: 130 duplicate
+% images, 59 MB. Append, so a figure deliberately saved under two names records
+% both rather than the sweep resurrecting it.
+prior = getappdata(fig, 'SaveToSvgNames');
+if isempty(prior), prior = {}; end
+setappdata(fig, 'SaveToSvgNames', [prior, {name}]);
 end

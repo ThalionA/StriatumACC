@@ -303,52 +303,6 @@ for ds_idx = 1:size(datasets, 1)
     end % End loop metrics
 end % End loop datasets
 
-% --- Match y-scales between Task and Control (2026-09-07, meeting 2026-08-28) ---
-% Same metric, same aggregation, same area -> same y-limits across cohorts, so a
-% Task/Control pair reads on one scale. Zone patches are drawn here, after the
-% link, so they span the final limits. Empty tiles (no units) are ignored.
-for met_idx = 1:size(metrics, 1)
-    for avg_idx = 1:numel(avg_methods)
-        for i_area = 1:num_areas
-            axs = gobjects(0);
-            for ds_idx = 1:size(datasets, 1)
-                a = sp_axes{met_idx, avg_idx, ds_idx};
-                if numel(a) >= i_area && isgraphics(a(i_area)) && ~isempty(findobj(a(i_area), 'Type', 'line'))
-                    axs(end+1) = a(i_area); %#ok<AGROW>
-                end
-            end
-            if isempty(axs), continue; end
-            if numel(axs) == 1
-                yl = ylim(axs);
-            else
-                yls = cell2mat(get(axs, 'YLim'));
-                yl  = [min(yls(:, 1)), max(yls(:, 2))];
-            end
-            set(axs, 'YLim', yl);
-            y_p = [yl(1), yl(1), yl(2), yl(2)];
-            for k = 1:numel(axs)
-                patch(axs(k), [v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], ...
-                      'FaceAlpha', 0.5, 'EdgeColor', 'none', 'HandleVisibility', 'off');
-                patch(axs(k), [r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, ...
-                      'FaceAlpha', 0.2, 'EdgeColor', 'none', 'HandleVisibility', 'off');
-                uistack(findobj(axs(k), 'Type', 'line'), 'top');
-            end
-        end
-        axs = gobjects(0);
-        for ds_idx = 1:size(datasets, 1)
-            a = tp_axes{met_idx, avg_idx, ds_idx};
-            if ~isempty(a) && isgraphics(a), axs(end+1) = a; end %#ok<AGROW>
-        end
-        if numel(axs) > 1
-            yls = cell2mat(get(axs, 'YLim'));
-            set(axs, 'YLim', [min(yls(:, 1)), max(yls(:, 2))]);
-        end
-    end
-end
-for k = 1:size(fig_saves, 1)
-    save_to_svg(fig_saves{k, 2}, fig_saves{k, 1});
-end
-fprintf('--- Comprehensive Spatiotemporal Plots Complete ---\n\n');
 
 %% ================= Control 2 (dark-only cohort): its own figure set =================
 % Control 2 ran no corridor, so it has no spatial axis and cannot share one with
@@ -362,6 +316,10 @@ fprintf('--- Comprehensive Spatiotemporal Plots Complete ---\n\n');
 %   2. Trial number is raw, not learning-point aligned. Yoked controls have no
 %      learning point, so "Expert" here is trials 21-30, a matched time window,
 %      NOT a matched level of performance.
+% Control 2's axes are collected the same way section 1's are, so the single
+% y-matching pass below can put all THREE cohorts on one scale (2026-09-09).
+c2_sp_axes = cell(size(metrics, 1), numel(avg_methods));   % keyed [met, avg] -> containers.Map(area -> axes)
+c2_tp_axes = cell(size(metrics, 1), numel(avg_methods));
 if ~isempty(ctrl2)
     fprintf('--- Generating Control 2 (dark-only) figures ---\n');
     c2_metrics = {'raw', 'Raw FR'; 'z', 'Z-Scored'};
@@ -378,8 +336,10 @@ if ~isempty(ctrl2)
                    'Position', [100, 100, 500 * numel(ctrl2), 450], 'Color', 'w');
             t_prof = tiledlayout(1, numel(ctrl2), 'TileSpacing', 'compact', 'Padding', 'compact');
             lh = []; lh_names = {};
+            c2_sp_axes{met_idx, avg_idx} = containers.Map('KeyType', 'char', 'ValueType', 'any');
             for c2i = 1:numel(ctrl2)
-                nexttile; hold on;
+                ax_c2 = nexttile; hold on;
+                c2_sp_axes{met_idx, avg_idx}(ctrl2(c2i).area) = ax_c2;
                 cube = ctrl2(c2i).(fld);
                 lh = []; lh_names = {};
                 for i_epoch = 1:numel(epoch_trials)
@@ -405,7 +365,7 @@ if ~isempty(ctrl2)
             title(t_prof, sprintf('%s: Dark-Period Temporal Profile', fig_prefix), 'FontSize', 16);
             xlabel(t_prof, 'Temporal Bin within Dark Trial (1-50)', 'FontSize', 12);
             ylabel(t_prof, met_name, 'FontSize', 12);
-            save_to_svg(regexprep(sprintf('%s_DarkProfile', fig_prefix), '[\[\]\s:]', '_'));
+            fig_saves(end+1, :) = {gcf, regexprep(sprintf('%s_DarkProfile', fig_prefix), '[\[\]\s:]', '_')};
 
             % --- FIGURE B: evolution across trials by area ---
             figure('Name', sprintf('%s: Dark Evolution', fig_prefix), ...
@@ -432,11 +392,86 @@ if ~isempty(ctrl2)
             xlim([0, n_trials_tensor]);
             if ~isempty(lh), legend(lh, lnames, 'Location', 'northwest'); end
             box on; hold off;
-            save_to_svg(regexprep(sprintf('%s_DarkEvolution', fig_prefix), '[\[\]\s:]', '_'));
+            c2_tp_axes{met_idx, avg_idx} = gca;
+            fig_saves(end+1, :) = {gcf, regexprep(sprintf('%s_DarkEvolution', fig_prefix), '[\[\]\s:]', '_')};
         end
     end
     fprintf('--- Control 2 Figures Complete ---\n\n');
 end
+
+% --- Match y-scales across Task, Control 1 and Control 2 (2026-09-09) ---
+% Same metric, same aggregation, same area -> one y-scale across all three
+% cohorts, so the panels can be read against each other. Control 2's figures are
+% included even though its x axis is a temporal bin inside a dark trial rather
+% than a corridor position: the QUANTITY on y is the same (Hz, or sd for the
+% z-scored metric), which is what a shared scale asserts.
+%
+% CAVEAT, deliberately not hidden: on the Raw FR metric the three cohorts sit at
+% genuinely different absolute rates, so a union scale compresses whichever
+% cohort is smaller. That is the cost of the comparison Theo asked for; the
+% Z-Scored panels are the ones to read when the shape matters more than the level.
+%
+% Per-area matching is keyed by AREA NAME, not by column index: section 1's
+% columns come from unique(lbls_full.area) (ACC/CA1/DLS/DMS/V1) while Control 2
+% has only DMS/DLS/ACC in its own order, so index-matching would pair the wrong
+% areas. Zone patches are drawn after the limits are final so they span them;
+% Control 2 gets no zone patches (no corridor).
+for met_idx = 1:size(metrics, 1)
+    for avg_idx = 1:numel(avg_methods)
+        for i_area = 1:num_areas
+            this_area = areas_in_data{i_area};
+            axs = gobjects(0); is_corridor = logical([]);
+            for ds_idx = 1:size(datasets, 1)
+                a = sp_axes{met_idx, avg_idx, ds_idx};
+                if numel(a) >= i_area && isgraphics(a(i_area)) && ~isempty(findobj(a(i_area), 'Type', 'line'))
+                    axs(end+1) = a(i_area); is_corridor(end+1) = true; %#ok<AGROW>
+                end
+            end
+            m2 = c2_sp_axes{met_idx, avg_idx};
+            if ~isempty(m2) && isKey(m2, this_area)
+                a2 = m2(this_area);
+                if isgraphics(a2) && ~isempty(findobj(a2, 'Type', 'line'))
+                    axs(end+1) = a2; is_corridor(end+1) = false; %#ok<AGROW>
+                end
+            end
+            if isempty(axs), continue; end
+            if numel(axs) == 1
+                yl = ylim(axs);
+            else
+                yls = cell2mat(get(axs, 'YLim'));
+                yl  = [min(yls(:, 1)), max(yls(:, 2))];
+            end
+            set(axs, 'YLim', yl);
+            y_p = [yl(1), yl(1), yl(2), yl(2)];
+            for k = 1:numel(axs)
+                if is_corridor(k)
+                    patch(axs(k), [v_zone(1), v_zone(2), v_zone(2), v_zone(1)], y_p, [0.9 0.9 0.9], ...
+                          'FaceAlpha', 0.5, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+                    patch(axs(k), [r_zone(1), r_zone(2), r_zone(2), r_zone(1)], y_p, cfg.plot.colors.dls, ...
+                          'FaceAlpha', 0.2, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+                end
+                uistack(findobj(axs(k), 'Type', 'line'), 'top');
+            end
+        end
+        % The all-areas-on-one-axes evolution figures: one scale per
+        % (metric, aggregation) across all three cohorts.
+        axs = gobjects(0);
+        for ds_idx = 1:size(datasets, 1)
+            a = tp_axes{met_idx, avg_idx, ds_idx};
+            if ~isempty(a) && isgraphics(a), axs(end+1) = a; end %#ok<AGROW>
+        end
+        a2 = c2_tp_axes{met_idx, avg_idx};
+        if ~isempty(a2) && isgraphics(a2), axs(end+1) = a2; end %#ok<AGROW>
+        if numel(axs) > 1
+            yls = cell2mat(get(axs, 'YLim'));
+            set(axs, 'YLim', [min(yls(:, 1)), max(yls(:, 2))]);
+        end
+    end
+end
+for k = 1:size(fig_saves, 1)
+    save_to_svg(fig_saves{k, 2}, fig_saves{k, 1});
+end
+fprintf('--- Spatiotemporal + Control 2 figures saved (y-scales matched across 3 cohorts) ---\n\n');
 
 %% ================= Comprehensive Spatiotemporal Visualization (Increase/Decrease/Maintain) =================
 fprintf('--- Generating Comprehensive Spatiotemporal Plots (Pooled vs Hierarchical) ---\n');
@@ -1458,6 +1493,9 @@ fprintf('--- Hierarchical Spatial Skewness Profiles Complete ---\n\n');
 
 
 %% 15. Temporal Evolution of Population Skewness (Hierarchical, Z-Scored)
+% NB sections 15 and 15b drew different statistics under the SAME filename until
+% 2026-09-09; the later save silently overwrote the earlier one and only the
+% numbered sweep copy of the first survived. 15b is now suffixed _SpaceAveraged.
 fprintf('--- Generating Hierarchical Temporal Profiles of Population Skewness ---\n');
 
 % --- 1. Prepare Full Clean Data ---
@@ -1713,12 +1751,14 @@ for ds_idx = 1:size(datasets, 1)
     xlabel(t_temporal, 'Aligned Trial Number', 'FontSize', 14);
     ylabel(t_temporal, 'Mean Spatial Skewness (Smoothed)', 'FontSize', 14);
     
-    clean_name = regexprep(sprintf('[%s]_Temporal_Skewness_Profile_Hierarchical', ds_name), '[\[\]\s:]', '_'); 
+    clean_name = regexprep(sprintf('[%s]_Temporal_Skewness_Profile_Hierarchical_SpaceAveraged', ds_name), '[\[\]\s:]', '_'); 
     save_to_svg(clean_name);
 end
 fprintf('--- Hierarchical Temporal Skewness Profiles Complete ---\n\n');
 
 %% 16. Population Distributions of Mean Unit Activity (Hierarchical & KS Test)
+% NB the histogram (this section) and the KDE section below collided on filename
+% until 2026-09-09 — 12 figures were overwritten. The KDE saves now carry _KDE_.
 fprintf('--- Generating Hierarchical Mean Activity Distributions by Area and Cell Type ---\n');
 
 % --- 1. Prepare Full Clean Data ---
@@ -2142,7 +2182,7 @@ for ds_idx = 1:size(datasets, 1)
         xlim(ax_epochs(isgraphics(ax_epochs)), [x_eval(1), x_eval(end)]);
         title(t_epochs, sprintf('%s: %s Mean Activity Distributions by Epoch (KDE)', ds_name, current_type_name), 'FontSize', 16);
         
-        save_to_svg(regexprep(sprintf('[%s]_MeanDist_Epochs_Hierarchical_%s', ds_name, current_type_name), '[\[\]\s:]', '_'));
+        save_to_svg(regexprep(sprintf('[%s]_MeanDist_Epochs_Hierarchical_KDE_%s', ds_name, current_type_name), '[\[\]\s:]', '_'));
         
         % =====================================================================
         % FIGURE B: Distributions by Specific Trial
@@ -2243,7 +2283,7 @@ for ds_idx = 1:size(datasets, 1)
         xlim(ax_trials(isgraphics(ax_trials)), [x_eval(1), x_eval(end)]);
         title(t_trials, sprintf('%s: %s Mean Activity Distributions by Specific Trial (KDE)', ds_name, current_type_name), 'FontSize', 16);
         
-        save_to_svg(regexprep(sprintf('[%s]_MeanDist_Trials_Hierarchical_%s', ds_name, current_type_name), '[\[\]\s:]', '_'));
+        save_to_svg(regexprep(sprintf('[%s]_MeanDist_Trials_Hierarchical_KDE_%s', ds_name, current_type_name), '[\[\]\s:]', '_'));
     end
 end
 fprintf('--- Hierarchical KDE Mean Activity Distribution Plots Complete ---\n\n');

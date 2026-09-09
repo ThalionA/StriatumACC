@@ -12,22 +12,22 @@ the narrative claims, and three of the analyses are refuted; see
 
 | Panel | Source | Files | Shows |
 |---|---|---|---|
-| `Fig1B_lick_heatmap_task` | `Striatum project/figures/integrated_01_task_spatial_lick_rate_heatmaps.png` | svg+png | Learning heatmap, task |
-| `Fig1B_lick_heatmap_control1` | `Striatum project/figures/integrated_02_control_1_spatial_lick_rate_heatmaps.png` | svg+png | Learning heatmap, control 1 |
-| `Fig1B_lick_heatmap_control2` | `Striatum project/figures/integrated_03_control_2_temporal_lick_rate_heatmaps.png` | svg+png | Learning heatmap, control 2 |
-| `Fig1B_performance_zerror_task` | `Striatum project/figures/integrated_04_task_group_z_scored_lick_errors.png` | svg+png | Performance quantification (z-scored lick error) -> epochs |
-| `Fig1B_performance_by_epoch` | `Striatum project/figures/integrated_06_z_scored_errors_by_epoch.png` | svg+png | Performance by epoch (defines Naive/Intermediate/Expert) |
-| `Fig1C_behavioural_stability_epochs` | `Striatum project/figures/integrated_07_behavioral_stability_evolution_epochs.png` | svg+png | Increasing stability of licks and velocity |
-| `Fig1C_behavioural_evolution_yoked` | `Striatum project/figures/integrated_08_behavioural_evolution_across_yoked_epochs.png` | svg+png | Behavioural evolution across yoked epochs, all 3 groups |
+| `Fig1B_lick_heatmap_task` | `Striatum project/figures/Behavioral_Lick_Heatmaps_Group1.png` | svg+png | Learning heatmap, task |
+| `Fig1B_lick_heatmap_control1` | `Striatum project/figures/Behavioral_Lick_Heatmaps_Group2.png` | svg+png | Learning heatmap, control 1 |
+| `Fig1B_lick_heatmap_control2` | `Striatum project/figures/Behavioral_Lick_Heatmaps_Group3.png` | svg+png | Learning heatmap, control 2 |
+| `Fig1B_performance_zerror_task` | `Striatum project/figures/Behavioral_ZError_AllTask.png` | svg+png | Performance quantification (z-scored lick error) -> epochs |
+| `Fig1B_performance_by_epoch` | `Striatum project/figures/Behavioral_Epoch_ZError.png` | svg+png | Performance by epoch (defines Naive/Intermediate/Expert) |
+| `Fig1C_behavioural_stability_epochs` | `Striatum project/figures/Behavioral_Stability_AllGroups_Epochs.png` | svg+png | Increasing stability of licks and velocity |
+| `Fig1C_behavioural_evolution_yoked` | `Striatum project/figures/Behavioural_Evolution_3Groups_Yoked.png` | svg+png | Behavioural evolution across yoked epochs, all 3 groups |
 | `Fig1E_RL_fit_quality` | `Striatum project/rl_model/figures/fig_real_fit_quality.png` | png | RL fit quality per mouse (see caveat: the CV null is exposure-confounded) |
 | `Fig1E_RL_lick_profiles` | `Striatum project/rl_model/figures/fig_real_lick_profiles.png` | png | RL model per-epoch lick profiles vs data |
-| `Fig2C_activity_by_area_epoch_task` | `Striatum project/figures/spatiotemporal_03_task_raw_fr_hierarchical_spatial.png` | svg+png | Evolution of activity across epochs by area, task |
-| `Fig2C_activity_by_area_epoch_control` | `Striatum project/figures/spatiotemporal_11_control_raw_fr_hierarchical_spatial.png` | svg+png | Same, control |
-| `Fig2C_activity_by_area_and_type_task` | `Striatum project/figures/spatiotemporal_33_task_raw_fr_pooled_increasers_spatial.png` | svg+png | Activity by area x cell type (MSN/FS/TAN/RS) |
-| `Fig2D_neural_stability_hierarchical` | `Striatum project/figures/integrated_09_stability_allgroups_hierarchical_zscored.png` | svg+png | Trial-to-trial reliability across epochs, animal-level, 3 groups |
-| `Fig2E_position_decoding_evolution` | `Striatum project/figures/integrated_11_ml_decoding_evolution_yoked.png` | svg+png | Position decoding across epochs, 3 groups |
-| `Fig2E_decoding_error_profile` | `Striatum project/figures/integrated_12_spatial_decoding_error_profile_across_corridor.png` | svg+png | Decoding error along the corridor |
-| `Fig2E_decoding_certainty_profile` | `Striatum project/figures/integrated_13_spatial_certainty_profile_across_corridor.png` | svg+png | Decoder certainty (normalised entropy) along the corridor |
+| `Fig2C_activity_by_area_epoch_task` | `Striatum project/figures/_Task__Raw_FR_-_Hierarchical_Spatial.png` | svg+png | Evolution of activity across epochs by area, task |
+| `Fig2C_activity_by_area_epoch_control` | `Striatum project/figures/_Control__Raw_FR_-_Hierarchical_Spatial.png` | svg+png | Same, control |
+| `Fig2C_activity_by_area_and_type_task` | `Striatum project/figures/_Task__Raw_FR_-_Pooled_-_Increasers_Spatial_Area_x_Type.png` | svg+png | Activity by area x cell type (MSN/FS/TAN/RS) |
+| `Fig2D_neural_stability_hierarchical` | `Striatum project/figures/Stability_AllGroups_Hierarchical_ZScored.png` | svg+png | Trial-to-trial reliability across epochs, animal-level, 3 groups |
+| `Fig2E_position_decoding_evolution` | `Striatum project/figures/Decoding_Evolution_3Groups_Yoked.png` | svg+png | Position decoding across epochs, 3 groups |
+| `Fig2E_decoding_error_profile` | `Striatum project/figures/Decoding_Spatial_Bin_Error_3Groups.png` | svg+png | Decoding error along the corridor |
+| `Fig2E_decoding_certainty_profile` | `Striatum project/figures/Decoding_Spatial_Entropy_Bin_Profile_3Groups.png` | svg+png | Decoder certainty (normalised entropy) along the corridor |
 | `Fig3A_TCA_components_rank5` | `Striatum project/figures/tca_components_rank5.png` | svg+png | TCA components (neuron / spatial / trial factors) |
 | `Fig3A_TCA_components_rank4` | `Striatum project/figures/tca_components_rank4.png` | svg+png | TCA components at the BIC-selected rank |
 | `Fig3A_TCA_rank_diagnostics` | `Striatum project/figures/tca_bic_diagnostics.png` | svg+png | Rank selection diagnostics |
