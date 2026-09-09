@@ -18,7 +18,7 @@ from . import config
 
 #: Columns that stay strings when a table is loaded.
 TEXT_FIELDS = frozenset({
-    "cohort", "group", "probe", "area", "band", "epoch", "window",
+    "cohort", "group", "probe", "area", "band", "epoch", "window", "lp_source",
     "area_a", "area_b", "trial_rel_lp", "metric", "survives_fdr",
 })
 

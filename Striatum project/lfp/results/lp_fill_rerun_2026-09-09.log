@@ -1,0 +1,240 @@
+logging to results/pipeline_2026-09-09_1045.log
+cohorts: task control   steps: arms contrast plots   jobs: 5   only: all
+=== /opt/anaconda3/bin/python scripts/run_lfp_arms.py --jobs 6 --cohort task @ 10:45:29 ===
+[arms] cohort=task: 21 band-power files
+[arms] task 1106/visual    lp=67 areas=['V1'] 20+25+25+0+945+15+0 rows      4s
+[arms] task 1105/visual    lp=44 areas=['V1'] 20+25+25+0+1000+15+0 rows      6s
+[arms] task 1206/striatum  lp=41 areas=['DMS'] 20+25+25+0+520+15+1 rows      3s
+[arms] task 1212/striatum  lp=23 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+2325+45+1 rows     52s
+[arms] task 1201/striatum  lp=84 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     60s
+[arms] task 1206/visual    lp=41 areas=['CA1', 'DG', 'V1'] 60+75+75+15+1560+45+0 rows     56s
+[arms] task 1105/striatum  lp=44 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     64s
+[arms] task 1106/striatum  lp=67 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+2835+45+1 rows     66s
+[arms] task 1201/visual    lp=84 areas=['CA1', 'DG', 'V1'] 60+75+75+15+3000+45+0 rows     76s
+[arms] task 624/striatum  lp=32 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+1065+45+1 rows     30s
+[arms] task 418/striatum  lp=26 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+2130+45+1 rows     53s
+[arms] task 1212/visual    lp=23 areas=['CA1', 'DG', 'V1'] 60+75+75+15+2325+45+0 rows     58s
+[arms] task 409/striatum  lp=39 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     59s
+[arms] task 703/striatum  lp=41 areas=['ACC', 'DMS'] 40+50+50+5+1090+30+1 rows     18s
+[arms] task 614/striatum  lp=44 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     61s
+[arms] task 523/striatum  lp=22 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     68s
+[arms] task 731/striatum  lp=36 areas=['ACC', 'DMS'] 40+50+50+5+760+30+1 rows     14s
+[arms] task 823/striatum  lp=14 areas=['ACC', 'DMS'] 40+50+50+5+2000+30+1 rows     22s
+[arms] task 822/striatum  lp=33 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+1350+45+1 rows     32s
+[arms] task 727/striatum  lp=53 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     51s
+[arms] task 730/striatum  lp=54 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+3000+45+1 rows     52s
+[arms] all files in 2.8 min
+[arms] wrote lfp_arms_evolution_stats_task.csv: 13/72 cells survive BH-FDR at q=0.05
+[arms] wrote lfp_arms_evolution_task.csv (1080 rows)
+[arms] wrote lfp_arms_decoding_task.csv (1350 rows)
+[arms] wrote lfp_arms_reliability_task.csv (1350 rows)
+[arms] wrote lfp_arms_cca_task.csv (240 rows)
+[arms] wrote lfp_arms_moving_reliability_task.csv (43905 rows)
+[arms] wrote lfp_arms_moving_reliability_epochs_task.csv (810 rows)
+[arms] wrote lfp_arms_behaviour_task.csv (16 rows)
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/run_lfp_arms.py --jobs 6 --cohort control @ 10:48:21 ===
+[arms] cohort=control: 8 band-power files
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:101: RuntimeWarning: invalid value encountered in divide
+  ratio_cor = cor_lin / corridor[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:102: RuntimeWarning: invalid value encountered in divide
+  ratio_dark = dark_lin / dark[total_idx, mask]
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/scripts/run_lfp_arms.py:182: RuntimeWarning: All-NaN slice encountered
+  "reliability": float(np.nanmedian(moving[:, ti])),
+[arms] cont 407/striatum  lp=41 areas=['DLS', 'DMS'] 40+50+50+5+2000+30+1 rows     29s
+[arms] cont 513/striatum  lp=41 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+1635+45+1 rows     50s
+[arms] cont 515/visual    lp=41 areas=['CA1', 'DG', 'V1'] 60+75+75+15+1980+45+0 rows     51s
+[arms] cont 513/visual    lp=41 areas=['CA1', 'DG', 'V1'] 60+75+75+15+1635+45+0 rows     51s
+[arms] cont 515/striatum  lp=41 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+1980+45+1 rows     52s
+[arms] cont 1205/striatum  lp=41 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+2175+45+1 rows     54s
+[arms] cont 817/striatum  lp=41 areas=['ACC', 'DLS', 'DMS'] 60+75+75+15+2055+45+1 rows     34s
+[arms] cont 817/visual    lp=41 areas=['CA1', 'DG', 'V1'] 60+75+75+15+2055+45+0 rows     22s
+[arms] all files in 1.2 min
+[arms] wrote lfp_arms_evolution_stats_control.csv: 5/72 cells survive BH-FDR at q=0.05
+[arms] wrote lfp_arms_evolution_control.csv (460 rows)
+[arms] wrote lfp_arms_decoding_control.csv (575 rows)
+[arms] wrote lfp_arms_reliability_control.csv (575 rows)
+[arms] wrote lfp_arms_cca_control.csv (110 rows)
+[arms] wrote lfp_arms_moving_reliability_control.csv (15515 rows)
+[arms] wrote lfp_arms_moving_reliability_epochs_control.csv (345 rows)
+[arms] wrote lfp_arms_behaviour_control.csv (5 rows)
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/run_lfp_group_contrast.py @ 10:49:35 ===
+[contrast] evolution            2/84 cells differ between groups (BH q=0.05)
+              DLS     theta       task -0.1860 vs control +0.0758  p=0.0011 p_FDR=0.032  (n 12 vs 5)
+              DLS     theta       task -0.1806 vs control +0.0783  p=0.0010 p_FDR=0.029  (n 12 vs 5)
+[contrast] decoding             9/30 cells differ between groups (BH q=0.05)
+              ACC     high_gamma  task +0.0500 vs control +0.0170  p=0.0120 p_FDR=0.040  (n 15 vs 4)
+              ACC     low_gamma   task +0.0476 vs control +0.0077  p=0.0007 p_FDR=0.021  (n 15 vs 4)
+              ACC     theta       task +0.0619 vs control +0.0116  p=0.0033 p_FDR=0.024  (n 15 vs 4)
+              ACC     total       task +0.0681 vs control +0.0195  p=0.0037 p_FDR=0.024  (n 15 vs 4)
+              DG      high_gamma  task +0.0381 vs control -0.0001  p=0.0106 p_FDR=0.040  (n 3 vs 3)
+              DLS     low_gamma   task +0.0265 vs control +0.0052  p=0.0085 p_FDR=0.036  (n 12 vs 5)
+              DMS     high_gamma  task +0.0376 vs control +0.0078  p=0.0024 p_FDR=0.024  (n 16 vs 5)
+              DMS     low_gamma   task +0.0282 vs control +0.0046  p=0.0076 p_FDR=0.036  (n 16 vs 5)
+              DMS     total       task +0.0378 vs control +0.0108  p=0.0040 p_FDR=0.024  (n 16 vs 5)
+[contrast] reliability          13/30 cells differ between groups (BH q=0.05)
+              ACC     beta        task +0.5882 vs control +0.1367  p=0.0012 p_FDR=0.004  (n 15 vs 4)
+              ACC     high_gamma  task +0.6554 vs control +0.2212  p=0.0000 p_FDR=0.000  (n 15 vs 4)
+              ACC     low_gamma   task +0.5007 vs control +0.0207  p=0.0005 p_FDR=0.002  (n 15 vs 4)
+              CA1     high_gamma  task +0.7749 vs control +0.3738  p=0.0156 p_FDR=0.039  (n 3 vs 3)
+              DLS     beta        task +0.6782 vs control +0.0658  p=0.0007 p_FDR=0.002  (n 12 vs 5)
+              DLS     high_gamma  task +0.6463 vs control +0.1848  p=0.0001 p_FDR=0.001  (n 12 vs 5)
+              DLS     low_gamma   task +0.6097 vs control +0.0855  p=0.0000 p_FDR=0.000  (n 12 vs 5)
+              DLS     theta       task +0.7495 vs control +0.1876  p=0.0055 p_FDR=0.015  (n 12 vs 5)
+              DLS     total       task +0.7592 vs control +0.2473  p=0.0003 p_FDR=0.001  (n 12 vs 5)
+              DMS     beta        task +0.6328 vs control +0.0195  p=0.0000 p_FDR=0.000  (n 16 vs 5)
+              DMS     high_gamma  task +0.6312 vs control +0.1227  p=0.0000 p_FDR=0.000  (n 16 vs 5)
+              DMS     low_gamma   task +0.5065 vs control +0.0455  p=0.0000 p_FDR=0.000  (n 16 vs 5)
+              DMS     theta       task +0.7831 vs control +0.2282  p=0.0205 p_FDR=0.047  (n 16 vs 5)
+[contrast] moving_reliability   0/30 cells differ between groups (BH q=0.05)
+[contrast] behaviour            2/3 cells differ between groups (BH q=0.05)
+              behaviourspeed_profile_split_half_r task +0.9800 vs control +0.6753  p=0.0130 p_FDR=0.013  (n 16 vs 5)
+              behaviourmean_speed_cm_s task +36.0515 vs control +21.2100  p=0.0007 p_FDR=0.001  (n 16 vs 5)
+[contrast] cca                  0/30 cells differ between groups (BH q=0.05)
+[contrast] wrote lfp_group_contrast.csv (213 rows)
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_arms.py --cohort task @ 10:49:35 ===
+[plot] lfp_evolution_z_task.svg + .png
+[plot] lfp_evolution_speed_residual_task.svg + .png
+[plot] lfp_evolution_fraction_task.svg + .png
+[plot] lfp_evolution_speed_task.svg + .png
+[plot] lfp_decoding_task.svg + .png
+[plot] lfp_reliability_task.svg + .png
+[plot] lfp_cca_task.svg + .png
+[plot] lfp_cca_vs_distance_task.svg + .png
+[plot] lfp_reliability_moving_task.svg + .png
+[plot] lfp_reliability_moving_session_task.svg + .png
+[plot] lfp_reliability_moving_depth_task.svg + .png
+[plot] lfp_reliability_moving_vs_units_task.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_arms.py --cohort control @ 10:49:59 ===
+[plot] lfp_evolution_z_control.svg + .png
+[plot] lfp_evolution_speed_residual_control.svg + .png
+[plot] lfp_evolution_fraction_control.svg + .png
+[plot] lfp_evolution_speed_control.svg + .png
+[plot] lfp_decoding_control.svg + .png
+[plot] lfp_reliability_control.svg + .png
+[plot] lfp_cca_control.svg + .png
+[plot] lfp_cca_vs_distance_control.svg + .png
+[plot] lfp_reliability_moving_control.svg + .png
+[plot] lfp_reliability_moving_session_control.svg + .png
+[plot] lfp_reliability_moving_depth_control.svg + .png
+[plot] lfp_reliability_moving_vs_units_control.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_task_vs_control.py @ 10:50:14 ===
+[plot] lfp_task_vs_control.svg + .png
+[plot] lfp_dls_theta_task_vs_control.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_combined.py @ 10:50:15 ===
+[plot] lfp_reliability_moving_session_task_vs_control.svg + .png
+[plot]   shared y -0.109 to 0.271; animals task 16, control 5
+[plot] lfp_reliability_moving_lp_task_vs_control.svg + .png
+[plot]   shared y -0.109 to 0.282; animals task 16, control 5
+[plot] lfp_evolution_z_task_vs_control.svg + .png
+run:print:4: bad option: - 
+=== PIPELINE COMPLETE @ 10:50:22 ===

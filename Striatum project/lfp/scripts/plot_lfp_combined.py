@@ -179,13 +179,13 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
                     continue
                 ax.errorbar(x, m, yerr=e, marker="o", ms=4, lw=1.6, capsize=3,
                             color=colour, label=label)
-                # Print the per-epoch animal count. A point is dropped when fewer
-                # than MIN_ANIMALS animals have it, and the reason is never the
-                # data being short: the Intermediate and Expert windows are
-                # LEARNING-POINT relative, so the two task non-learners (703 and
-                # 1206, which never reach criterion) have no such window at all.
-                # In CA1 and DG, where 1206 is one of only three task animals,
-                # that takes n to 2 and the line stops after "Trials 4-10".
+                # Print the per-epoch animal count. Since 2026-09-09 the two
+                # task animals that never reach criterion (703, 1206) inherit the
+                # cohort's average learning point instead of having none, so the
+                # Intermediate and Expert windows exist for them and CA1/DG keep
+                # n = 3 throughout. Their late window is a matched TIME window
+                # rather than a matched level of performance -- the same caveat
+                # the controls carry -- which is why the count still gets printed.
                 counts.setdefault((area, band, key), ns)
             ax.axhline(0, color="k", lw=0.5, ls=":")
             ax.set_xticks(x)
@@ -211,11 +211,10 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
         "LFP band power across learning: task versus yoked Control 1\n"
         "z-scored log power in the corridor, animal means ± SEM, shared y-scale. "
         f"N per epoch is printed in each panel; a point needs {MIN_ANIMALS} animals to be drawn.\n"
-        "Intermediate and Expert are LEARNING-POINT relative, so the two task "
-        "non-learners (703, 1206) have no such window — in CA1/DG, where 1206 is "
-        "one of three animals, the task line therefore stops after trials 4-10.\n"
-        "Control epochs are matched TIME windows: yoked controls have no learning "
-        "point and inherit the task cohort's average (41).", fontsize=11)
+        "Intermediate and Expert are LEARNING-POINT relative. The two task animals that never "
+        "reach criterion (703, 1206) inherit the cohort average (41), as the controls do,\n"
+        "so for them — and for every control — the late window is a matched TIME window, "
+        "not a matched level of performance.", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.90))
     figstyle.save_pair(fig, stem)
 

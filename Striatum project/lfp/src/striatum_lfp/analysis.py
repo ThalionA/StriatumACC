@@ -97,24 +97,16 @@ def epoch_indices(lp: int | None, n_trials: int, *,
     return idx
 
 
-def cohort_learning_points(cohort=None, preproc_mat=None) -> dict[int, int | None]:
-    """``{mouse_id: learning point}`` from a cohort's preprocessed struct.
+def measured_learning_points(cohort=None, preproc_mat=None) -> dict[int, int | None]:
+    """``{mouse_id: learning point}`` exactly as the lick errors give it.
 
-    Yoked controls have no learning point of their own -- there is nothing for
-    them to learn -- so ``IntegratedAll_v1.m`` gives every control animal the TASK
-    cohort's average learning point, and the epoch windows follow from that. A
-    cohort declaring ``learning_point_source == "task_average"`` gets the same
-    treatment here, so control epochs line up with task epochs by construction.
+    ``None`` where the animal never reaches criterion. This is the raw
+    measurement; use :func:`cohort_learning_points` for the map the analyses
+    actually run on, which fills those gaps.
     """
     import h5py
 
     ch = cohort or config.TASK
-    if ch.learning_point_source == "task_average":
-        task_lps = [v for v in cohort_learning_points(config.TASK).values()
-                    if v is not None]
-        avg = int(round(sum(task_lps) / len(task_lps))) if task_lps else None
-        return {m: avg for m in ch.mouse_ids}
-
     out: dict[int, int | None] = {}
     with h5py.File(preproc_mat or ch.preproc_mat, "r") as handle:
         P = handle["preprocessed_data"]
@@ -122,6 +114,66 @@ def cohort_learning_points(cohort=None, preproc_mat=None) -> dict[int, int | Non
             z = np.asarray(handle[P["zscored_lick_errors"][i, 0]]).ravel()
             out[mouse] = learning_point(z)
     return out
+
+
+def task_average_learning_point(preproc_mat=None) -> int | None:
+    """Mean learning point over the task animals that ACTUALLY reach criterion.
+
+    Averaged over learners only, so it stays the same number whether or not the
+    non-learners have since been given it (a mean is unchanged by adding copies
+    of itself, but computing it from the filled map would make the definition
+    circular and impossible to reason about).
+    """
+    lps = [v for v in measured_learning_points(config.TASK, preproc_mat).values()
+           if v is not None]
+    return int(round(sum(lps) / len(lps))) if lps else None
+
+
+def cohort_learning_points(cohort=None, preproc_mat=None) -> dict[int, int | None]:
+    """``{mouse_id: learning point}`` as the epoch windows use it.
+
+    Two kinds of animal have no learning point of their own, and BOTH now take
+    the task cohort's average over its learners:
+
+    * **Yoked controls** -- there is nothing for them to learn, so
+      ``IntegratedAll_v1.m`` gives every control animal the task average and the
+      epoch windows follow from that. A cohort declaring
+      ``learning_point_source == "task_average"`` gets the same treatment here.
+    * **Task animals that never reach criterion** (703 and 1206). Until
+      2026-09-09 these were left at ``None``, which meant the Intermediate and
+      Expert windows did not exist for them at all -- and since 1206 is one of
+      only three task animals with a probe in CA1 and DG, those two areas fell
+      to n = 2 in half the epochs and dropped out of the figures entirely.
+
+    What this buys and what it costs. It buys CA1/DG coverage in every epoch and
+    restores DMS to 16 and ACC to 15 animals throughout. It costs the meaning of
+    the word "Expert" for those two animals: their late window is a matched TIME
+    window, not a matched level of performance -- exactly the caveat the controls
+    already carry. :func:`learning_point_sources` says which animals are on a
+    borrowed number so a table or figure can label them.
+    """
+    ch = cohort or config.TASK
+    if ch.learning_point_source == "task_average":
+        avg = task_average_learning_point()
+        return {m: avg for m in ch.mouse_ids}
+
+    measured = measured_learning_points(ch, preproc_mat)
+    avg = task_average_learning_point(preproc_mat if ch is config.TASK else None)
+    return {m: (v if v is not None else avg) for m, v in measured.items()}
+
+
+def learning_point_sources(cohort=None, preproc_mat=None) -> dict[int, str]:
+    """``{mouse_id: "measured" | "cohort_average"}`` for the map above.
+
+    Anything reporting an epoch result should be able to say which animals had a
+    learning point of their own, because for the others "Expert" means a time
+    window rather than a level of performance.
+    """
+    ch = cohort or config.TASK
+    if ch.learning_point_source == "task_average":
+        return {m: "cohort_average" for m in ch.mouse_ids}
+    return {m: ("measured" if v is not None else "cohort_average")
+            for m, v in measured_learning_points(ch, preproc_mat).items()}
 
 
 def cohort_trial_counts(cohort=None, preproc_mat=None) -> dict[int, int]:

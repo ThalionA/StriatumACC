@@ -59,6 +59,10 @@ def analyse_one(item) -> dict[str, list[dict]]:
     n_stored = corridor.shape[3]
 
     lp = analysis.cohort_learning_points(ch).get(mouse)
+    # "measured" or "cohort_average": for a borrowed learning point the late
+    # window is a matched TIME window, not a matched level of performance, and
+    # anything quoting an epoch result should be able to say so.
+    lp_source = analysis.learning_point_sources(ch).get(mouse, "unknown")
     n_trials_matlab = min(analysis.cohort_trial_counts(ch).get(mouse, n_stored), n_stored)
     epochs = analysis.epoch_indices(lp, n_trials_matlab, naive_split=analysis.NAIVE_SPLIT)
     speed = analysis.bin_speed_cm_s(z["corridor_bin_start_ms"], z["corridor_bin_stop_ms"])
@@ -79,7 +83,7 @@ def analyse_one(item) -> dict[str, list[dict]]:
     epochs3 = analysis.epoch_indices(lp, n_trials_matlab)
     EPOCH3_NAMES = ("Naive", "Intermediate", "Expert")
     base = {"cohort": cohort_name, "mouse_id": mouse, "probe": probe,
-            "learning_point": lp, "n_trials": n_trials_matlab}
+            "learning_point": lp, "lp_source": lp_source, "n_trials": n_trials_matlab}
 
     # Precompute the z-scored log cubes once per (band, area).
     cubes: dict[tuple[str, str], np.ndarray] = {}

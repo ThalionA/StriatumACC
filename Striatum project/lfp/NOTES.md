@@ -1,5 +1,52 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-09 (c) — Task non-learners take the cohort average LP; CA1 and DG are whole again
+
+**Requested by Theo.** The two task animals that never reach criterion, **703 and
+1206**, were left at `learning_point = None`, so the learning-point-relative
+Intermediate and Expert windows did not exist for them. Since 1206 is one of only
+three task animals with a probe in CA1 and DG, those two areas fell to n = 2 in half
+the epochs and dropped out of the figures. They now inherit the task cohort's average
+learning point (**41**) exactly as the yoked controls do — `IntegratedAll_v1.m`'s own
+rule, applied to the same kind of animal.
+
+**Coverage, measured before → after** (task animals contributing, per area):
+
+| area | Trials 1-3 | Trials 4-10 | Intermediate | Expert |
+|---|---|---|---|---|
+| DMS | 16 | 16 | 14 → **16** | 14 → **16** |
+| DLS | 12 | 12 | 12 | 12 |
+| ACC | 15 | 15 | 14 → **15** | 14 → **15** |
+| V1  | 5 | 5 | 4 → **5** | 4 → **5** |
+| CA1 | 3 | 3 | 2 → **3** | 2 → **3** |
+| DG  | 3 | 3 | 2 → **3** | 2 → **3** |
+
+Identical gains in the reliability and decoding arms. CA1 and DG now draw across all
+four epochs in `lfp_evolution_z_task_vs_control` instead of stopping after trials 4-10.
+
+**What it costs, stated plainly.** For 703 and 1206 "Expert" is now a matched TIME
+window, not a matched level of performance — the caveat every control already carried.
+The arm tables gained an `lp_source` column (`measured` | `cohort_average`) so any
+result can say which animals are on a borrowed number, and the combined figure's
+caption says it.
+
+**What moved in the results, checked like-for-like against the pre-change tables:**
+- **No cell gained or lost significance in the group contrast.** Decoding stays
+  9/30, reliability 13/30, moving reliability 0, CCA 0, behaviour 2/3.
+- **DLS theta is unchanged as an effect and slightly weaker as a q-value**: task
+  −0.1860 vs control +0.0758, p = 0.0011 in both runs; **p_FDR 0.0215 → 0.0323**,
+  purely because CA1 and DG cells are now testable so the BH family grew from 56 to
+  84 comparisons. It remains the only evolution cell where the groups differ.
+- Within-task evolution stats went 7/48 → 13/72 surviving BH-FDR, again because the
+  CA1/DG cells entered the family.
+
+**Code.** `analysis.measured_learning_points` is the raw measurement and is what
+MATLAB parity is owed on; `analysis.cohort_learning_points` is the analysis-facing map
+that fills the gaps; `analysis.task_average_learning_point` averages over LEARNERS
+only, so the definition cannot go circular; `analysis.learning_point_sources` labels
+each animal. The MATLAB-parity test was repointed to the measurement and a test added
+that the fill touches the two non-learners and nothing else. 241 tests pass.
+
 ## 2026-09-09 (b) — Why the CA1/DG task line stops after trials 4-10
 
 Not missing trials. Every animal has all of its trials; the **epochs are the

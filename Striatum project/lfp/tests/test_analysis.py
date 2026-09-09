@@ -52,9 +52,27 @@ def test_learning_point_ignores_nans():
 
 
 def test_learning_point_matches_matlab_on_the_real_cohort():
-    got = analysis.cohort_learning_points()
+    """The MEASUREMENT must still reproduce find_learning_points.m exactly.
+
+    Repointed from `cohort_learning_points` on 2026-09-09: that function now
+    fills a non-learner's gap with the cohort average (so CA1/DG keep an n of 3
+    in the learning-point-relative epochs), which is a deliberate analysis
+    choice, not a measurement. `measured_learning_points` is the measurement and
+    is what MATLAB parity is owed on.
+    """
+    got = analysis.measured_learning_points()
     for mouse, expected in MATLAB_LPS.items():
         assert got[mouse] == expected, f"{mouse}: got {got[mouse]}, MATLAB says {expected}"
+
+
+def test_filled_map_differs_from_matlab_only_on_the_non_learners():
+    """The fill must touch the two non-learners and nothing else."""
+    measured = analysis.measured_learning_points()
+    filled = analysis.cohort_learning_points()
+    changed = {m for m in measured if measured[m] != filled[m]}
+    assert changed == {m for m, v in MATLAB_LPS.items() if v is None}
+    avg = analysis.task_average_learning_point()
+    assert all(filled[m] == avg for m in changed)
 
 
 # --- epoch windows (epoch_indices.m) ----------------------------------------

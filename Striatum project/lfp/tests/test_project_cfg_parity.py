@@ -84,3 +84,39 @@ def test_area_list_matches():
         f"config.AREAS = {config.AREAS} but project_cfg.m cfg.areas = {_areas()}")
     for area in config.AREAS:
         assert area in config.AREA_FIELD, f"{area} has no preprocessed-struct field name"
+
+
+def test_non_learners_inherit_the_task_average():
+    """Task animals without a learning point take the cohort average, as controls do.
+
+    Before 2026-09-09 they were left at None, so the learning-point-relative
+    Intermediate and Expert windows did not exist for them -- which removed 1206
+    from CA1 and DG and left those areas at n = 2 in half the epochs.
+    """
+    measured = analysis.measured_learning_points(config.TASK)
+    used = analysis.cohort_learning_points(config.TASK)
+    sources = analysis.learning_point_sources(config.TASK)
+    avg = analysis.task_average_learning_point()
+
+    assert avg is not None
+    assert all(v is not None for v in used.values()), "every task animal must have a usable LP"
+    for mouse, m in measured.items():
+        if m is None:
+            assert used[mouse] == avg, f"{mouse} should inherit the average {avg}"
+            assert sources[mouse] == "cohort_average"
+        else:
+            assert used[mouse] == m, f"{mouse} had a measured LP and must keep it"
+            assert sources[mouse] == "measured"
+
+
+def test_task_average_is_over_learners_only():
+    """The average must not be recomputed from the filled map -- that is circular."""
+    measured = [v for v in analysis.measured_learning_points(config.TASK).values()
+                if v is not None]
+    expected = int(round(sum(measured) / len(measured)))
+    assert analysis.task_average_learning_point() == expected
+
+
+def test_controls_still_take_the_same_number():
+    used = set(analysis.cohort_learning_points(config.CONTROL).values())
+    assert used == {analysis.task_average_learning_point()}
