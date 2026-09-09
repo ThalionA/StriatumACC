@@ -99,7 +99,7 @@ run() {
         for c in $COHORTS; do run $PY scripts/plot_lfp_arms.py --cohort $c; done
         if [[ -f results/lfp_group_contrast.csv ]]; then
           run $PY scripts/plot_lfp_task_vs_control.py
-          run $PY scripts/plot_lfp_reliability_first20.py
+          run $PY scripts/plot_lfp_combined.py
         else
           print "SKIP cross-cohort plots: results/lfp_group_contrast.csv absent."
         fi

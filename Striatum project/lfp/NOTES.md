@@ -1,5 +1,70 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-09 — Corrected: the reliability figure Theo asked for is the MOVING one
+
+**I built the wrong figure yesterday.** "Trial-to-trial reliability in the first
+20 trials" was read as a static split-half over trials 1-20 (a bar per area x
+band). What was wanted is the **evolution of the moving-window reliability** —
+the learning-point-aligned figure, re-aligned to the start of the session. The
+data for it was already on disk (`lfp_arms_moving_reliability_*.csv`, per trial),
+so the "First 20" window added to the arms and the two re-runs it cost were both
+unnecessary. `plot_lfp_reliability_first20.py` and its figure are deleted; the
+`First 20` rows stay in the reliability table as a summary statistic but nothing
+plots them. Logged in `~/.claude/MISTAKES.md` (6th `misread-spec`, and the first
+to recur through a project rule that already carries the promoted line).
+
+**New: `scripts/plot_lfp_combined.py`** — task and Control 1 on the same axes,
+one figure per result instead of two, all on a shared y-scale. Splitting each
+result across two per-cohort files meant the comparison that matters had to be
+made by holding two images side by side and trusting their axes matched.
+
+1. `lfp_reliability_moving_session_task_vs_control` — **the requested figure.**
+   Moving-window reliability against trial number from session start, first 20
+   trials, area x band grid, both cohorts, no shuffle series. The session axis is
+   the honest one for a cohort comparison: yoked controls have no learning point
+   and inherit the task cohort's average (41), so an aligned control curve is an
+   artefact of that borrowed number. Task sits above control in nearly every
+   panel from the first trials — with the same speed-stereotypy caveat as every
+   other reliability result.
+2. `lfp_reliability_moving_lp_task_vs_control` — the same statistic on the
+   learning-point axis, kept as the direct counterpart so the two alignments can
+   be compared.
+3. `lfp_evolution_z_task_vs_control` — band power across the four epochs, both
+   cohorts, previously split across two 6x4 grids.
+
+`run_lfp_pipeline.sh` now calls this in its `plots` step; exercised end to end
+with `--from plots`.
+
+### Answering a question that came up: the single-unit curve in
+### `lfp_reliability_moving_vs_units_*` does not show the naive → expert rise
+
+Both that curve and `integrated_09_stability_allgroups_hierarchical_zscored`
+come from the SAME numbers — `figures/stability_by_animal.csv`, written by
+`IntegratedAll_v1` from `hier_z` / `hier_z_shuff`. The difference is entirely in
+the rendering, and the underlying naive → expert change is small:
+
+| area | observed reliability, Naive → Expert | shuffle | obs − shuffle |
+|---|---|---|---|
+| DMS | 0.269 → 0.278 (+0.008) | 0.145 → 0.142 | +0.011 |
+| DLS | 0.204 → 0.232 (+0.028) | 0.114 → 0.134 | +0.008 |
+| ACC | 0.249 → 0.211 (**−0.038**) | 0.099 → 0.115 | −0.055 |
+| V1  | 0.161 → 0.164 (+0.003) | 0.095 → 0.073 | +0.025 |
+| CA1 | 0.131 → 0.102 (−0.029) | 0.081 → 0.089 | −0.036 |
+
+Two things produce the apparent disagreement. **(a) The MATLAB figure draws each
+epoch as its own 10-trial trajectory**, so what reads as "increasing towards
+expert" is largely the rise WITHIN the Naive block (DMS climbs ~0.24 → 0.30
+across trials 1-10, DLS similarly) — the first trials of a session are the least
+reliable. The LFP figure collapses each epoch to one mean, which removes that.
+**(b) The LFP figure plots observed MINUS its own trial-shuffled control**, and
+in ACC the shuffle level RISES with learning (0.099 → 0.115) while the observed
+falls, so the subtraction steepens ACC's decline from −0.038 to −0.055.
+
+Neither figure is wrong, but the epoch-mean of the single-unit statistic is flat
+to slightly falling in this cohort, and any claim that single-unit reliability
+increases with learning should be made on the within-epoch trajectory, with the
+epoch means quoted alongside.
+
 ## 2026-09-08 — First-20-trials reliability, one pipeline entry point, project_cfg parity
 
 **New figure: `lfp_reliability_first20_task_vs_control`** (requested). Split-half

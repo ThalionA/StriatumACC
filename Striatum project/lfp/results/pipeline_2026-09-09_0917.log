@@ -1,0 +1,41 @@
+cohorts: task control   steps: plots   jobs: 5   only: all
+=== /opt/anaconda3/bin/python scripts/plot_lfp_arms.py --cohort task @ 09:17:03 ===
+[plot] lfp_evolution_z_task.svg + .png
+[plot] lfp_evolution_speed_residual_task.svg + .png
+[plot] lfp_evolution_fraction_task.svg + .png
+[plot] lfp_evolution_speed_task.svg + .png
+[plot] lfp_decoding_task.svg + .png
+[plot] lfp_reliability_task.svg + .png
+[plot] lfp_cca_task.svg + .png
+[plot] lfp_cca_vs_distance_task.svg + .png
+[plot] lfp_reliability_moving_task.svg + .png
+[plot] lfp_reliability_moving_session_task.svg + .png
+[plot] lfp_reliability_moving_depth_task.svg + .png
+[plot] lfp_reliability_moving_vs_units_task.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_arms.py --cohort control @ 09:17:28 ===
+[plot] lfp_evolution_z_control.svg + .png
+[plot] lfp_evolution_speed_residual_control.svg + .png
+[plot] lfp_evolution_fraction_control.svg + .png
+[plot] lfp_evolution_speed_control.svg + .png
+[plot] lfp_decoding_control.svg + .png
+[plot] lfp_reliability_control.svg + .png
+[plot] lfp_cca_control.svg + .png
+[plot] lfp_cca_vs_distance_control.svg + .png
+[plot] lfp_reliability_moving_control.svg + .png
+[plot] lfp_reliability_moving_session_control.svg + .png
+[plot] lfp_reliability_moving_depth_control.svg + .png
+[plot] lfp_reliability_moving_vs_units_control.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_task_vs_control.py @ 09:17:42 ===
+[plot] lfp_task_vs_control.svg + .png
+[plot] lfp_dls_theta_task_vs_control.svg + .png
+run:print:4: bad option: - 
+=== /opt/anaconda3/bin/python scripts/plot_lfp_combined.py @ 09:17:44 ===
+[plot] lfp_reliability_moving_session_task_vs_control.svg + .png
+[plot]   shared y -0.109 to 0.271; animals task 16, control 5
+[plot] lfp_reliability_moving_lp_task_vs_control.svg + .png
+[plot]   shared y -0.106 to 0.242; animals task 16, control 5
+[plot] lfp_evolution_z_task_vs_control.svg + .png
+run:print:4: bad option: - 
+=== PIPELINE COMPLETE @ 09:17:51 ===
