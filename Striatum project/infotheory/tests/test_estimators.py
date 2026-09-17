@@ -224,3 +224,42 @@ def test_conditional_mutual_information_matches_mi_when_z_is_constant():
     z = np.zeros_like(x)
     assert est.conditional_mutual_information(x, y, z) == pytest.approx(
         est.mutual_information(x, y), rel=0.02)
+
+
+# --------------------------------------------------------------------------
+# the vectorised path
+# --------------------------------------------------------------------------
+
+def test_vectorised_mi_matches_the_scalar_estimator():
+    """The fast path exists only for speed; it must give the same numbers."""
+    rng = np.random.default_rng(20)
+    n_samples = 800
+    spikes = (rng.random((6, n_samples)) < 0.3).astype(int)
+    # Three feature variants, one of them genuinely coupled to unit 0.
+    codes = rng.integers(0, 3, size=(n_samples, 3))
+    codes[:, 0] = np.where(spikes[0] == 1, 0, rng.integers(1, 3, n_samples))
+
+    fast = est.mi_binary_vs_categorical(spikes, codes, n_codes=3)
+    for u in range(spikes.shape[0]):
+        for v in range(codes.shape[1]):
+            slow = est.mutual_information(spikes[u], codes[:, v])
+            assert fast[u, v] == pytest.approx(slow, abs=1e-12), (
+                f"unit {u}, variant {v}: fast {fast[u, v]:.6f} vs slow {slow:.6f}")
+
+
+def test_vectorised_mi_handles_a_silent_unit():
+    """A unit that never fires carries no information and must not produce NaN."""
+    rng = np.random.default_rng(21)
+    spikes = np.zeros((2, 500), dtype=int)
+    spikes[1] = (rng.random(500) < 0.5).astype(int)
+    codes = rng.integers(0, 3, size=(500, 1))
+    out = est.mi_binary_vs_categorical(spikes, codes, n_codes=3)
+    assert np.isfinite(out).all()
+    assert out[0, 0] == pytest.approx(0.0, abs=1e-12)
+
+
+def test_vectorised_mi_shapes_follow_the_inputs():
+    rng = np.random.default_rng(22)
+    spikes = (rng.random((4, 300)) < 0.4).astype(int)
+    assert est.mi_binary_vs_categorical(spikes, rng.integers(0, 3, 300), 3).shape == (4, 1)
+    assert est.mi_binary_vs_categorical(spikes, rng.integers(0, 3, (300, 7)), 3).shape == (4, 7)

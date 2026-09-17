@@ -247,3 +247,48 @@ def transfer_entropy(source: np.ndarray, target: np.ndarray, *, lag: int = 1) ->
     if x.size <= lag + 1:
         return np.nan
     return conditional_mutual_information(x[:-lag], y[lag:], y[:-lag])
+
+
+def mi_binary_vs_categorical(binary: np.ndarray, codes: np.ndarray,
+                             n_codes: int) -> np.ndarray:
+    """``I(spike; feature)`` in bits for MANY binary series against MANY features.
+
+    ``binary`` is ``(n_series, n_samples)`` of 0/1 -- the paper's binarised
+    spiking, one row per unit. ``codes`` is ``(n_samples, n_variants)`` of
+    integers in ``[0, n_codes)``: one column per feature, or per shuffle of a
+    feature, or both stacked together. Returns ``(n_series, n_variants)``.
+
+    The whole contingency table comes from a single matrix product. For a binary
+    row the 2 x k table is determined by the counts of ``spike == 1`` per feature
+    bin, which is exactly ``binary @ onehot(codes)``; the ``spike == 0`` row is
+    the column totals minus that. Doing it this way is what makes the shuffle
+    distribution affordable: 467 units x 10 features x 50 shuffles becomes one
+    ``(467, n) @ (n, 5610)`` product instead of a quarter of a million
+    contingency tables. Verified against the scalar estimator by test.
+    """
+    b = np.asarray(binary, dtype=np.float64)
+    c = np.asarray(codes, dtype=int)
+    if c.ndim == 1:
+        c = c[:, None]
+    n_samples, n_variants = c.shape
+    if b.shape[1] != n_samples:
+        raise ValueError(f"binary has {b.shape[1]} samples, codes have {n_samples}")
+
+    # One-hot every variant side by side: (n_samples, n_variants * n_codes).
+    flat = (np.arange(n_variants)[None, :] * n_codes + c).ravel()
+    onehot = np.zeros((n_samples, n_variants * n_codes))
+    onehot[np.repeat(np.arange(n_samples), n_variants), flat] = 1.0
+
+    n1 = (b @ onehot).reshape(b.shape[0], n_variants, n_codes)      # spike == 1
+    col = onehot.sum(axis=0).reshape(n_variants, n_codes)[None, :, :]
+    n0 = col - n1                                                    # spike == 0
+    counts = np.stack([n0, n1], axis=2)                              # (u, v, 2, k)
+
+    total = counts.sum(axis=(2, 3), keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pxy = np.where(total > 0, counts / total, 0.0)
+        px = pxy.sum(axis=3, keepdims=True)
+        py = pxy.sum(axis=2, keepdims=True)
+        ratio = np.where((pxy > 0) & (px * py > 0), pxy / (px * py), 1.0)
+        mi = np.sum(np.where(pxy > 0, pxy * np.log(ratio), 0.0), axis=(2, 3)) / LOG2
+    return np.asarray(mi)

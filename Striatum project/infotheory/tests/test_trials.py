@@ -110,3 +110,22 @@ def test_velocity_uses_the_corridor_only():
     assert slow["mean_velocity_cm_s"] == pytest.approx(
         fast_dark["mean_velocity_cm_s"], rel=1e-6), (
         "dark-period running must not enter the corridor velocity")
+
+
+def test_pooled_sample_order_is_tile_not_repeat():
+    """The convention the MI driver depends on, pinned here because it is silent.
+
+    A (units, window, trials) block ravelled in C order puts sample s at
+    trial ``s % n_trials``, so the per-trial labels must be TILED. Using
+    ``repeat`` instead pairs each sample with the wrong trial and still returns
+    perfectly plausible information values.
+    """
+    n_units, n_win, n_tr = 2, 5, 7
+    block = np.zeros((n_units, n_win, n_tr))
+    trial_id = np.arange(n_tr)
+    # Stamp each element with its trial identity.
+    block[:] = trial_id[None, None, :]
+    flat = block.reshape(n_units, -1)
+    tiled = np.tile(trial_id, n_win)
+    assert np.array_equal(flat[0], tiled), "C-order ravel means tile, not repeat"
+    assert not np.array_equal(flat[0], np.repeat(trial_id, n_win))
