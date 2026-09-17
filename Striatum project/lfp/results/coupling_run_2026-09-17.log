@@ -1,3 +1,20 @@
 [coup] cohort=task: 21 files, 100 surrogates per PAC cell
 [coup] task 1105/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 25s)
 [coup] 1105/visual: fewer than two usable areas or no long trial, skipped
+[coup] task 1106/striatum  3 areas ['ACC', 'DLS', 'DMS'], 189 trials ->  5103 trial rows,  270 epoch rows  (read 43s)
+[coup] 1106/visual: fewer than two usable areas or no long trial, skipped
+[coup] task 1201/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 19s)
+[coup] task 1201/visual    3 areas ['CA1', 'DG', 'V1'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 20s)
+[coup] 1206/striatum: fewer than two usable areas or no long trial, skipped
+[coup] task 1206/visual    3 areas ['CA1', 'DG', 'V1'], 104 trials ->  2808 trial rows,  270 epoch rows  (read 48s)
+[coup] task 1212/striatum  3 areas ['ACC', 'DLS', 'DMS'], 154 trials ->  4158 trial rows,  270 epoch rows  (read 58s)
+[coup] task 1212/visual    3 areas ['CA1', 'DG', 'V1'], 154 trials ->  4158 trial rows,  270 epoch rows  (read 65s)
+[coup] task 409/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 22s)
+[coup] task 418/striatum  3 areas ['ACC', 'DLS', 'DMS'], 141 trials ->  3807 trial rows,  270 epoch rows  (read 42s)
+[coup] task 523/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 16s)
+[coup] task 614/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 11s)
+[coup] task 624/striatum  3 areas ['ACC', 'DLS', 'DMS'],  71 trials ->  1917 trial rows,  270 epoch rows  (read 42s)
+[coup] task 703/striatum  2 areas ['ACC', 'DMS'], 108 trials ->  1188 trial rows,  110 epoch rows  (read 43s)
+[coup] task 727/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 15s)
+[coup] task 730/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 15s)
+[coup] task 731/striatum  2 areas ['ACC', 'DMS'],  76 trials ->   836 trial rows,  110 epoch rows  (read 43s)

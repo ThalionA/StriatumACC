@@ -163,3 +163,14 @@
   on fewer sources, are smoother, and correlate more with their neighbours. It
   produced a spurious within > across of 0.08 and would have validated a false
   positive. Sample from a stationary kernel instead. (2026-09-17)
+- VR position keeps increasing during the 5 s DARK inter-trial period, not only
+  in the corridor, so "first sample at or past 100 a.u." as a reward-zone-entry
+  rule fires in the dark on some trials. Task animal 523 trial 1: naive rule
+  3185 ms, corridor-restricted rule 10478 ms, corridor starts at 5001 ms — a 7 s
+  mis-alignment on a subset of trials while looking fine on the rest. Mask to
+  `trial_world > 6` first (`striatum_info.trials.reward_zone_entry`). (2026-09-17)
+- The per-trial cell arrays in `preprocessed_data5cm.mat` do not all have the
+  same length. For 1212 and 409, `binned_spikes_trials` and `npx_times_trials`
+  carry ONE MORE entry than `trialData`, `n_trials` and `zscored_lick_errors`.
+  `n_trials` is authoritative; indexing spikes by their own length reads a trial
+  with no behaviour attached and throws only if you are lucky. (2026-09-17)
