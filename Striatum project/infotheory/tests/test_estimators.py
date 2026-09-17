@@ -324,3 +324,49 @@ def test_the_peaks_bias_depends_on_sample_size_and_the_means_does_not():
         f"{peak_9:.5f} at n=9 vs {peak_10:.5f} at n=10")
     assert abs(mean_9 - mean_10) < 0.0005, (
         f"the mean must not care about one trial; got {mean_9:+.5f} vs {mean_10:+.5f}")
+
+
+# --------------------------------------------------------------------------
+# the general vectorised path, used by the LFP arm
+# --------------------------------------------------------------------------
+
+def test_vectorised_multilevel_mi_matches_the_scalar_estimator():
+    rng = np.random.default_rng(30)
+    n = 900
+    x = rng.integers(0, 3, size=n)
+    variants = rng.integers(0, 2, size=(n, 5))
+    variants[:, 0] = (x > 0).astype(int)          # one genuinely coupled column
+    fast = est.mi_codes_vs_variants(x, variants, n_x=3, n_y=2)
+    for v in range(variants.shape[1]):
+        slow = est.mutual_information(x, variants[:, v])
+        assert fast[v] == pytest.approx(slow, abs=1e-12)
+
+
+def test_conditional_vectorised_mi_matches_the_scalar_estimator():
+    rng = np.random.default_rng(31)
+    n = 1_200
+    z = rng.integers(0, 2, size=n)
+    x = rng.integers(0, 3, size=n)
+    variants = np.stack([(x + z) % 2, rng.integers(0, 2, n)], axis=1)
+    fast = est.cmi_codes_vs_variants(x, variants, z, n_x=3, n_y=2)
+    for v in range(variants.shape[1]):
+        slow = est.conditional_mutual_information(x, variants[:, v], z)
+        assert fast[v] == pytest.approx(slow, abs=1e-9)
+
+
+def test_conditioning_on_the_confound_removes_a_spurious_dependence():
+    """The case the LFP arm exists to catch.
+
+    Speed drives BOTH band power and the behavioural feature. The raw mutual
+    information is then clearly positive while the conditional information is
+    zero -- the whole apparent coupling was the confound.
+    """
+    rng = np.random.default_rng(32)
+    n = 40_000
+    speed = rng.integers(0, 2, size=n)
+    power = (speed + (rng.random(n) < 0.15).astype(int)) % 2
+    feature = (speed + (rng.random(n) < 0.15).astype(int)) % 2
+    raw = est.mi_codes_vs_variants(power, feature, n_x=2, n_y=2)[0]
+    cond = est.cmi_codes_vs_variants(power, feature, speed, n_x=2, n_y=2)[0]
+    assert raw > 0.1, f"the confound must create apparent coupling, got {raw:.4f}"
+    assert cond < 0.01, f"conditioning must remove it, got {cond:.4f}"

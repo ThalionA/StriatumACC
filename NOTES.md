@@ -1,5 +1,56 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-17 — The Panzeri mirror moves to the LFP, and DLS loses information with training
+
+**The spike arm was uninterpretable and is superseded.** Single-unit information
+about behaviour is real but tiny (~0.004 bits) and did not move with learning --
+but that arm had no positive control, so its null said nothing. It also carried a
+bug worth remembering: `peak_mi_corrected`, the MAX over 30 shuffle-subtracted
+windows, returns **+0.054 bits on data with zero information**, and the bias grows
+as the sample shrinks, so it invents contrasts between epochs of unequal size.
+Every across-epoch summary is now the MEAN over windows. Pinned by two
+known-answer tests in `infotheory/tests/test_estimators.py`.
+
+**The LFP arm has an anchor.** Band power must carry information about running
+speed, and it does: +0.008 to +0.030 bits in every area, both interpretable
+bands, p <= 0.0005 wherever N >= 6 (`lfp_mi_speed_<cohort>.csv`). Computed WITHIN
+each spatial bin so position cannot manufacture it. A null elsewhere now means
+something.
+
+**Band power carries behavioural information beyond speed.** Every one of the ten
+features, whole session, task cohort: **70-92% of the raw information survives
+conditioning on running speed**, all p <= 0.0063 at N=15-16. Speed conditioning
+matters -- animals run faster as they learn and speed alone moves band power --
+so `I(power; feature | speed)` is the quantity every claim is read off.
+
+**That information falls with training, specifically in DLS.** First fifty versus
+last fifty trials: DLS **-0.0030 +/- 0.0008 bits, 10/10 animals, p = 0.0020**,
+leave-one-out worst p = 0.0039. Present independently in theta (p = 0.020) and
+beta (p = 0.027). Paired against DMS in the same ten animals, DLS falls further
+(p = 0.0137); DMS and ACC alone are flat.
+
+Four things it is NOT:
+* recording drift -- the anchor `I(power; speed)` does not fall (+0.002 to +0.007,
+  all p > 0.38), so the field's capacity to carry information is intact;
+* behavioural stereotypy -- the median-split gap WIDENS late (x1.28), so there is
+  more behavioural spread to predict, not less;
+* trial count -- both windows are exactly 50 trials;
+* speed -- it is conditioned out.
+
+Open caveats: Early50/Late50 is a session-TIME split, not learning-point locked
+(the ten-trial epochs cannot answer this at all -- their contrast noise, 0.0036
+bits, exceeds the 0.004-bit information level; the wide split is 0.0010). N=10 for
+DLS. Control cohort moves the OPPOSITE way on every area but N=5 cannot be tested,
+and its behavioural spread widens more (x1.72), which is itself a candidate
+explanation for its rise. Only theta (4-8) and beta (15-30) are interpretable:
+low_gamma carries the ~75 Hz peak, high_gamma (80-150) is where spike bleed-through
+lives, total spans both. p-values uncorrected throughout, by request.
+
+Drivers: `infotheory/scripts/run_lfp_mi.py`, `plot_lfp_mi.py`. Inputs are the
+existing `lfp/results/lfp_band_trials_<cohort>/` cubes -- no LFP re-read; trial
+indexing against the behavioural cache verified exact (r = 1.0000, 0 ms on
+corridor duration, four animals).
+
 ## 2026-09-09 — Three-cohort y-scales, and the end of the double-saved figures
 
 **No figure is written twice any more.** Audited with a 14-agent workflow (5 script

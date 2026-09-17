@@ -292,3 +292,63 @@ def mi_binary_vs_categorical(binary: np.ndarray, codes: np.ndarray,
         ratio = np.where((pxy > 0) & (px * py > 0), pxy / (px * py), 1.0)
         mi = np.sum(np.where(pxy > 0, pxy * np.log(ratio), 0.0), axis=(2, 3)) / LOG2
     return np.asarray(mi)
+
+
+def mi_codes_vs_variants(x_codes: np.ndarray, variants: np.ndarray,
+                         n_x: int, n_y: int) -> np.ndarray:
+    """``I(x; variants[:, v])`` for every variant at once, in bits.
+
+    The general form of :func:`mi_binary_vs_categorical`: ``x_codes`` is one
+    discretised variable of ``n_x`` levels and ``variants`` is ``(n_samples,
+    n_variants)`` of ``n_y`` levels -- in practice the observed labels in column
+    0 and its shuffles in the rest. Contingency tables for all variants come
+    from ``n_y`` matrix products rather than a Python loop, which is what makes
+    a 50-shuffle bias correction affordable per (area, band, epoch, window).
+    """
+    x_codes = np.asarray(x_codes, int).ravel()
+    variants = np.asarray(variants, int)
+    if variants.ndim == 1:
+        variants = variants[:, None]
+    n_samples, n_var = variants.shape
+    if x_codes.size != n_samples:
+        raise ValueError(f"x has {x_codes.size} samples, variants have {n_samples}")
+
+    onehot = np.zeros((n_x, n_samples))
+    onehot[x_codes, np.arange(n_samples)] = 1.0
+    counts = np.empty((n_x, n_y, n_var))
+    for j in range(n_y):
+        counts[:, j, :] = onehot @ (variants == j).astype(float)
+
+    p = counts / n_samples
+    px = p.sum(axis=1)[:, None, :]
+    py = p.sum(axis=0)[None, :, :]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        term = p * np.log2(p / (px * py))
+    return np.nansum(np.where(p > 0, term, 0.0), axis=(0, 1))
+
+
+def cmi_codes_vs_variants(x_codes: np.ndarray, variants: np.ndarray,
+                          z_codes: np.ndarray, n_x: int, n_y: int) -> np.ndarray:
+    """``I(x; variants[:, v] | z)`` for every variant, in bits.
+
+    The chain rule applied stratum by stratum: mutual information inside each
+    level of ``z``, weighted by how many samples that level holds. Used to ask
+    whether band power still says anything about a behavioural feature once
+    running speed is held fixed -- animals run faster as they learn, and speed
+    alone moves band power, so the unconditioned value is not interpretable on
+    its own.
+    """
+    x_codes = np.asarray(x_codes, int).ravel()
+    z_codes = np.asarray(z_codes, int).ravel()
+    variants = np.asarray(variants, int)
+    if variants.ndim == 1:
+        variants = variants[:, None]
+    total = np.zeros(variants.shape[1])
+    n = x_codes.size
+    for level in np.unique(z_codes):
+        m = z_codes == level
+        if m.sum() < 2:
+            continue
+        total += (m.sum() / n) * mi_codes_vs_variants(
+            x_codes[m], variants[m], n_x, n_y)
+    return total
