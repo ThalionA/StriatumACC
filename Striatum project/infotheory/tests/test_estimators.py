@@ -1,0 +1,226 @@
+"""Ground-truth tests for the information-theoretic estimators.
+
+These mirror Lemke, Celotto, Maffulli, Ganguly & Panzeri (2024), *Information
+flow between motor cortex and striatum reverses during skill learning*, Curr Biol
+34:1831-1843 — mutual information about a behavioural feature, a partial
+information decomposition of what two areas carry, and a directed measure
+(transfer entropy, and the feature-specific transfer built on top of it).
+
+Every estimator is pinned on a case whose answer is known analytically:
+
+* **XOR** — each source alone carries nothing, the pair carries one bit. All of
+  it is synergy.
+* **COPY** — one source IS the target, the other is independent. All of it is
+  unique to the first.
+* **COMMON** — both sources are the target. All of it is redundant.
+* **Independence** — zero, and specifically zero AFTER bias handling, because the
+  plug-in estimate of mutual information is biased upward and is never zero on
+  finite samples.
+
+The bias point is the one that matters most in practice: with 5 bins for the
+neural variable and 3 for the feature (the paper's scheme), a plug-in MI on a
+few hundred trials is positive for independent variables. Lemke et al. subtract
+the mean of a shuffled distribution; the existing MATLAB arm in this repo uses a
+Miller-Madow analytic correction AND a shuffle null. Both are implemented so the
+two can be compared rather than argued about.
+
+Created 2026-09-17.
+"""
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from striatum_info import estimators as est
+
+
+# --------------------------------------------------------------------------
+# discretisation
+# --------------------------------------------------------------------------
+
+def test_equipopulated_bins_are_equally_occupied():
+    rng = np.random.default_rng(0)
+    x = rng.lognormal(size=9_000)                 # strongly skewed on purpose
+    b = est.equipopulated_bins(x, 3)
+    counts = np.bincount(b, minlength=3)
+    assert set(np.unique(b)) == {0, 1, 2}
+    assert counts.max() - counts.min() <= 1, f"bins should be balanced, got {counts}"
+
+
+def test_equipopulated_bins_are_monotone_in_the_value():
+    rng = np.random.default_rng(1)
+    x = rng.normal(size=5_000)
+    b = est.equipopulated_bins(x, 5)
+    for lo in range(4):
+        assert x[b == lo].max() <= x[b == lo + 1].min() + 1e-9
+
+
+def test_zero_aware_bins_keep_zeros_together():
+    """The repo's existing MATLAB convention: exact zeros get their own bin.
+
+    Spike counts and lick rates are sparse; an equipopulated split would scatter
+    the zeros across bins and destroy the distinction that carries the signal.
+    """
+    rng = np.random.default_rng(2)
+    x = np.concatenate([np.zeros(500), rng.lognormal(size=500)])
+    b = est.zero_aware_bins(x, 3)
+    assert len(set(b[:500])) == 1, "every exact zero belongs in one bin"
+    assert b[500:].min() != b[0], "non-zeros must not share the zero bin"
+
+
+# --------------------------------------------------------------------------
+# mutual information
+# --------------------------------------------------------------------------
+
+def test_mutual_information_of_a_deterministic_copy_is_the_entropy():
+    rng = np.random.default_rng(3)
+    x = rng.integers(0, 4, size=20_000)
+    assert est.mutual_information(x, x) == pytest.approx(2.0, abs=0.02)
+
+
+def test_mutual_information_of_independent_variables_is_zero_in_the_limit():
+    rng = np.random.default_rng(4)
+    x = rng.integers(0, 3, size=200_000)
+    y = rng.integers(0, 5, size=200_000)
+    assert est.mutual_information(x, y) == pytest.approx(0.0, abs=0.005)
+
+
+def test_plugin_mutual_information_is_biased_up_on_small_samples():
+    """The reason a bias correction is not optional.
+
+    Independent variables, 5 x 3 bins, 200 trials -- the paper's scheme and a
+    plausible trial count. The plug-in estimate must come out clearly positive,
+    which is what makes an uncorrected 'information' value meaningless.
+    """
+    rng = np.random.default_rng(5)
+    vals = [est.mutual_information(rng.integers(0, 5, 200), rng.integers(0, 3, 200))
+            for _ in range(200)]
+    assert np.mean(vals) > 0.02, (
+        f"plug-in MI on independent data should be visibly positive, got {np.mean(vals):.4f}")
+
+
+def test_shuffle_subtraction_removes_that_bias():
+    rng = np.random.default_rng(6)
+    vals = [est.shuffle_subtracted_mi(rng.integers(0, 5, 200), rng.integers(0, 3, 200),
+                                      n_shuffles=50, seed=k)["mi_corrected"]
+            for k in range(60)]
+    assert abs(np.mean(vals)) < 0.01, (
+        f"after shuffle subtraction independent data should sit at zero, "
+        f"got {np.mean(vals):+.4f}")
+
+
+def test_shuffle_subtraction_keeps_a_real_dependence():
+    rng = np.random.default_rng(7)
+    x = rng.integers(0, 3, size=600)
+    y = (x + (rng.random(600) < 0.1).astype(int)) % 3      # noisy copy
+    out = est.shuffle_subtracted_mi(x, y, n_shuffles=50, seed=0)
+    assert out["mi_corrected"] > 0.5
+    assert out["p"] < 0.05
+
+
+def test_miller_madow_also_reduces_the_bias():
+    """The repo's existing MATLAB correction, for comparison with the paper's."""
+    rng = np.random.default_rng(8)
+    plug = [est.mutual_information(rng.integers(0, 5, 200), rng.integers(0, 3, 200))
+            for _ in range(150)]
+    mm = [est.mutual_information(rng.integers(0, 5, 200), rng.integers(0, 3, 200),
+                                 correction="miller_madow") for _ in range(150)]
+    assert abs(np.mean(mm)) < abs(np.mean(plug))
+
+
+# --------------------------------------------------------------------------
+# partial information decomposition
+# --------------------------------------------------------------------------
+
+def test_xor_is_pure_synergy():
+    rng = np.random.default_rng(9)
+    x = rng.integers(0, 2, size=60_000)
+    y = rng.integers(0, 2, size=60_000)
+    s = x ^ y
+    pid = est.pid_imin(x, y, s)
+    assert est.mutual_information(x, s) == pytest.approx(0.0, abs=0.01)
+    assert est.mutual_information(y, s) == pytest.approx(0.0, abs=0.01)
+    assert pid["synergy"] == pytest.approx(1.0, abs=0.05)
+    assert pid["redundancy"] == pytest.approx(0.0, abs=0.02)
+    assert pid["unique_x"] == pytest.approx(0.0, abs=0.02)
+
+
+def test_a_copied_source_carries_unique_information():
+    rng = np.random.default_rng(10)
+    x = rng.integers(0, 2, size=60_000)
+    y = rng.integers(0, 2, size=60_000)
+    s = x                                   # target IS x; y is irrelevant
+    pid = est.pid_imin(x, y, s)
+    assert pid["unique_x"] == pytest.approx(1.0, abs=0.05)
+    assert pid["unique_y"] == pytest.approx(0.0, abs=0.02)
+    assert pid["redundancy"] == pytest.approx(0.0, abs=0.02)
+
+
+def test_two_copies_of_the_target_are_pure_redundancy():
+    rng = np.random.default_rng(11)
+    s = rng.integers(0, 2, size=60_000)
+    pid = est.pid_imin(s, s, s)
+    assert pid["redundancy"] == pytest.approx(1.0, abs=0.05)
+    assert pid["synergy"] == pytest.approx(0.0, abs=0.02)
+    assert pid["unique_x"] == pytest.approx(0.0, abs=0.02)
+
+
+def test_pid_atoms_sum_to_the_joint_information():
+    rng = np.random.default_rng(12)
+    x = rng.integers(0, 3, size=40_000)
+    y = rng.integers(0, 3, size=40_000)
+    s = (x + y) % 3
+    pid = est.pid_imin(x, y, s)
+    total = pid["redundancy"] + pid["unique_x"] + pid["unique_y"] + pid["synergy"]
+    joint = est.mutual_information(est.pair_code(x, y), s)
+    assert total == pytest.approx(joint, rel=0.02), "the four atoms must partition I(X,Y;S)"
+
+
+# --------------------------------------------------------------------------
+# directed measures
+# --------------------------------------------------------------------------
+
+def test_transfer_entropy_finds_the_driver():
+    """X drives Y one step later; TE must be asymmetric in the right direction."""
+    rng = np.random.default_rng(13)
+    n = 60_000
+    x = rng.integers(0, 2, size=n)
+    y = np.zeros(n, dtype=int)
+    y[1:] = np.where(rng.random(n - 1) < 0.85, x[:-1], rng.integers(0, 2, n - 1))
+    te_xy = est.transfer_entropy(x, y, lag=1)
+    te_yx = est.transfer_entropy(y, x, lag=1)
+    assert te_xy > 0.2, f"X->Y should be clear, got {te_xy:.3f}"
+    assert te_xy > 5 * max(te_yx, 1e-6), f"and much larger than Y->X ({te_yx:.3f})"
+
+
+def test_transfer_entropy_is_zero_for_independent_series():
+    rng = np.random.default_rng(14)
+    n = 60_000
+    x = rng.integers(0, 2, size=n)
+    y = rng.integers(0, 2, size=n)
+    assert est.transfer_entropy(x, y, lag=1) == pytest.approx(0.0, abs=0.01)
+
+
+def test_transfer_entropy_discounts_the_receivers_own_past():
+    """A self-predictive Y that X merely echoes must NOT look like X -> Y.
+
+    This is the whole point of conditioning on Y's past, and the case that
+    separates transfer entropy from a lagged correlation.
+    """
+    rng = np.random.default_rng(15)
+    n = 80_000
+    y = np.zeros(n, dtype=int)
+    for t in range(1, n):
+        y[t] = y[t - 1] if rng.random() < 0.9 else 1 - y[t - 1]
+    x = np.roll(y, 1)                      # x is just y delayed: adds nothing new
+    te = est.transfer_entropy(x, y, lag=1)
+    assert te < 0.05, f"an echo of Y's own past is not transfer, got {te:.3f}"
+
+
+def test_conditional_mutual_information_matches_mi_when_z_is_constant():
+    rng = np.random.default_rng(16)
+    x = rng.integers(0, 3, size=30_000)
+    y = (x + (rng.random(30_000) < 0.2).astype(int)) % 3
+    z = np.zeros_like(x)
+    assert est.conditional_mutual_information(x, y, z) == pytest.approx(
+        est.mutual_information(x, y), rel=0.02)

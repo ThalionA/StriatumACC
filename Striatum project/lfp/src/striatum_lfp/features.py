@@ -48,6 +48,17 @@ def band_envelope(x: np.ndarray, sos: np.ndarray, method: str = "hilbert",
     raise ValueError(f"unknown envelope method {method!r}")
 
 
+def band_phase(x: np.ndarray, sos: np.ndarray, axis: int = 0) -> np.ndarray:
+    """Instantaneous phase in ``(-pi, pi]`` of ``x`` after a zero-phase bandpass.
+
+    The companion of :func:`band_envelope`: that returns ``abs`` of the analytic
+    signal, this returns its angle. Zero-phase filtering matters here more than
+    for the envelope -- a filter that shifted phase would shift every coupling
+    measure built on it.
+    """
+    return np.angle(hilbert(sosfiltfilt(sos, x, axis=axis), axis=axis))
+
+
 def extract_bands(x: np.ndarray, *, bands: dict[str, tuple[float, float]] = BANDS,
                   fs: int = FS, cfg: Config = DEFAULT) -> dict[str, np.ndarray]:
     """``{band_name: envelope}`` for an in-memory (padded) block along axis 0.

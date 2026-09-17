@@ -1,0 +1,3 @@
+[coup] cohort=task: 21 files, 100 surrogates per PAC cell
+[coup] task 1105/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials ->  5400 trial rows,  270 epoch rows  (read 25s)
+[coup] 1105/visual: fewer than two usable areas or no long trial, skipped

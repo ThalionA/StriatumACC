@@ -37,90 +37,35 @@ import time
 from itertools import combinations
 from pathlib import Path
 
-import h5py
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, config, psi  # noqa: E402
-from striatum_lfp.reader import DATASET  # noqa: E402
+from striatum_lfp import analysis, area_signals, config, psi  # noqa: E402
 
 #: 2.048 s at 1 kHz -> 0.49 Hz bins, so theta (4-8 Hz) still holds ~9 of them.
 NPERSEG = 2048
 MIN_SEGMENTS = 8
-MIN_CHANNELS = 4          # an area with fewer cannot give a bipolar derivation
+MIN_CHANNELS = area_signals.MIN_CHANNELS
 BANDS = {"theta": (4.0, 8.0), "beta": (15.0, 30.0),
          "low_gamma": (30.0, 80.0), "high_gamma": (80.0, 150.0)}
 EPOCHS = ("All", "Trials 1-3", "Trials 4-10", "Intermediate", "Expert")
 
 
-def area_channels(z) -> dict[str, np.ndarray]:
-    """{area: channel indices}, ordered by depth so bipolar pairs are adjacent."""
-    depths = z["channel_depth_um"]
-    out = {}
-    for a in config.AREAS:
-        key = f"is_{a.lower()}"
-        if key not in z.files:
-            continue
-        idx = np.flatnonzero(z[key])
-        if idx.size >= MIN_CHANNELS:
-            out[a] = idx[np.argsort(depths[idx])]
-    return out
-
-
-def reduce_block(block: np.ndarray, chans: dict[str, np.ndarray]) -> dict[tuple[str, str], np.ndarray]:
-    """One monopolar and one bipolar signal per area, from a (samples, 384) read."""
-    out: dict[tuple[str, str], np.ndarray] = {}
-    for area, idx in chans.items():
-        sub = block[:, idx]
-        sub = sub - sub.mean(axis=0, keepdims=True)
-        sd = sub.std(axis=0, keepdims=True)
-        sub = sub / np.where(sd > 0, sd, np.nan)     # a dead channel drops out
-        out[(area, "monopolar")] = np.nanmean(sub, axis=1)
-        # Non-overlapping adjacent pairs; see psi.bipolar_derivation for why an
-        # averaged np.diff would silently collapse to a single wide pair.
-        out[(area, "bipolar")] = psi.bipolar_derivation(sub)
-    return out
-
-
 def run_one(cache: Path, cohort_name: str) -> list[dict]:
-    t0 = time.time()
     z = np.load(cache, allow_pickle=False)
     mouse, probe = int(z["mouse_id"]), str(z["probe"])
-    chans = area_channels(z)
+    ch = config.get_cohort(cohort_name)
+    chans, per_trial, elapsed = area_signals.read_trial_signals(
+        z, ch, min_samples=NPERSEG, min_channels=MIN_CHANNELS)
     if len(chans) < 2:
         print(f"[psi] {mouse}/{probe}: fewer than two usable areas, skipped", flush=True)
         return []
-
-    ch = config.get_cohort(cohort_name)
+    if not per_trial:
+        print(f"[psi] {mouse}/{probe}: no trial long enough / export missing", flush=True)
+        return []
     lp = analysis.cohort_learning_points(ch).get(mouse)
     good = np.flatnonzero(z["good_trials"].astype(bool))
-    starts = z["corridor_start_sample"]
-    stops = z["trial_stop_sample"]
-
-    lfp_file = config.lfp_path(mouse, probe) if cohort_name == "task" else \
-        ch.lfp_dir / f"{mouse}{'_v1' if probe == 'visual' else ''}_voltage_data_384ch.mat"
-    if not lfp_file.exists():
-        print(f"[psi] {mouse}/{probe}: {lfp_file.name} missing, skipped", flush=True)
-        return []
-
-    # Read each trial's corridor once, reduce to per-area signals, keep those.
-    per_trial: dict[int, dict[tuple[str, str], np.ndarray]] = {}
-    with h5py.File(lfp_file, "r") as fh:
-        dset = fh[DATASET]
-        n_total = int(dset.shape[0])
-        for t in good:
-            a, b = int(starts[t]), int(stops[t])
-            if b > n_total:
-                b = n_total
-            if b - a < NPERSEG:
-                continue
-            block = np.asarray(dset[a:b, :], dtype=np.float64)
-            per_trial[int(t)] = reduce_block(block, chans)
-    if not per_trial:
-        print(f"[psi] {mouse}/{probe}: no trial long enough for a {NPERSEG}-sample window",
-              flush=True)
-        return []
 
     n_trials = int(min(analysis.cohort_trial_counts(ch).get(mouse, len(good)), len(good)))
     windows = {"All": np.array(sorted(per_trial))}
@@ -163,7 +108,7 @@ def run_one(cache: Path, cohort_name: str) -> list[dict]:
                     })
     print(f"[psi] {cohort_name[:4]:<4} {mouse}/{probe:9s} "
           f"{len(chans)} areas {sorted(chans)}, {len(per_trial):3d} trials, "
-          f"{len(rows):4d} rows  {time.time() - t0:5.0f}s", flush=True)
+          f"{len(rows):4d} rows  {elapsed:5.0f}s", flush=True)
     return rows
 
 
