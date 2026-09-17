@@ -4,12 +4,15 @@
 Three panels, mirroring the first arm of Lemke et al. (2024):
 
 (a) Information time course around reward-zone entry, per area, for each feature.
-(b) Naive versus Expert, per feature — the learning comparison, on TRIAL-COUNT
-    MATCHED thirds of the session.
+(b) Naive versus Expert, per feature — the learning comparison, on the project's
+    standard ten-trial learning epochs.
 (c) The same contrast per area, task against yoked control.
 
 All values are shuffle-subtracted, so zero means "no more than the bias this bin
-count produces at this sample size". Peaks are tested with a max-statistic
+count produces at this sample size". Shuffle subtraction removes the sample-size
+bias but NOT a firing-rate change: MI with a binarised train is capped by that
+train's entropy, so a rate drift between epochs moves every feature together.
+Measured here (2026-09-17): task +0.006 bits of ceiling, control +0.011. Peaks are tested with a max-statistic
 permutation over time windows, not against a single window's null.
 
     /opt/anaconda3/bin/python scripts/plot_mi.py
@@ -123,8 +126,11 @@ def main() -> None:
     axb.set_xticklabels([f.replace("_", " ") for f in features], rotation=25,
                         ha="right", fontsize=8)
     axb.set_ylabel("Expert − Naive\nshuffle-subtracted MI (bits)")
-    axb.set_title("(b) Does the information change with learning? Animal medians, "
-                  "trial-count-matched thirds of the session.", fontsize=11)
+    axb.set_title("(b) Does the information change with learning? Animal medians, over the "
+                  "project's ten-trial Naive and Expert epochs. CAUTION: the control cohort "
+                  "is positive on every feature, and its firing rate rises 6% from Naive to "
+                  "Expert (4/5 mice, entropy ceiling +0.011 bits) — the offset is the size "
+                  "of that rate change, so read it as rate, not information.", fontsize=10)
     axb.legend(fontsize=9, frameon=False)
 
     # ---- (c) the same contrast per area -------------------------------------
@@ -161,19 +167,18 @@ def main() -> None:
     axc.legend(fontsize=9, frameon=False)
 
     fig.suptitle("Single-unit information about behaviour, mirroring Lemke et al. (2024)\n"
-                 "Aligned to reward-zone entry; spikes binarised at 10 ms; features in 3 "
-                 "equipopulated bins; shuffle-subtracted.", fontsize=13)
+                 "Aligned to reward-zone entry; spikes binarised at 10 ms; features split at "
+                 "the median; shuffle-subtracted. Ten-trial learning epochs; p-values "
+                 "uncorrected across features.", fontsize=13)
     FIGURES.mkdir(exist_ok=True)
     fig.savefig(FIGURES / "mi_overview.svg")
     fig.savefig(FIGURES / "mi_overview.png", dpi=min(150, 1600 / max(fig.get_size_inches())))
     plt.close(fig)
     print("[plot] mi_overview.svg + .png")
 
-    # Ten features were tried, so the family is the features and the p-values
-    # need correcting. Reporting the smallest uncorrected p as "the result" would
-    # be exactly the multiple-comparisons error the max-statistic test was added
-    # to fix one level down.
-    tested = []
+    # Uncorrected across features, by request. Ten features were tried, so the
+    # smallest p here is not a 5% claim -- read the effect sizes, not the stars.
+    print("\n   Expert - Naive, per feature (task cohort, UNCORRECTED p):")
     for f in features:
         n = per_animal(units["task"], feature=f, epoch="Naive")
         ex = per_animal(units["task"], feature=f, epoch="Expert")
@@ -183,24 +188,9 @@ def main() -> None:
             continue
         d = np.array([ex[k] - n[k] for k in shared])
         pv = stats.wilcoxon(d).pvalue if d.size >= 6 else np.nan
-        tested.append((f, d, pv))
-
-    ps = np.array([t[2] for t in tested], dtype=float)
-    order = np.argsort(ps)
-    m = np.sum(np.isfinite(ps))
-    survives = np.zeros(ps.size, bool)
-    for rank, idx in enumerate(order, start=1):
-        if np.isfinite(ps[idx]) and ps[idx] <= rank / m * 0.05:
-            survives[order[:rank]] = True
-    for (f, d, pv), ok in zip(tested, survives):
-        verdict = (f"p = {pv:.3f}" if np.isfinite(pv)
-                   else f"UNDERPOWERED (n={d.size})")
-        tail = "  *SURVIVES BH-FDR" if ok else ("  (does NOT survive BH-FDR over "
-                                               f"{m} features)" if np.isfinite(pv)
-                                               and pv < 0.05 else "")
-        print(f"   {f:30s} Expert − Naive = {d.mean():+.5f} ± "
-              f"{d.std(ddof=1) / np.sqrt(d.size):.5f} bits (N={d.size} mice, {verdict}){tail}")
-    print(f"\n   {int(survives.sum())}/{m} features survive BH-FDR at q = 0.05")
+        verdict = f"p = {pv:.3f}" if np.isfinite(pv) else f"UNDERPOWERED (n={d.size})"
+        print(f"   {f:30s} {d.mean():+.5f} +/- "
+              f"{d.std(ddof=1) / np.sqrt(d.size):.5f} bits (N={d.size} mice, {verdict})")
 
 
 if __name__ == "__main__":

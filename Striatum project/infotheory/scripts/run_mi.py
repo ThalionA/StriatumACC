@@ -7,18 +7,22 @@ that changes across learning epochs.
 
 Following the paper where it transfers:
 
-* spikes binarised at 10 ms; each behavioural feature into **3 equipopulated
-  bins**, recomputed WITHIN each epoch so the comparison across epochs is not
-  contaminated by the feature's own drift;
+* spikes binarised at 10 ms; each behavioural feature split at its **median**,
+  recomputed WITHIN each epoch so the comparison across epochs is not
+  contaminated by the feature's own drift. The paper used three equipopulated
+  bins on sessions of hundreds of trials; this project's learning epochs are ten
+  trials, so two bins (five trials each) is the workable split, and it is what
+  the repo's existing MATLAB MI arm already uses (``cfg.mi_behav_bins = 2``);
 * responses **pooled over a moving window** of time points to increase samples --
   the paper used 5 points shifted by 2, here 5 points (50 ms) shifted by 5, which
   keeps the windows non-overlapping so neighbouring values are independent;
 * bias removed by **shuffle subtraction**: the mean of a permuted distribution is
   subtracted, with the permutation applied across TRIALS so a unit's own temporal
   structure survives it;
-* trial counts **matched across epochs** within an animal, because mutual
-  information is biased by sample size and an unmatched comparison between a
-  10-trial and a 200-trial epoch measures the trial count.
+* epochs are the project's standard **Naive / Intermediate / Expert**, ten
+  trials each, so they are trial-count matched by construction — which matters
+  because mutual information is biased by sample size and an unmatched
+  comparison between epochs would partly measure the trial count.
 
 Two tables:
 
@@ -44,34 +48,33 @@ from striatum_info import estimators as est  # noqa: E402
 from striatum_lfp import analysis, config as lfp_config  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
-N_FEATURE_BINS = 3
+N_FEATURE_BINS = 2   # median split, matching MutualInformationStriatum_v2's mi_behav_bins
 POOL_WIN = 5        # time bins pooled per window (50 ms at 10 ms bins)
 POOL_SHIFT = 5      # non-overlapping, so neighbouring windows are independent
 N_SHUFFLES = 50
-MIN_TRIALS = 20     # below this an epoch cannot support a 3-bin estimate
+MIN_TRIALS = 8      # a 10-trial epoch gives 5 per bin at 2 bins
 
 
-def epoch_windows(valid: np.ndarray, n_third: int | None = None) -> dict[str, np.ndarray]:
-    """``{epoch: trial indices}`` — All, Naive (first third), Expert (last third).
+def epoch_windows(lp, n_trials: int, valid: np.ndarray) -> dict[str, np.ndarray]:
+    """``{epoch: trial indices}`` — the project's standard THREE-epoch scheme.
 
-    NOT the project's usual learning-point epochs. Those are 10-trial windows
-    (and 3 for "Trials 1-3"), which is far too few for a 3-bin information
-    estimate: the first run of this script computed nothing but "All" because
-    every learning epoch fell below the minimum. Lemke et al. faced the same
-    constraint and solved it by pooling DAYS; we have one session, so the
-    equivalent is a larger fraction of it.
+    Naive / Intermediate / Expert, ten trials each, learning-point relative
+    (``project_cfg`` ``epoch_names``). Ten trials is thin for an information
+    estimate, which is why the feature is split at its median rather than into
+    three bins: two bins give five trials per bin instead of three, and it is the
+    convention the repo's existing MATLAB MI arm already uses
+    (``cfg.mi_behav_bins = 2``).
 
-    A thirds split is also closer to the paper than an LP split would be: their
-    naive and skilled are the first 3-4 and last 2-4 DAYS of training, a
-    time-based division, not a performance-based one.
+    The three windows are the same size by construction, so no trial-count
+    matching is needed — and each epoch's bias is removed against its own
+    shuffles anyway, which is what makes the comparison across epochs fair.
     """
-    usable = np.flatnonzero(valid)
-    out = {"All": usable}
-    if usable.size < 3:
-        return out
-    k = n_third or max(1, usable.size // 3)
-    out["Naive"] = usable[:k]
-    out["Expert"] = usable[-k:]
+    usable = set(np.flatnonzero(valid).tolist())
+    out = {"All": np.array(sorted(usable))}
+    for name, tr in zip(("Naive", "Intermediate", "Expert"),
+                        analysis.epoch_indices(lp, n_trials)):
+        idx = np.asarray(tr, int) - 1
+        out[name] = np.array([t for t in idx if t in usable])
     return out
 
 
@@ -85,14 +88,9 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
     valid = z["valid"].astype(bool)
     mouse = int(path.stem.split("_")[-1]) if path.stem.split("_")[-1].isdigit() else 0
 
-    windows = epoch_windows(valid)
-    # Naive and Expert are the same size by construction; "All" is descriptive
-    # only and is left unmatched. Matching matters because mutual information is
-    # biased by sample size, so an unmatched epoch comparison partly measures the
-    # trial count rather than the coding.
-    n_match = min((windows[e].size for e in ("Naive", "Expert") if e in windows),
-                  default=0)
-
+    ch = lfp_config.get_cohort(cohort)
+    lp = analysis.cohort_learning_points(ch).get(mouse)
+    windows = epoch_windows(lp, spikes.shape[2], valid)
     n_bins = spikes.shape[1]
     starts = np.arange(0, n_bins - POOL_WIN + 1, POOL_SHIFT)
     rng = np.random.default_rng(rng_seed)
@@ -110,8 +108,6 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
             use = trials[ok]
             if use.size < MIN_TRIALS:
                 continue
-            if epoch != "All" and n_match >= MIN_TRIALS and use.size > n_match:
-                use = np.sort(rng.choice(use, size=n_match, replace=False))
             fv = feats[use, fi]
             if np.unique(fv).size < N_FEATURE_BINS:
                 continue
@@ -170,7 +166,7 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
                 })
 
     used = sorted({r["epoch"] for r in unit_rows})
-    print(f"[mi] {cohort[:4]:<4} {mouse:>5}: epochs {used}, matched n={n_match}, "
+    print(f"[mi] {cohort[:4]:<4} {mouse:>5}: epochs {used}, lp={lp}, "
           f"{len(starts)} windows -> {len(unit_rows):5d} unit rows "
           f"({time.time() - t0:.0f}s)", flush=True)
     return tc_rows, unit_rows
