@@ -26,3 +26,47 @@
 [coup] pac_within   bipolar    epoch=All: 102 cells, p < 0.05 in 82 (80%)
 [coup] pac_between  monopolar  epoch=All: 192 cells, p < 0.05 in 189 (98%)
 [coup] pac_between  bipolar    epoch=All: 192 cells, p < 0.05 in 129 (67%)
+[coup] cohort=control: 8 files, 100 surrogates per PAC cell
+[coup] cont 1205/striatum  3 areas ['ACC', 'DLS', 'DMS'], 144 trials ->  3888 trial rows,  270 epoch rows  (read 41s)
+[coup] cont 407/striatum  2 areas ['DLS', 'DMS'], 169 trials ->  1859 trial rows,  110 epoch rows  (read 42s)
+[coup] cont 513/striatum  3 areas ['ACC', 'DLS', 'DMS'], 108 trials ->  2916 trial rows,  270 epoch rows  (read 49s)
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/src/striatum_lfp/area_signals.py:60: RuntimeWarning: Mean of empty slice
+  out[(area, "monopolar")] = np.nanmean(sub, axis=1)
+/Users/theoamvr/Desktop/Experiments/StriatumACC/Striatum project/lfp/src/striatum_lfp/psi.py:185: RuntimeWarning: Mean of empty slice
+  return np.nanmean(x[:, 0:n:2] - x[:, 1:n:2], axis=1)
+[coup] cont 513/visual    3 areas ['CA1', 'DG', 'V1'], 108 trials ->  2916 trial rows,  270 epoch rows  (read 48s)
+[coup] cont 515/striatum  3 areas ['ACC', 'DLS', 'DMS'], 131 trials ->  3537 trial rows,  270 epoch rows  (read 43s)
+[coup] cont 515/visual    3 areas ['CA1', 'DG', 'V1'], 131 trials ->  3537 trial rows,  270 epoch rows  (read 46s)
+[coup] cont 817/striatum  3 areas ['ACC', 'DLS', 'DMS'], 136 trials ->  3672 trial rows,  270 epoch rows  (read 40s)
+[coup] cont 817/visual    3 areas ['CA1', 'DG', 'V1'], 136 trials ->  3672 trial rows,  270 epoch rows  (read 44s)
+[coup] wrote lfp_coupling_trials_control.csv (25997 rows)
+[coup] wrote lfp_coupling_epochs_control.csv (2000 rows)
+[coup] pac_within   monopolar  epoch=All: 40 cells, p < 0.05 in 39 (98%)
+[coup] pac_within   bipolar    epoch=All: 40 cells, p < 0.05 in 30 (75%)
+[coup] pac_between  monopolar  epoch=All: 76 cells, p < 0.05 in 75 (99%)
+[coup] pac_between  bipolar    epoch=All: 76 cells, p < 0.05 in 54 (71%)
+[psi] cohort=task: 21 files, nperseg=2048 (2.05 s, 0.49 Hz bins)
+[psi] task 1105/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     25s
+[psi] 1105/visual: fewer than two usable areas, skipped
+[psi] task 1106/striatum  3 areas ['ACC', 'DLS', 'DMS'], 189 trials,  120 rows     42s
+[psi] 1106/visual: fewer than two usable areas, skipped
+[psi] task 1201/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     19s
+[psi] task 1201/visual    3 areas ['CA1', 'DG', 'V1'], 200 trials,  120 rows     20s
+[psi] 1206/striatum: fewer than two usable areas, skipped
+[psi] task 1206/visual    3 areas ['CA1', 'DG', 'V1'], 104 trials,  120 rows     48s
+[psi] task 1212/striatum  3 areas ['ACC', 'DLS', 'DMS'], 154 trials,  120 rows     58s
+[psi] task 1212/visual    3 areas ['CA1', 'DG', 'V1'], 154 trials,  120 rows     64s
+[psi] task 409/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     22s
+[psi] task 418/striatum  3 areas ['ACC', 'DLS', 'DMS'], 141 trials,  120 rows     41s
+[psi] task 523/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     16s
+[psi] task 614/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     11s
+[psi] task 624/striatum  3 areas ['ACC', 'DLS', 'DMS'],  71 trials,  120 rows     41s
+[psi] task 703/striatum  2 areas ['ACC', 'DMS'], 108 trials,   40 rows     42s
+[psi] task 727/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     15s
+[psi] task 730/striatum  3 areas ['ACC', 'DLS', 'DMS'], 200 trials,  120 rows     14s
+[psi] task 731/striatum  2 areas ['ACC', 'DMS'],  76 trials,   40 rows     42s
+[psi] task 822/striatum  3 areas ['ACC', 'DLS', 'DMS'],  90 trials,  120 rows     45s
+[psi] task 823/striatum  2 areas ['ACC', 'DMS'], 200 trials,   40 rows     14s
+[psi] wrote lfp_psi_task.csv (1920 rows)
+[psi] monopolar  epoch=All: 192 cells, |z| > 2 in 131 (68%, calibrated chance ~5-10%), mean |z| 5.36
+[psi] bipolar    epoch=All: 192 cells, |z| > 2 in 51 (27%, calibrated chance ~5-10%), mean |z| 1.94

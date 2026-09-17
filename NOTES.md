@@ -1,5 +1,35 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-17 — Theta-gamma coupling: real and widespread, unchanged by learning
+
+**PAC is real here, and the test is calibrated on REAL data.** The existing unit
+test calibrates the time-shift surrogate on a stationary synthetic signal and
+passes at up to 25%; real LFP is not stationary and the driver concatenates
+trials before measuring. Calibration on real LFP, with the amplitude series
+rebuilt from the SAME trials in a PERMUTED order (every trial's statistics, the
+concatenation boundaries and the session drift survive; only within-trial
+phase-amplitude pairing is destroyed): **7/96 cells significant, 7%**, against a
+nominal 5% and **71%** observed on the same cells. The widespread coupling is not
+a broken test.
+
+Bipolar re-referencing is what to read. Significant cells drop 99% -> 80% within
+area and 98% -> 67% between areas when the far field is removed -- the same
+shared-field signature the distance and PSI controls found. The bipolar numbers
+still sit far above the 7% null.
+
+**It does not change with learning.** The raw contrast said p = 0.0000 in both
+gamma bands with identical effect sizes; that was epoch SIZE. The Tort modulation
+index is positively biased at small n and the epochs are 3, 7, 10 and 10 trials:
+Spearman(mi, n_trials) = -0.49, p = 1.6e-90 (0.00033 at three trials vs 0.00014 at
+ten). Shuffle subtraction carries none of it (Spearman +0.011, p = 0.68), and on
+size-matched epochs (Intermediate vs Expert, both ten trials) the change is
+p = 0.63 within area and p = 0.90 between. `run_lfp_coupling.py` now emits
+`mi_corrected` and documents the size dependence in its own docstring; existing
+tables can derive it as `mi - mi_surrogate_mean`.
+
+Orthogonalised amplitude-envelope correlation: level +0.067 (task, bipolar, N=16),
+no learning change (p = 0.71). Control +0.113, N=5, untestable.
+
 ## 2026-09-17 — The Panzeri mirror moves to the LFP, and DLS loses information with training
 
 **The spike arm was uninterpretable and is superseded.** Single-unit information

@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Theta and gamma coupling between areas, and theta-gamma coupling within and between.
+"""**Never compare the raw ``mi`` column across epochs.**
+
+The Tort modulation index is positively biased at small sample sizes, and this
+driver's epochs are 3, 7, 10 and 10 trials. Measured on the task cohort
+(2026-09-17): Spearman(mi, n_trials) = -0.49, p = 1.6e-90 -- raw MI runs 0.00033
+at three trials against 0.00014 at ten, so "Trials 1-3" beats "Expert" by a
+factor of two on sample size alone and a naive contrast returns p = 0.0000 with
+no coupling change whatever. ``mi_corrected`` (= ``mi - mi_surrogate_mean``)
+carries none of it: Spearman = +0.011, p = 0.68. On size-matched epochs
+(Intermediate vs Expert, both ten trials) the learning change is p = 0.63.
+
+Theta and gamma coupling between areas, and theta-gamma coupling within and between.
 
 Reads the voltage exports once per animal (via `area_signals`), then computes,
 for both referencing schemes:
@@ -112,6 +123,7 @@ def _epoch_rows(per_trial, trials, chans, base, sos_cache) -> list[dict]:
                 out = coupling.modulation_index_with_surrogates(
                     joined[(area, ref)], None, fs=config.FS, phase_band=THETA,
                     amp_band=edges, n_surrogates=N_SURROGATES, seed=int(base["mouse_id"]))
+                out["mi_corrected"] = out["mi"] - out["mi_surrogate_mean"]
                 rows.append({**base, "reference": ref, "measure": "pac_within",
                              "band": band, "area_a": area, "area_b": area, **out})
         for a1, a2 in permutations(areas, 2):
@@ -120,6 +132,7 @@ def _epoch_rows(per_trial, trials, chans, base, sos_cache) -> list[dict]:
                     joined[(a1, ref)], joined[(a2, ref)], fs=config.FS,
                     phase_band=THETA, amp_band=edges,
                     n_surrogates=N_SURROGATES, seed=int(base["mouse_id"]))
+                out["mi_corrected"] = out["mi"] - out["mi_surrogate_mean"]
                 rows.append({**base, "reference": ref, "measure": "pac_between",
                              "band": band, "area_a": a1, "area_b": a2, **out})
     return rows
