@@ -1,5 +1,68 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-17 — The cross-area coupling is distance, and nothing else
+
+**The control asked for on 2026-09-09.** DMS, DLS and ACC sit on one shank, so
+"different area" and "further apart" have been the same axis in every cross-area
+number this package reports. The test: compare channel pairs the SAME distance
+apart, within one area against across an area boundary.
+
+**Answer: at matched separation the boundary makes no difference.**
+
+| cohort | band | within − across | N mice | test |
+|---|---|---|---|---|
+| Task | theta | −0.057 ± 0.069 | 14 | p = 0.43 |
+| Task | beta | +0.005 ± 0.052 | 14 | p = 0.95 |
+| Task | low gamma | +0.011 ± 0.052 | 14 | p = 0.90 |
+| Task | high gamma | +0.018 ± 0.034 | 14 | p = 0.58 |
+| Task | total | −0.012 ± 0.049 | 14 | p = 0.72 |
+| Control 1 | all five | −0.073 to +0.051 | 5 | underpowered |
+
+Animal is the unit of analysis, Wilcoxon signed-rank against zero, BH-FDR across
+bands. Nothing is significant anywhere. **Control 1 is marked underpowered, not
+"n.s.": at n = 5 the smallest attainable two-sided signed-rank p is 0.0625, so
+that test cannot reject at 0.05 however large the effect is.** The task cohort at
+n = 14 is the one carrying the negative result.
+
+The decay curves say the same thing more directly: coupling falls from r ≈ 0.8 at
+adjacent channels to ≈ 0.17 at 1.6 mm, and the within-area and across-area curves
+lie on top of each other the whole way.
+
+**This settles the standing caveat.** The held-out CC1 ordering that looked like a
+result — CA1–DG 0.93 at 510 µm down to ACC–DLS 0.55 at 2044 µm — is the distance
+axis and not an area axis. No cross-area LFP coupling claim should be made from
+these data, and the answer does not change with re-referencing: re-referencing
+would change the decay constant, not the fact that the two classes share a curve.
+
+**A trap I walked into first, kept in the code and pinned by a test.** Restricting
+both classes to a shared separation RANGE is not the same as matching their
+separation DISTRIBUTIONS. An area is only a few hundred µm thick, so inside the
+shared range within-area pairs sit **216 µm closer** than across-area pairs, and
+that imbalance correlates with the contrast at **r = −0.63**. The range-restricted
+comparison therefore reported **within − across = +0.073** on data whose exact-matched
+answer is **−0.008**. Channel depths lie on an exact 20 µm grid, so the classes can
+be matched at IDENTICAL separations rather than merely overlapping ranges;
+`distance.exact_matched_contrast` does that and both numbers stay in
+`lfp_distance_matched_<cohort>.csv` so the confound is visible rather than
+quietly corrected away.
+
+A ground-truth fixture bug in the same area, also fixed: the "distance-only" null
+field was built by summing Gaussian-weighted sources over a finite depth range, so
+channels near the ends drew on fewer sources, were more correlated with their
+neighbours, and produced a spurious within > across of 0.08. The field is now
+sampled from an exactly stationary kernel, and the null test passes for the right
+reason.
+
+**Code.** `src/striatum_lfp/distance.py` (+ 11 ground-truth tests),
+`scripts/run_lfp_distance_control.py`, `scripts/plot_lfp_distance_control.py`,
+a `distance` step in `run_lfp_pipeline.sh`. Reads the band-power caches only — no
+re-extraction. 252 tests pass.
+
+**Still open from that meeting: direction of communication.** The cached products
+are binned to 50 spatial bins per trial (~120–250 ms each), which cannot resolve a
+communication lag; a directional measure needs a fresh extraction from the voltage
+exports. Scoped for Theo, not started.
+
 ## 2026-09-09 (c) — Task non-learners take the cohort average LP; CA1 and DG are whole again
 
 **Requested by Theo.** The two task animals that never reach criterion, **703 and
