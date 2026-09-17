@@ -8,7 +8,7 @@ const TFIG = path.join(ROOT, 'tcca', 'figures');
 const CFIG = path.join(ROOT, 'cca', 'figures');
 const RFIG = path.join(ROOT, 'rl_model', 'figures');
 const LFIG = path.join(ROOT, 'lfp', 'figures');
-const OUT = path.join(ROOT, 'presentations', 'StriatumUpdate_20260908.pptx');
+const OUT = path.join(ROOT, 'presentations', 'StriatumUpdate_20260917.pptx');
 
 // The four RS panels used to be excluded here because they rendered empty.
 // Fixed 2026-08-11/12 (probe-2 waveforms now loaded, cortical/hippocampal
@@ -197,9 +197,14 @@ const SECTIONS = [
 
   { title: 'LFP band power: yoked Control 1 cohort',
     files: pickIn(LFIG, f => !LFP_SUPERSEDED(f) && /_control\.png$/.test(f) &&
+                    !/^lfp_distance_control\.png$/.test(f) &&
                     !/^(lfp_cohort_overview|lfp_spectra|lfp_session_integrity|lfp_identity_matrix|lfp_depth_by_frequency)/.test(f),
                   ['lfp_evolution_z_control.png', 'lfp_decoding_control.png',
                    'lfp_reliability_control.png', 'lfp_cca_control.png']) },
+
+  { title: 'LFP: is the cross-area coupling anything but distance, and does it have a direction?',
+    files: pickIn(LFIG, /^(lfp_distance_control|lfp_psi_direction)\.png$/,
+                  ['lfp_distance_control.png', 'lfp_psi_direction.png']) },
 
   { title: 'LFP: task versus yoked control, and the one learning-specific effect',
     files: pickIn(LFIG, /_task_vs_control\.png$/,
