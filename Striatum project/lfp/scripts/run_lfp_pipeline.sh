@@ -22,6 +22,7 @@
 #   validate    reproduce the MATLAB bin map, must be 0.0 ms         seconds
 #   arms        evolution / decoding / reliability / CCA / behaviour ~4 min/cohort
 #   distance    the shank-distance control for cross-area coupling     ~30 s/cohort
+#   psi         phase-slope index; RE-READS the voltage exports        ~25 s/file
 #   contrast    task vs control, BH-FDR within arm (needs BOTH)      seconds
 #   plots       per-cohort figures, then the task-vs-control set     seconds
 #
@@ -38,7 +39,7 @@ FROM=""
 ONLY=""
 JOBS=5
 LIST=0
-STEPS=(inventory identity bandpower validate arms distance contrast plots)
+STEPS=(inventory identity bandpower validate arms distance psi contrast plots)
 
 usage() { sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -104,6 +105,9 @@ run() {
         fi
         if [[ -f results/lfp_distance_matched_task.csv ]]; then
           run $PY scripts/plot_lfp_distance_control.py
+        fi
+        if [[ -f results/lfp_psi_task.csv ]]; then
+          run $PY scripts/plot_lfp_psi.py
         else
           print "SKIP cross-cohort plots: results/lfp_group_contrast.csv absent."
         fi
@@ -122,6 +126,7 @@ run() {
             validate)  run $PY scripts/validate_lfp_bandpower.py --cohort $c ;;
             arms)      run $PY scripts/run_lfp_arms.py --jobs $((JOBS + 1)) --cohort $c ;;
             distance)  run $PY scripts/run_lfp_distance_control.py --cohort $c ;;
+            psi)       run $PY scripts/run_lfp_psi.py --cohort $c ;;
           esac
         done
         ;;

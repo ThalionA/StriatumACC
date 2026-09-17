@@ -147,3 +147,19 @@
   survived. Fixed with `_SpaceAveraged` and `_KDE_` suffixes. When adding a section
   that mirrors an existing one, grep its save name before reusing the expression.
   (2026-09-09)
+- A bipolar derivation must average NON-OVERLAPPING adjacent pairs.
+  `np.mean(np.diff(x, axis=1), axis=1)` reads like "the average local
+  difference" and is algebraically `(x[:, -1] - x[:, 0]) / (n - 1)` — one wide
+  pair across the whole area, resting on two channels, cancelling far less of
+  the far field than a local pair. Use `psi.bipolar_derivation`. (2026-09-17)
+- Restricting two groups to a shared RANGE of a confounding variable does not
+  match their DISTRIBUTIONS of it. For within- vs across-area channel pairs on
+  this probe, the shared separation range still leaves within-area pairs 216 µm
+  closer, and that imbalance correlates with the contrast at r = −0.63: the
+  range-restricted answer was +0.073 where the exactly-matched answer is −0.008.
+  Channel depths are on a 20 µm grid, so match on the exact value. (2026-09-17)
+- A synthetic "null" field built by summing Gaussian-weighted sources over a
+  FINITE depth range is not translation-invariant: channels near the ends draw
+  on fewer sources, are smoother, and correlate more with their neighbours. It
+  produced a spurious within > across of 0.08 and would have validated a false
+  positive. Sample from a stationary kernel instead. (2026-09-17)

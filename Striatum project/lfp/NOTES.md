@@ -1,5 +1,65 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-17 (b) — Direction of communication: nothing survives removing the far field
+
+The third question from 2026-09-09, asked with the phase-slope index because it
+is the one measure blind to instantaneous mixing by construction -- and the
+distance control that morning had just shown cross-area coupling here IS a shared
+field. Two references computed per pair from the raw voltage: **monopolar** (the
+area's mean channel) and **bipolar** (non-overlapping adjacent-channel
+differences, which cancel the far field to first order -- the re-referencing this
+file has been asking for since August).
+
+**Answer: no.** Task cohort, animal as the unit, Wilcoxon against zero, BH-FDR
+over the 12-cell family:
+
+| reference | cells surviving BH-FDR | the one survivor |
+|---|---|---|
+| monopolar | **1 / 12** | DLS→DMS beta, z = +4.35 ± 0.89, N = 12, p = 0.0005 |
+| bipolar | **0 / 12** | — every cell within \|z\| ≤ 1.73, all p > 0.09 |
+
+**The decisive number is not either of those — it is that the two references
+agree at chance.** Over 268 cells, monopolar and bipolar z correlate at
+**r = −0.05** and their signs agree in **46%** (chance 50%). If bipolar were
+simply a noisier view of a true direction, the signs would agree well above
+chance. They do not, so the monopolar effect is not a stronger version of the
+bipolar one; they are unrelated measurements, and the monopolar one is a property
+of the far field.
+
+PSI is blind to INSTANTANEOUS mixing, not to a shared source carrying a delay.
+A field that propagates or is filtered differently with depth has a real phase
+slope, and that is what the monopolar numbers are reading. Bipolar removes it and
+leaves nothing.
+
+**Change with learning: not answerable on a non-result.** The epoch panel is drawn
+but rests on cells that are null overall.
+
+**Task versus control: not answerable at all.** No control area pair reaches
+N = 6 animals, the floor at which a two-sided signed-rank test can return p < 0.05.
+The control cohort has five striatal animals split across pairs.
+
+### The statistic nearly went out uncalibrated
+The jackknife z divides by a spread over segments that overlap by half, so I
+distrusted it and built a mismatched-trial surrogate as the "proper" null. On real
+data the two disagreed fivefold, which forced a calibration: 40 synthetic cells
+with NO interaction and a strong shared field gave **jackknife sd(z) = 1.12, 10%
+false positives** against **surrogate sd(z) = 2.48, 38%**. The jackknife is the
+calibrated one; the surrogate is anti-conservative because every trial of a
+session shares the same slow field, so a mismatched pair stays coupled. It had
+briefly produced mean \|z\| = 14. The surrogate is kept with that measurement in
+its docstring and a test pinning it, so it is not re-adopted. Logged in
+`~/.claude/MISTAKES.md` (2026-09-17, no-verification).
+
+Two other defects caught before any number was reported: spectral windows were
+straddling trial boundaries (segmentation is now per trial), and the bipolar
+derivation was `mean(np.diff(...))`, which telescopes exactly to
+`(last − first)/(n−1)` — one wide pair across the area rather than local ones.
+
+**Code.** `src/striatum_lfp/psi.py` (+ 17 ground-truth tests, including that pure
+instantaneous mixing gives nothing and that a real lag survives heavy mixing),
+`scripts/run_lfp_psi.py`, `scripts/plot_lfp_psi.py`, a `psi` step in the pipeline.
+269 tests pass.
+
 ## 2026-09-17 — The cross-area coupling is distance, and nothing else
 
 **The control asked for on 2026-09-09.** DMS, DLS and ACC sit on one shank, so
