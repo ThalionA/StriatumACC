@@ -27,7 +27,12 @@ Following the paper where it transfers:
 Two tables:
 
 ``mi_timecourse_<cohort>.csv``   per (animal, area, epoch, feature, window)
-``mi_units_<cohort>.csv``        per (animal, unit, area, epoch, feature), peak over time
+``mi_units_<cohort>.csv``        per (animal, unit, area, epoch, feature):
+                                ``mean_mi_corrected`` (the unbiased summary, used
+                                for every across-epoch contrast) and
+                                ``peak_mi_corrected`` + ``peak_p`` (biased upward
+                                by the max over windows -- read only as "does
+                                this unit carry information anywhere")
 
     /opt/anaconda3/bin/python scripts/run_mi.py --cohort task
 """
@@ -137,6 +142,17 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
             null_mean = mi[:, :, 1:].mean(axis=2)
             corrected = mi[:, :, 0] - null_mean
             obs_peak = corrected.max(axis=1)
+            # The PEAK is what the paper reports and what peak_p tests, but it
+            # is useless as an effect size to compare BETWEEN epochs: the max of
+            # 30 noisy windows is positively biased, and the bias grows as the
+            # sample shrinks. Measured on independent spikes and features
+            # (2026-09-17): peak = +0.054 bits at 10 trials and +0.054 at 9,
+            # a spurious -0.003 bit contrast purely from one missing trial --
+            # which is exactly the lick_error_z case, since its NaN sits on
+            # trial 1 and trial 1 lives in Naive. The MEAN over windows is
+            # unbiased on the same data (-0.0001 vs +0.0000), so every
+            # across-epoch comparison uses it.
+            obs_mean = corrected.mean(axis=1)
             leave_one_out = ((mi[:, :, 1:].sum(axis=2)[:, :, None] - mi[:, :, 1:])
                              / (N_SHUFFLES - 1))
             null_peak = (mi[:, :, 1:] - leave_one_out).max(axis=1)   # (units, shuffles)
@@ -161,7 +177,8 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
                 unit_rows.append({
                     "cohort": cohort, "mouse_id": mouse, "epoch": epoch,
                     "n_trials": int(n_tr), "feature": fname, "area": areas[u],
-                    "unit": u, "peak_mi_corrected": float(obs_peak[u]),
+                    "unit": u, "mean_mi_corrected": float(obs_mean[u]),
+                    "peak_mi_corrected": float(obs_peak[u]),
                     "peak_time_ms": float(peak_ms[u]), "peak_p": float(peak_p[u]),
                 })
 

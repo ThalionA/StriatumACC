@@ -8,11 +8,14 @@ Three panels, mirroring the first arm of Lemke et al. (2024):
     standard ten-trial learning epochs.
 (c) The same contrast per area, task against yoked control.
 
+Across-epoch contrasts use the MEAN over time windows. The peak is biased upward
+by the max over windows (+0.054 bits on independent data) by an amount that grows
+as the sample shrinks, so it cannot be compared between epochs.
+
 All values are shuffle-subtracted, so zero means "no more than the bias this bin
-count produces at this sample size". Shuffle subtraction removes the sample-size
-bias but NOT a firing-rate change: MI with a binarised train is capped by that
-train's entropy, so a rate drift between epochs moves every feature together.
-Measured here (2026-09-17): task +0.006 bits of ceiling, control +0.011. Peaks are tested with a max-statistic
+count produces at this sample size". Shuffle subtraction removes the sample-size bias
+per window; it does not remove the bias in a max TAKEN OVER windows, which is why
+the contrasts use the mean. Peaks are tested with a max-statistic
 permutation over time windows, not against a single window's null.
 
     /opt/anaconda3/bin/python scripts/plot_mi.py
@@ -57,13 +60,20 @@ def load(name: str, cohort: str) -> list[dict]:
     return rows
 
 
-def per_animal(rows, **where) -> dict[int, float]:
-    """{mouse: median over its units}, for one cell of the design."""
+def per_animal(rows, *, value: str = "mean_mi_corrected", **where) -> dict[int, float]:
+    """{mouse: median over its units}, for one cell of the design.
+
+    Defaults to the MEAN over time windows, not the peak. The peak is the max of
+    30 noisy windows, so it is biased upward by an amount that grows as the
+    sample shrinks -- +0.054 bits on data with no information at all, and about
+    -0.003 bits of spurious contrast for a single missing trial. Comparing peaks
+    across epochs measures the trial count.
+    """
     by = defaultdict(list)
     for r in rows:
         if any(r.get(k) != v for k, v in where.items()):
             continue
-        val = r.get("peak_mi_corrected", np.nan)
+        val = r.get(value, np.nan)
         if np.isfinite(val):
             by[int(r["mouse_id"])].append(val)
     return {m: float(np.median(v)) for m, v in by.items() if v}
@@ -126,38 +136,41 @@ def main() -> None:
     axb.set_xticklabels([f.replace("_", " ") for f in features], rotation=25,
                         ha="right", fontsize=8)
     axb.set_ylabel("Expert − Naive\nshuffle-subtracted MI (bits)")
-    axb.set_title("(b) Does the information change with learning? Animal medians, over the "
-                  "project's ten-trial Naive and Expert epochs. CAUTION: the control cohort "
-                  "is positive on every feature, and its firing rate rises 6% from Naive to "
-                  "Expert (4/5 mice, entropy ceiling +0.011 bits) — the offset is the size "
-                  "of that rate change, so read it as rate, not information.", fontsize=10)
+    axb.set_title("(b) Does the information change with learning? Animal medians over the "
+                  "project's ten-trial Naive and Expert epochs, mean over time windows.",
+                  fontsize=11)
     axb.legend(fontsize=9, frameon=False)
 
     # ---- (c) the same contrast per area -------------------------------------
     axc = fig.add_subplot(gs[2])
     xa = np.arange(len(AREAS))
+    marks = []
     for key, label, colour in COHORTS:
         if not units[key]:
             continue
-        m, e, ns = [], [], []
-        for area in AREAS:
+        m, e = [], []
+        for ai, area in enumerate(AREAS):
             n = per_animal(units[key], area=area, epoch="Naive")
             ex = per_animal(units[key], area=area, epoch="Expert")
             shared = sorted(set(n) & set(ex))
             d = np.array([ex[k] - n[k] for k in shared])
             if d.size < MIN_MICE:
-                m.append(np.nan); e.append(np.nan); ns.append(0); continue
-            m.append(d.mean()); e.append(d.std(ddof=1) / np.sqrt(d.size)); ns.append(d.size)
+                m.append(np.nan); e.append(np.nan); continue
+            m.append(d.mean()); e.append(d.std(ddof=1) / np.sqrt(d.size))
             p = stats.wilcoxon(d).pvalue if d.size >= 6 else np.nan
             mark = ("*" if np.isfinite(p) and p < 0.05
                     else ("n.s." if np.isfinite(p) else f"n={d.size}"))
-            axc.text(xa[len(m) - 1] + (-0.15 if key == "task" else 0.15),
-                     m[-1] + (e[-1] if np.isfinite(e[-1]) else 0) + 0.0004,
-                     mark, ha="center", fontsize=7, color=colour)
+            marks.append((ai + (-0.15 if key == "task" else 0.15),
+                          m[-1] + e[-1], mark, colour))
         off = -0.15 if key == "task" else 0.15
         axc.errorbar(xa + off, m, yerr=e, fmt="s", ms=7, capsize=4, lw=0,
                      elinewidth=2, color=colour, label=label)
     axc.axhline(0, color="k", lw=1.0)
+    lo, hi = axc.get_ylim()
+    axc.set_ylim(lo, hi + 0.12 * (hi - lo))
+    pad = 0.03 * (axc.get_ylim()[1] - axc.get_ylim()[0])
+    for x, y, mark, colour in marks:
+        axc.text(x, y + pad, mark, ha="center", fontsize=7, color=colour)
     axc.set_xticks(xa)
     axc.set_xticklabels(AREAS)
     axc.set_ylabel("Expert − Naive\nshuffle-subtracted MI (bits)")

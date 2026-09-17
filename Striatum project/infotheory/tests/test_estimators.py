@@ -263,3 +263,64 @@ def test_vectorised_mi_shapes_follow_the_inputs():
     spikes = (rng.random((4, 300)) < 0.4).astype(int)
     assert est.mi_binary_vs_categorical(spikes, rng.integers(0, 3, 300), 3).shape == (4, 1)
     assert est.mi_binary_vs_categorical(spikes, rng.integers(0, 3, (300, 7)), 3).shape == (4, 7)
+
+
+# --------------------------------------------------------------------------
+# which summary statistic may be compared across epochs
+# --------------------------------------------------------------------------
+
+def _window_summaries(n_trials, *, n_units=40, n_time=150, pool=5, shift=5,
+                      n_shuffles=30, n_bins=2, seed=0):
+    """Peak and mean over time windows, on data with NO information at all.
+
+    Mirrors the driver in ``scripts/run_mi.py``: binary spikes, a feature split
+    into ``n_bins``, responses pooled over non-overlapping windows, each window
+    shuffle-subtracted.
+    """
+    rng = np.random.default_rng(seed)
+    spikes = (rng.random((n_units, n_time, n_trials)) < 0.045).astype(int)
+    codes = est.equipopulated_bins(rng.normal(size=n_trials), n_bins)
+    variants = np.empty((n_trials, 1 + n_shuffles), int)
+    variants[:, 0] = codes
+    for s in range(n_shuffles):
+        variants[:, s + 1] = rng.permutation(codes)
+    rep = np.tile(variants, (pool, 1))
+    starts = np.arange(0, n_time - pool + 1, shift)
+    mi = np.empty((n_units, starts.size, 1 + n_shuffles))
+    for wi, w in enumerate(starts):
+        blk = spikes[:, w:w + pool, :]
+        mi[:, wi, :] = est.mi_binary_vs_categorical(
+            blk.reshape(n_units, -1), rep, n_bins)
+    corrected = mi[:, :, 0] - mi[:, :, 1:].mean(axis=2)
+    return corrected.max(axis=1).mean(), corrected.mean(axis=1).mean()
+
+
+def test_the_peak_over_windows_is_biased_even_after_shuffle_subtraction():
+    """Shuffle subtraction fixes each window; taking the max re-breaks it.
+
+    The bug this pins (2026-09-17): ``peak_mi_corrected`` was used as the effect
+    size for Naive-vs-Expert contrasts. On data carrying zero information it
+    comes back at roughly +0.05 bits -- ten times the size of the "effects" that
+    were being reported off it.
+    """
+    peak, mean = _window_summaries(10, seed=1)
+    assert peak > 0.02, (
+        f"the max over windows must show its selection bias, got {peak:.5f}")
+    assert abs(mean) < 0.002, (
+        f"the mean over windows must be unbiased, got {mean:+.5f}")
+
+
+def test_the_peaks_bias_depends_on_sample_size_and_the_means_does_not():
+    """Why the peak cannot be compared between epochs of unequal n.
+
+    ``lick_error_z`` is NaN on trial 1, and trial 1 lives in the Naive epoch, so
+    Naive had 8.85 usable trials against Expert's 9.81. That one trial alone
+    produced a spurious negative contrast through the peak.
+    """
+    peak_9, mean_9 = _window_summaries(9, seed=2)
+    peak_10, mean_10 = _window_summaries(10, seed=2)
+    assert peak_9 - peak_10 > 0.001, (
+        "the smaller sample must carry the larger peak bias; got "
+        f"{peak_9:.5f} at n=9 vs {peak_10:.5f} at n=10")
+    assert abs(mean_9 - mean_10) < 0.0005, (
+        f"the mean must not care about one trial; got {mean_9:+.5f} vs {mean_10:+.5f}")
