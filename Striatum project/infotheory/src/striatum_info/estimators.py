@@ -352,3 +352,34 @@ def cmi_codes_vs_variants(x_codes: np.ndarray, variants: np.ndarray,
         total += (m.sum() / n) * mi_codes_vs_variants(
             x_codes[m], variants[m], n_x, n_y)
     return total
+
+
+def value_boundary_split(x: np.ndarray, *, min_frac: float = 0.2):
+    """Two-bin split that falls at a REAL value change, or ``None``.
+
+    :func:`equipopulated_bins` breaks ties by rank, and its argsort is stable, so
+    when the median lands inside a run of identical values the bin a tied sample
+    lands in is decided by its POSITION IN THE ARRAY. For a trial-level feature
+    that array is ordered by trial, so the "feature" silently becomes trial
+    order and the estimate becomes drift.
+
+    Measured on the task cohort (2026-09-18): ``success`` is 97.8% tied and every
+    one of 16 animals got a tie-split; ``n_licks`` is 47% tied and 11 of 16 did.
+    The eight continuous features were unaffected.
+
+    This picks the cut among the observed values that comes closest to halving
+    the sample, assigns ``x <= cut`` to 0 and the rest to 1, and refuses (returns
+    ``None``) when the smaller bin would hold less than ``min_frac`` of the
+    samples -- a 3/97 split is honest but carries no usable information at these
+    trial counts.
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    vals = np.unique(x)
+    if vals.size < 2:
+        return None
+    lows = np.array([(x <= v).sum() for v in vals[:-1]], dtype=float)
+    cut = vals[:-1][np.argmin(np.abs(lows / x.size - 0.5))]
+    lo = int((x <= cut).sum())
+    if min(lo, x.size - lo) < min_frac * x.size:
+        return None
+    return (x > cut).astype(int)

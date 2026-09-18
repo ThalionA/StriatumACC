@@ -66,7 +66,7 @@ LFP_RESULTS = Path(__file__).resolve().parents[2] / "lfp" / "results"
 MAX_BIN = 30            # project spatial truncation (config.max_bin); reward zone is bin 25
 POOL_BINS = 5           # adjacent spatial bins pooled per window -> 6 windows
 N_POWER_BINS = 3
-N_FEATURE_BINS = 2      # median split; a ten-trial epoch cannot support more
+N_FEATURE_BINS = 2      # two bins; a ten-trial epoch cannot support more
 N_SPEED_BINS = 2
 N_SHUFFLES = 50
 MIN_TRIALS = 8
@@ -207,8 +207,16 @@ def run_one(path: Path, cohort: str, seed: int, dp_clip: bool = True) -> tuple[l
                     use = trials[keep]
                     if use.size < MIN_TRIALS or np.unique(fv[keep]).size < N_FEATURE_BINS:
                         continue
-                    variants = variants_for(
-                        est.equipopulated_bins(fv[keep], N_FEATURE_BINS), rng)
+                    # The split must fall at a REAL value change. An
+                    # equipopulated split breaks ties by array position, and the
+                    # array is ordered by trial, so a near-constant feature turns
+                    # silently into trial order. `success` is 97.8% tied and
+                    # `n_licks` 47%; both produced perfectly balanced splits that
+                    # encoded drift (2026-09-18).
+                    codes = est.value_boundary_split(fv[keep])
+                    if codes is None:
+                        continue
+                    variants = variants_for(codes, rng)
                     mis, cmis = [], []
                     for w in starts:
                         got = pooled_codes(power, speed, use,

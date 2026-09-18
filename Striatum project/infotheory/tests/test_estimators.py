@@ -370,3 +370,50 @@ def test_conditioning_on_the_confound_removes_a_spurious_dependence():
     cond = est.cmi_codes_vs_variants(power, feature, speed, n_x=2, n_y=2)[0]
     assert raw > 0.1, f"the confound must create apparent coupling, got {raw:.4f}"
     assert cond < 0.01, f"conditioning must remove it, got {cond:.4f}"
+
+
+# --------------------------------------------------------------------------
+# tie handling — the split must encode the feature, not the array order
+# --------------------------------------------------------------------------
+
+def test_equipopulated_bins_splits_ties_by_position():
+    """The defect this guards against, pinned so it cannot be forgotten.
+
+    A near-constant feature still returns a perfectly balanced split, and among
+    the tied samples the bin tracks the INDEX — so for a trial-ordered array the
+    "feature" becomes trial order.
+    """
+    v = np.ones(20)
+    v[[3, 11]] = 0.0
+    c = est.equipopulated_bins(v, 2)
+    assert np.bincount(c).min() >= 9, "it still looks balanced, which is the trap"
+    tied = c[v == 1]
+    assert np.array_equal(tied, np.sort(tied)), "tied samples are split by position"
+
+
+def test_value_boundary_split_refuses_a_near_constant_feature():
+    v = np.ones(200)
+    v[:4] = 0.0                       # 2% zeros — honest split exists but is useless
+    assert est.value_boundary_split(v) is None
+
+
+def test_value_boundary_split_cuts_only_at_a_real_value_change():
+    rng = np.random.default_rng(40)
+    v = rng.integers(0, 5, size=400).astype(float)     # ties, but well spread
+    c = est.value_boundary_split(v)
+    assert c is not None
+    assert v[c == 0].max() < v[c == 1].min(), "no tied value may straddle the cut"
+
+
+def test_value_boundary_split_matches_the_median_on_continuous_data():
+    rng = np.random.default_rng(41)
+    v = rng.normal(size=500)
+    c = est.value_boundary_split(v)
+    assert c is not None
+    assert abs(c.mean() - 0.5) < 0.01
+    assert np.array_equal(c, est.equipopulated_bins(v, 2)), (
+        "with no ties it must agree with the equipopulated split")
+
+
+def test_value_boundary_split_refuses_a_constant_feature():
+    assert est.value_boundary_split(np.full(50, 3.0)) is None

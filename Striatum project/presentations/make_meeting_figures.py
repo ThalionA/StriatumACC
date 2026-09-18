@@ -155,16 +155,20 @@ def fig_beyond_speed():
     ax.set_xticklabels([f.replace("_", " ") for f in feats], rotation=28, ha="right",
                        fontsize=10)
     ax.set_ylabel("shuffle-subtracted MI (bits)")
-    ax.set_title("The information is not just running speed — 62–96% of it survives conditioning",
-                 fontweight="semibold")
+    n_sig = sum(1 for q in ps if np.isfinite(q) and q < 0.05)
+    ax.set_title(f"The information is not just running speed — {min(keep):.0f}–{max(keep):.0f}% "
+                 "of it survives conditioning", fontweight="semibold")
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
     save(fig, "02_information_beyond_speed", pad=-0.24, caption=
          "Task cohort, engaged trials only, pooled over areas and both interpretable bands. "
          "Percentages are the conditional value as a fraction of the raw one; p is Wilcoxon against "
-         "zero on the CONDITIONAL value, animals as n = 15–16. Nine of ten features survive at "
-         "p ≤ 0.011; path length alone does not (p = 0.083). Conditioning matters because animals "
-         "run faster as they learn and speed alone moves band power.")
+         f"zero on the CONDITIONAL value, animals as n = 16. {n_sig} of {len(feats)} features "
+         "survive at p < 0.05; path length alone does not. Conditioning matters because animals "
+         "run faster as they learn and speed alone moves band power. 'success' is ABSENT: it is "
+         "the reward flag, 98% identical within the engaged period, so no split of it carries "
+         "usable information — an equipopulated split of a near-constant feature silently "
+         "encodes trial ORDER instead, which is what it was doing.")
 
 
 # ------------------------------------------------------- 03 de-sparsification --
