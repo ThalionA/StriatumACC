@@ -256,9 +256,9 @@ def fig_null():
     rs = [r for r in rows(INFO / "lfp_mi_features_task.csv")
           if r["band_status"] == "interpretable"]
     for a in ("DMS", "DLS", "ACC"):
-        e = by_animal([r for r in rs if r["area"] == a and r["epoch"] == "EarlyHalf"],
+        e = by_animal([r for r in rs if r["area"] == a and r["epoch"] == "Naive"],
                       "cmi_given_speed")
-        l = by_animal([r for r in rs if r["area"] == a and r["epoch"] == "LateHalf"],
+        l = by_animal([r for r in rs if r["area"] == a and r["epoch"] == "Expert"],
                       "cmi_given_speed")
         sh = sorted(set(e) & set(l))
         d = np.array([l[m] - e[m] for m in sh])
@@ -270,7 +270,7 @@ def fig_null():
                            ("pac_between", "mi", "Theta–gamma PAC, between"),
                            ("same_freq", "orth_r", "Envelope correlation")):
         sub = [r for r in cp if r["measure"] == meas]
-        i = by_animal([r for r in sub if r["epoch"] == "Intermediate"], col)
+        i = by_animal([r for r in sub if r["epoch"] == "Naive"], col)
         x = by_animal([r for r in sub if r["epoch"] == "Expert"], col)
         sh = sorted(set(i) & set(x))
         d = np.array([x[m] - i[m] for m in sh])
@@ -302,7 +302,8 @@ def fig_null():
     ax.axvline(0, color=INK, lw=1.3)
     ax.set_yticks(y); ax.set_yticklabels([e[0] for e in entries])
     ax.set_xlim(-1.25, 1.25)
-    ax.set_xlabel("expert − naive, scaled to each measure's own spread\n(0 = no change)")
+    ax.set_xlabel("Expert (10 trials from the learning point) − Naive (trials 1–10)\n"
+                  "scaled to each measure's own spread   ·   0 = no change")
     words = {6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
     ax.set_title(f"Nothing changes with learning — {words.get(len(entries), len(entries))} "
                  "measures, two data types, two pipelines", fontweight="semibold")

@@ -2,7 +2,7 @@
 """**Never compare the raw ``mi`` column across epochs.**
 
 The Tort modulation index is positively biased at small sample sizes, and this
-driver's epochs are 3, 7, 10 and 10 trials. Measured on the task cohort
+driver's epochs were 3, 7, 10 and 10 trials before 2026-09-18. Measured then
 (2026-09-17): Spearman(mi, n_trials) = -0.49, p = 1.6e-90 -- raw MI runs 0.00033
 at three trials against 0.00014 at ten, so "Trials 1-3" beats "Expert" by a
 factor of two on sample size alone and a naive contrast returns p = 0.0000 with
@@ -60,7 +60,7 @@ from striatum_lfp import analysis, area_signals, config, coupling, features  # n
 THETA = (4.0, 8.0)
 AMP_BANDS = {"low_gamma": (30.0, 80.0), "high_gamma": (80.0, 150.0)}
 SAME_BANDS = {"theta": THETA, **AMP_BANDS}
-EPOCHS = ("All", "Trials 1-3", "Trials 4-10", "Intermediate", "Expert")
+EPOCHS = ("All", "Naive", "Intermediate", "Expert")
 #: One theta cycle is ~150-250 ms; a modulation index wants many of them.
 MIN_SAMPLES = 4000
 N_SURROGATES = 100
@@ -163,11 +163,25 @@ def run_one(cache: Path, cohort_name: str):
 
     n_trials = int(min(analysis.cohort_trial_counts(ch).get(mouse, len(per_trial)),
                        len(per_trial)))
-    windows = {"All": sorted(per_trial)}
-    for name, tr in zip(analysis.EPOCH_NAMES,
-                        analysis.epoch_indices(lp, n_trials,
-                                               naive_split=analysis.NAIVE_SPLIT)):
-        windows[name] = [t for t in (np.asarray(tr, int) - 1) if t in per_trial]
+    # The project's THREE-epoch scheme: Naive = trials 1-10, Expert = the ten
+    # trials from the learning point. Ten trials each, so every across-epoch
+    # contrast is count-matched by construction -- which the Tort index REQUIRES,
+    # being positively biased at small n (Spearman(mi, n_trials) = -0.49 on the
+    # four-epoch scheme this replaces, whose Naive was three trials).
+    dp = analysis.disengagement_points(ch).get(mouse, np.nan)
+    usable = sorted(per_trial)
+    if np.isfinite(dp):
+        usable = [t for t in usable if t + 1 <= dp]
+    windows = {"All": usable}
+    for name, tr in zip(("Naive", "Intermediate", "Expert"),
+                        analysis.epoch_indices(lp, n_trials)):
+        keep = [t for t in (np.asarray(tr, int) - 1) if t in per_trial]
+        # An LP-relative epoch can run past disengagement when LP and DP are close
+        # (418: LP = 26, DP = 27). Drop it rather than compare engaged with
+        # disengaged -- that confound killed a headline result on 2026-09-18.
+        if keep and np.isfinite(dp) and max(keep) + 1 > dp:
+            keep = []
+        windows[name] = keep
 
     epoch_rows = []
     for epoch in EPOCHS:
