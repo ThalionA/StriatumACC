@@ -52,6 +52,16 @@ def parse_args():
     p.add_argument("--pairs", default="", help="comma list A-B,C-D to restrict pairs")
     p.add_argument("--limit", type=int, default=0, help="cap number of learners (smoke)")
     p.add_argument("--tag", default="")
+    # A yoked control has no learning point of its own -- that is what makes it a
+    # control. classify_cohort keeps only animals with a DETECTED one, which for
+    # the control group is 1 of 5. Imposing the TASK cohort's mean LP on every
+    # control animal is the convention the LFP arm already uses
+    # (analysis.cohort_learning_points fills non-learners the same way). The
+    # resulting "expert" epoch is a matched TIME window, not a matched level of
+    # performance, and every row says so in lp_source.
+    p.add_argument("--yoked-lp", type=int, default=0,
+                   help="impose this learning point on EVERY animal in the group "
+                        "(use the other cohort's mean; sets lp_source=imposed)")
     return p.parse_args()
 
 
@@ -69,6 +79,9 @@ def main():
 
     animals = dataio.load_animals(group=args.group)
     entries, _ = dataio.classify_cohort(animals, cfg)
+    if args.yoked_lp:
+        entries = {aid: dataclasses.replace(e, lp=args.yoked_lp, role="learner")
+                   for aid, e in entries.items()}
     learners = [a for a in animals if entries[a.animal_id].role == "learner"]
     if args.limit:
         learners = learners[: args.limit]
