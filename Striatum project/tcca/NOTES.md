@@ -7,6 +7,71 @@ contrast; fresh tom_cca-style port; plus an engaged-vs-disengaged contrast).
 
 ---
 
+## 2026-09-18 — tom_cca's intercept fix ported; one conclusion dies, the rest hold
+
+Theo flagged that Tom's temporal CCA had been fixed again. `tom_cca` 9e03883
+(2026-09-15) added an INTERCEPT to `partial.partial_out_cv`; this port's copy was
+byte-identical to the PRE-fix version. Our windows are exactly the trap:
+`dataio.zscore_over_reference` scores over the engaged reference and every epoch
+window is a slice of it, so both areas' residuals kept the same `(I - P_Z)*1`
+image and CCA read it as a shared channel. Call sites: `subspace_window.py:96`,
+`early_trials.py:51`, `kcca_window.py:49`.
+
+**Impact, measured like-for-like** (same code both ways, canonical b25/FS-excl/
+partial, 107 cells). The pre-fix re-run reproduces the committed CSVs exactly
+(1571 dim rows, 106 cross), so the committed grid WAS the buggy one:
+
+| | |
+|---|---|
+| dim-1 cc1 moves > 0.05 | 52/107 cells (49%) — tom_cca saw 31% |
+| all dim rows > 0.05 | 672/1561 (43%); > 0.20 in 12%; max 1.19 |
+| n_sig total | 156 -> 82 (-47%); median per cell 1 -> 0 |
+| optimal lag changed | 103/1561 rows |
+| IFI | Spearman(pre, post) = 0.966 |
+
+### One conclusion is DEAD
+
+**"plain < partial FS-excluded; partialling denoises" (2026-08-11 item 3) was the
+bug.** Pre-fix medians -0.012 (b25) / -0.031 (b10), p ~ 0.02 / 0.04. Post-fix:
+-0.0006, p = 0.25 (b25) and 0.000, p = 0.81 (b10). The intercept was missing
+inside the partialling path, so partial fits were inflated by exactly the channel
+the fix removes. There is now no evidence that partialling denoises.
+
+### What holds
+
+1. **Strength null** — still 24 tests. Two nominal hits now (was one), and one of
+   them survives BH: b10/fsincl/partial DLS-ACC, dNE -0.033, p = 0.0078. It does
+   NOT replicate: the same pair at b25/fsincl/partial is **+0.028** (opposite
+   sign, p = 0.38). Same character as the pre-fix non-replicating IFI band. Read
+   as null with a config-specific artefact, not as a result.
+2. **IFI null** — 0 of 84 BH-surviving (pair x window x config). The Spearman
+   0.966 above says why: the directionality arm barely moves under the fix. This
+   is the most robust verdict in the subproject.
+3. **10 ms uniformly weaker** — b10 - b25 median -0.035 to -0.039, p <= 0.0098 in
+   all four frames. 25 ms stays the magnitude reference.
+4. **Gini** — area-intrinsic `gini_y` falls naive -> expert (-0.108, p = 0.002,
+   animals as n) both PRE and POST fix, while the CCA-independent `gini_pearson`
+   control stays flat (x p = 0.92, y p = 0.63). De-sparsification remains a
+   property of the weight metric, not of the data. Unchanged by the fix.
+5. FS-incl uplift broadens slightly: nominal in 3 of 4 frames now (b25/plain
+   p = 0.039, b10/partial p = 0.0195, b10/plain p = 0.0039), was plain-only.
+
+Also killed by the fix: a nominal cc1 decline with learning in the canonical
+config (animals as n, p = 0.027 -> p = 0.432).
+
+### Still diverged from tom_cca
+
+Not ported: the connection-specific Gini variants (`gini_x_conn`, `gini_y_conn`,
+`gini_x_sig`, `gini_y_sig`) -- tom_cca e099eca's newest result turns on exactly
+the area-intrinsic vs connection-specific distinction that item 4 above cannot
+currently test; `core.pca_fit_flat` (this port still duplicates the four-line PCA
+in `subspace_window` and `early_trials`); `early_trials.variates`' `dims`
+argument; and 24 newer tom_cca modules including `perdim_ifi`, `single_trial`,
+`population_geometry`, `unit_timescales`, `preprocess`. tom_cca has also collapsed
+its 8-config grid to ONE canonical configuration (7e2dd1c).
+
+---
+
 ## 2026-08-28 (later) — CORRECTION to the entry below, and the whole grid re-run on corrected cell types
 
 **The entry below claims the `cca_fit` back-port makes "no committed CSV move". That is wrong.**
