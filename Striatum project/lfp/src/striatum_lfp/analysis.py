@@ -189,6 +189,34 @@ def cohort_trial_counts(cohort=None, preproc_mat=None) -> dict[int, int]:
     return out
 
 
+def disengagement_points(cohort=None, preproc_mat=None) -> dict[int, float]:
+    """``{mouse_id: change_point_mean}`` -- the trial the animal stops engaging.
+
+    ``IntegratedAll_v1.m`` section 2 defines this alongside the learning point and
+    several MATLAB callers pass a DP-truncated ``n_trials`` downstream
+    (``epoch_indices.m``). **It is not applied by ``cohort_trial_counts``, and
+    ``good_trials`` in the band-power cubes is an ALIGNMENT flag, not an
+    engagement one** -- it is set wherever a corridor start was found.
+
+    Anything comparing early against late trials must clip here first. Measured
+    2026-09-17: without clipping, 9 of 13 task animals had their entire "last
+    fifty trials" window past DP, so an early-versus-late contrast was mostly
+    measuring engagement. Returns ``nan`` where the change point is undefined
+    (1212), which callers must handle rather than silently include.
+    """
+    import h5py
+
+    ch = cohort or config.TASK
+    out: dict[int, float] = {}
+    with h5py.File(preproc_mat or ch.preproc_mat, "r") as handle:
+        P = handle["preprocessed_data"]
+        if "change_point_mean" not in P:
+            return out
+        for i, mouse in enumerate(ch.mouse_ids):
+            out[mouse] = float(np.asarray(handle[P["change_point_mean"][i, 0]]).ravel()[0])
+    return out
+
+
 def bin_speed_cm_s(bin_start_ms: np.ndarray, bin_stop_ms: np.ndarray) -> np.ndarray:
     """Running speed (cm/s) implied by each spatial bin's traversal time.
 

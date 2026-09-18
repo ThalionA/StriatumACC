@@ -30,6 +30,90 @@ tables can derive it as `mi - mi_surrogate_mean`.
 Orthogonalised amplitude-envelope correlation: level +0.067 (task, bipolar, N=16),
 no learning change (p = 0.71). Control +0.113, N=5, untestable.
 
+## 2026-09-18 — RETRACTED: the DLS information drop was disengagement
+
+**The 2026-09-17 headline below is wrong and is retracted.** "DLS loses
+behavioural information with training" (-0.0030 bits, 10/10 animals, p = 0.0020)
+compared the first fifty trials against the last fifty **stored** trials. The band
+cubes' `good_trials` is an ALIGNMENT flag -- set wherever a corridor start was
+found -- not an engagement one. Measured: the late window sat entirely past
+`change_point_mean` in **9 of 13 animals** and partly in 11 of 13. Clipped at DP
+the effect is **-0.00024, 6/11 animals, p = 0.97**, and nothing is significant in
+any area. It was the animal ceasing to do the task.
+
+The four controls I ran (recording drift, behavioural stereotypy, trial count,
+speed) all passed and all tested artefacts I had already thought of. None tested
+engagement. A passing control only excludes the hypothesis it encodes.
+
+**`analysis.disengagement_points()` now exists** and reads `change_point_mean`
+from the preprocessed mat. Note `cohort_trial_counts` does NOT truncate at it, so
+nothing upstream enforces this -- every early-versus-late contrast must clip
+explicitly. `run_lfp_mi.py` clips, defines its wide contrast as the two halves of
+the ENGAGED period (count-matched within animal), and DROPS an LP-relative
+ten-trial epoch that crosses DP rather than comparing across it (418 has LP=26,
+DP=27). The sibling `tcca/` port already did all of this correctly.
+
+## 2026-09-17 — The Panzeri mirror moves to the LFP (levels stand, learning does not)
+
+**The spike arm was uninterpretable and is superseded.** Single-unit information
+about behaviour is real but tiny (~0.004 bits), had no positive control, and
+carried a bug worth remembering: `peak_mi_corrected`, the MAX over 30
+shuffle-subtracted windows, returns **+0.054 bits on data with zero information**,
+with a bias that grows as the sample shrinks. Every across-epoch summary is now
+the MEAN over windows. Pinned by known-answer tests.
+
+**The LFP arm has an anchor.** Band power carries information about running
+speed: +0.009 to +0.024 bits in every area, both interpretable bands, p <= 0.0005
+wherever N >= 6, computed WITHIN each spatial bin so position cannot manufacture
+it. A null elsewhere now means something.
+
+**Band power carries behavioural information beyond speed -- this survives DP
+clipping.** All ten features, engaged period only, task cohort: 62-96% of the raw
+information survives conditioning on running speed, **9 of 10 at p <= 0.011**
+(`path_length_au` p = 0.083), N=15-16. Strongest: `success` +0.0084, `first_lick_
+position` +0.0040, `n_licks` +0.0038. This is the solid result of the arm.
+
+**Nothing changes with learning.** Two halves of the engaged period, every area,
+all p > 0.35. The ten-trial epochs cannot address it either -- their contrast
+noise (0.0036 bits) exceeds the information level (0.004).
+
+Drivers: `infotheory/scripts/run_lfp_mi.py`, `plot_lfp_mi.py`. Inputs are the
+existing `lfp/results/lfp_band_trials_<cohort>/` cubes -- no LFP re-read; trial
+indexing against the behavioural cache verified exact (r = 1.0000, 0 ms on
+corridor duration, four animals). Only theta (4-8) and beta (15-30) are
+interpretable: low_gamma carries the ~75 Hz peak, high_gamma (80-150) is where
+spike bleed-through lives, total spans both.
+
+## 2026-09-17 — Theta-gamma coupling: real and widespread, unchanged by learning
+
+**PAC is real here, and the test is calibrated on REAL data.** The existing unit
+test calibrates the time-shift surrogate on a stationary synthetic signal and
+passes at up to 25%; real LFP is not stationary and the driver concatenates
+trials before measuring. Calibration on real LFP, with the amplitude series
+rebuilt from the SAME trials in a PERMUTED order (every trial's statistics, the
+concatenation boundaries and the session drift survive; only within-trial
+phase-amplitude pairing is destroyed): **7/96 cells significant, 7%**, against a
+nominal 5% and **71%** observed on the same cells. The widespread coupling is not
+a broken test.
+
+Bipolar re-referencing is what to read. Significant cells drop 99% -> 80% within
+area and 98% -> 67% between areas when the far field is removed -- the same
+shared-field signature the distance and PSI controls found. The bipolar numbers
+still sit far above the 7% null.
+
+**It does not change with learning.** The raw contrast said p = 0.0000 in both
+gamma bands with identical effect sizes; that was epoch SIZE. The Tort modulation
+index is positively biased at small n and the epochs are 3, 7, 10 and 10 trials:
+Spearman(mi, n_trials) = -0.49, p = 1.6e-90 (0.00033 at three trials vs 0.00014 at
+ten). Shuffle subtraction carries none of it (Spearman +0.011, p = 0.68), and on
+size-matched epochs (Intermediate vs Expert, both ten trials) the change is
+p = 0.63 within area and p = 0.90 between. `run_lfp_coupling.py` now emits
+`mi_corrected` and documents the size dependence in its own docstring; existing
+tables can derive it as `mi - mi_surrogate_mean`.
+
+Orthogonalised amplitude-envelope correlation: level +0.067 (task, bipolar, N=16),
+no learning change (p = 0.71). Control +0.113, N=5, untestable.
+
 ## 2026-09-17 — The Panzeri mirror moves to the LFP, and DLS loses information with training
 
 **The spike arm was uninterpretable and is superseded.** Single-unit information

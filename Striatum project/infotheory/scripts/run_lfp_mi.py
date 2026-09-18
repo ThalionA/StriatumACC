@@ -15,7 +15,7 @@ Two arms, both per (animal, probe, area, band, epoch):
              that shared dependence masquerade as coupling.
 
 Epochs are the project's ten-trial Naive / Intermediate / Expert, plus ``All``
-and a wide ``Early50`` / ``Late50`` split. The ten-trial epochs are kept for
+and a wide ``EarlyHalf`` / ``LateHalf`` split. The ten-trial epochs are kept for
 comparability with every other arm, but they are far too small to answer the
 learning question -- their contrast noise exceeds the effect -- so the wide split
 is what any statement about learning is read off.
@@ -70,7 +70,7 @@ N_FEATURE_BINS = 2      # median split; a ten-trial epoch cannot support more
 N_SPEED_BINS = 2
 N_SHUFFLES = 50
 MIN_TRIALS = 8
-WIDE_TRIALS = 50        # the wide learning contrast; see epoch construction
+WIDE_TRIALS = 25        # minimum half-size for the wide contrast; see epoch construction
 MIN_CHANNELS = 4
 INTERPRETABLE = ("theta", "beta")
 
@@ -131,13 +131,29 @@ def run_one(path: Path, cohort: str, seed: int) -> tuple[list, list]:
     lp = analysis.cohort_learning_points(ch).get(mouse)
     lp_source = analysis.learning_point_sources(ch).get(mouse, "unknown")
     n_matlab = min(analysis.cohort_trial_counts(ch).get(mouse, n_stored), n_stored)
+    # CLIP AT THE DISENGAGEMENT POINT. good_trials is an ALIGNMENT flag, not an
+    # engagement one. Measured 2026-09-17 before this clip existed: 9 of 13 task
+    # animals had their entire late window past DP, so an early-versus-late
+    # contrast was largely measuring whether the animal was still doing the task.
+    dp = analysis.disengagement_points(ch).get(mouse, np.nan)
     usable = np.flatnonzero(good)
+    if np.isfinite(dp):
+        usable = usable[usable + 1 <= dp]        # trial numbers are 1-based
     windows = {"All": usable}
     for name, tr in zip(("Naive", "Intermediate", "Expert"),
                         analysis.epoch_indices(lp, n_matlab)):
         idx = np.asarray(tr, int) - 1
-        windows[name] = np.array([t for t in idx if t < n_stored and good[t]])
+        keep = np.array([t for t in idx if t < n_stored and good[t]])
+        # An LP-relative epoch can run past DP when the two are close (418: LP=26,
+        # DP=27). Drop the epoch rather than compare engaged with disengaged.
+        windows[name] = (np.array([], int) if keep.size and np.isfinite(dp)
+                         and (keep + 1 > dp).any() else keep)
 
+    # EarlyHalf / LateHalf split the ENGAGED period in two, count-matched within
+    # each animal so the information bias cancels in the paired difference. Their
+    # size therefore varies between animals, which is fine for a paired contrast
+    # and would not be for a level comparison.
+    #
     # The project's ten-trial epochs cannot answer the learning question here:
     # measured on the task cohort (2026-09-17) their Expert - Naive standard
     # error is 0.003-0.005 bits against an information LEVEL of 0.004, so only a
@@ -145,9 +161,10 @@ def run_one(path: Path, cohort: str, seed: int) -> tuple[list, list]:
     # contrast with enough trials to see a change -- first versus last fifty
     # stored trials, a session-time split like the paper's naive and skilled
     # DAYS, which is a time contrast rather than a performance-locked one.
-    if usable.size >= 2 * WIDE_TRIALS:
-        windows["Early50"] = usable[:WIDE_TRIALS]
-        windows["Late50"] = usable[-WIDE_TRIALS:]
+    half = usable.size // 2
+    if half >= WIDE_TRIALS:
+        windows["EarlyHalf"] = usable[:half]
+        windows["LateHalf"] = usable[-half:]
 
     areas = {a: z[f"is_{a.lower()}"] for a in lfp_config.AREAS}
     areas = {a: m for a, m in areas.items() if m.sum() >= MIN_CHANNELS}

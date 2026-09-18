@@ -64,8 +64,8 @@ def per_animal(rows, key="v", **where) -> dict[str, float]:
 
 
 def contrast(rows, key="v", **where):
-    a = per_animal(rows, key, epoch="Early50", **where)
-    b = per_animal(rows, key, epoch="Late50", **where)
+    a = per_animal(rows, key, epoch="EarlyHalf", **where)
+    b = per_animal(rows, key, epoch="LateHalf", **where)
     sh = sorted(set(a) & set(b))
     d = np.array([b[m] - a[m] for m in sh])
     return d, (stats.wilcoxon(d).pvalue if d.size >= MIN_MICE else np.nan)
@@ -131,7 +131,7 @@ def main() -> None:
                         ha="right", fontsize=8)
     axb.set_ylabel("shuffle-subtracted MI (bits)")
     axb.set_title("(b) What survives running speed. Task cohort, whole session,\n"
-                  "pooled over areas and both bands. 70–92% of each feature survives.",
+                  "pooled over areas and both bands. 62–96% of each feature survives.",
                   fontsize=10)
     axb.legend(fontsize=9, frameon=False)
 
@@ -157,16 +157,16 @@ def main() -> None:
     for xx, yy, t, cc in marks:
         axc.text(xx, yy + pad, t, ha="center", fontsize=7, color=cc)
     axc.set_xticks(x); axc.set_xticklabels(AREAS)
-    axc.set_ylabel("Late50 − Early50\nI(power; feature | speed)  (bits)")
-    axc.set_title("(c) Does it change with training? First versus last fifty trials.\n"
-                  "The ten-trial epochs cannot answer this: their noise exceeds the effect.",
+    axc.set_ylabel("LateHalf − EarlyHalf\nI(power; feature | speed)  (bits)")
+    axc.set_title("(c) Does it change with training? Two halves of the ENGAGED period.\n"
+                  "All trials clipped at the disengagement point; nothing survives it.",
                   fontsize=10)
     axc.legend(fontsize=9, frameon=False)
 
     # ---- (d) DLS animal by animal -------------------------------------------
     axd = fig.add_subplot(gs[1, 1])
-    a = per_animal(feat["task"], area="DLS", epoch="Early50")
-    b = per_animal(feat["task"], area="DLS", epoch="Late50")
+    a = per_animal(feat["task"], area="DLS", epoch="EarlyHalf")
+    b = per_animal(feat["task"], area="DLS", epoch="LateHalf")
     sh = sorted(set(a) & set(b))
     for m in sh:
         axd.plot([0, 1], [a[m], b[m]], "-o", ms=5, color="#1f4e79", alpha=0.65, lw=1.2)
@@ -174,18 +174,18 @@ def main() -> None:
     axd.plot([0, 1], [np.mean([a[m] for m in sh]), np.mean([b[m] for m in sh])],
              "-o", ms=10, color="#c0392b", lw=3, label="mean", zorder=5)
     p = stats.wilcoxon(d).pvalue if d.size >= MIN_MICE else np.nan
-    axd.set_xticks([0, 1]); axd.set_xticklabels(["first 50 trials", "last 50 trials"])
+    axd.set_xticks([0, 1]); axd.set_xticklabels(["first half\n(engaged)", "second half\n(engaged)"])
     axd.set_xlim(-0.25, 1.25)
     axd.set_ylabel("DLS  I(power; feature | speed)  (bits)")
     axd.set_title(f"(d) DLS, animal by animal: {(d < 0).sum()}/{d.size} decrease "
-                  f"(Wilcoxon p = {p:.4f}).\nAnchor I(power; speed) does NOT fall, so it "
-                  f"is not the recording degrading.", fontsize=10)
+                  f"(Wilcoxon p = {p:.4f}).\nBefore clipping at disengagement this read 10/10, p = 0.0020 "
+                  f"— it was disengagement, not learning.", fontsize=10)
     axd.legend(fontsize=9, frameon=False)
 
     fig.suptitle("LFP band power and behavioural information — mirroring Lemke et al. (2024) "
                  "on the field rather than single units\n"
                  "theta (4–8 Hz) and beta (15–30 Hz) only; log power ranked WITHIN spatial "
-                 "bin; shuffle-subtracted; mean over windows, never peak. p uncorrected.",
+                 "bin; shuffle-subtracted; mean over windows, never peak.\nALL trials clipped at the disengagement point (change_point_mean); the wide contrast is the two halves of what remains. p uncorrected.",
                  fontsize=12)
     FIGURES.mkdir(exist_ok=True)
     fig.savefig(FIGURES / "lfp_mi_overview.svg")
