@@ -93,7 +93,7 @@ def save(fig, name, caption, pad=-0.03):
 # ---------------------------------------------------------------- 01 anchor --
 def fig_anchor():
     rs = [r for r in rows(INFO / "lfp_mi_speed_task.csv", epoch="All")
-          if r["band_status"] == "interpretable"]
+          if r["band_status"] == "clean"]
     fig, ax = plt.subplots(figsize=(10, 6))
     x = np.arange(len(AREAS))
     for bi, (band, colour) in enumerate((("theta", "#4a7ebb"), ("beta", "#9c4f96"))):
@@ -129,7 +129,7 @@ def fig_anchor():
 # ------------------------------------------------- 02 information past speed --
 def fig_beyond_speed():
     rs = [r for r in rows(INFO / "lfp_mi_features_task.csv", epoch="All")
-          if r["band_status"] == "interpretable"]
+          if r["band_status"] == "clean"]
     feats = sorted({r["feature"] for r in rs})
     fig, ax = plt.subplots(figsize=(11, 6.2))
     xf = np.arange(len(feats))
@@ -248,8 +248,9 @@ def fig_pac():
          "was calibrated on REAL LFP, not synthetic: the amplitude series rebuilt from the SAME trials "
          "in permuted order, so each trial's statistics, the concatenation boundaries and the session "
          "drift all survive and only within-trial phase–amplitude pairing is destroyed. Bipolar is the "
-         "number to read — monopolar shares a field across the shank. NOTE: this run is not yet clipped "
-         "at the disengagement point.")
+         "number to read — monopolar shares a field across the shank. Engaged trials only (clipped at "
+         "the disengagement point); clipping lowered the bipolar rates from 80% and 67%, so "
+         "disengaged trials had been inflating them. The 7% null was measured before clipping.")
 
 
 # ------------------------------------------------------- 05 the learning null --
@@ -258,7 +259,7 @@ def fig_null():
 
     # LFP information about behaviour, engaged halves, per area
     rs = [r for r in rows(INFO / "lfp_mi_features_task.csv")
-          if r["band_status"] == "interpretable"]
+          if r["band_status"] == "clean"]
     for a in ("DMS", "DLS", "ACC"):
         e = by_animal([r for r in rs if r["area"] == a and r["epoch"] == "Naive"],
                       "cmi_given_speed")
@@ -314,12 +315,14 @@ def fig_null():
     ax.spines[["top", "right", "left"]].set_visible(False)
     ax.tick_params(axis="y", length=0)
     save(fig, "05_no_change_with_learning",
-         "Blue = LFP arm, purple = unit temporal-CCA arm. Each measure is scaled by its own spread so "
-         "seven different units sit on one axis; the claim is the position relative to zero, not the "
-         "magnitude. LFP epochs are the two halves of the ENGAGED period; coupling epochs are "
-         "size-matched (Intermediate vs Expert, ten trials each) because the Tort index is biased at "
-         "small n. Separately and not drawn here: phase-slope direction survives in 0 of 12 bipolar "
-         "cells, and the unit IFI is null in 0 of 84 BH-corrected window × config cells.")
+         f"ONE epoch definition throughout: Naive = trials 1–10, Expert = the ten trials from the "
+         "learning point, so every contrast is count-matched by construction — which the Tort "
+         "index requires, being biased at small n. Engaged trials only, and an epoch running past the "
+         "disengagement point is dropped rather than compared across it. Blue = LFP arm, purple = unit "
+         f"temporal-CCA arm; they share no code or preprocessing. Each measure is scaled by its own "
+         f"spread so {len(entries)} different units sit on one axis — the claim is the position "
+         "relative to zero, not the magnitude. Not drawn: phase-slope direction survives in 0 of 12 "
+         "bipolar cells, and the unit IFI is null in 0 of 84 BH-corrected window × config cells.")
 
 
 if __name__ == "__main__":
