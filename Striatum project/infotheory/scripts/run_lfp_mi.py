@@ -36,11 +36,8 @@ Design decisions carried over from the spike arm's failures:
   baseline cannot survive into the pooled estimate.
 * every value is shuffle-subtracted, with the permutation applied across TRIALS.
 
-Only ``theta`` and ``beta`` are interpretable. ``low_gamma`` (30-80 Hz) is listed
-in ``config.CONFOUNDED_BANDS`` -- a ~75 Hz narrow peak of unresolved provenance
-sits inside it -- ``high_gamma`` is 80-150 Hz, which on Neuropixels is where
-spike bleed-through lives, and ``total`` (1-150 Hz) contains both. They are
-computed and written so the contamination is visible, and flagged in the output.
+All five bands are reported, each with a measured ``band_status`` -- see
+``BAND_STATUS`` below for the spectra and spike-coupling measurements behind it.
 
     /opt/anaconda3/bin/python scripts/run_lfp_mi.py --cohort task
 """
@@ -72,7 +69,23 @@ N_SHUFFLES = 50
 MIN_TRIALS = 8
 WIDE_TRIALS = 25        # minimum half-size for the wide contrast; see epoch construction
 MIN_CHANNELS = 4
-INTERPRETABLE = ("theta", "beta")
+# Band status, MEASURED rather than inherited (2026-09-18):
+#
+# * Mains is notched at 50/100/150 Hz unconditionally when the cubes are built
+#   (run_lfp_bandpower.py:173). The dominant narrow peak in the RAW spectra is
+#   50 Hz -- line noise -- at up to 31 dB above the 1/f background in 20 of 21
+#   animal-probes, with a 150 Hz harmonic in 6. config.py's note about a "~75 Hz
+#   narrow peak" is not what the spectra show.
+# * What notching cannot remove is spike bleed-through. Measured as
+#   Spearman(area firing rate, area band power) across trials, median over 50
+#   area-cells: theta +0.03, beta +0.06, low_gamma +0.11, high_gamma +0.19,
+#   total +0.16 -- monotonic in frequency, exactly the bleed-through signature.
+#   High gamma shares about 3.5% of its variance with firing rate.
+#
+# So every band is reported. The gamma bands are usable but partly a spike-rate
+# readout, and anything claimed from them must say so.
+BAND_STATUS = {"theta": "clean", "beta": "clean", "low_gamma": "spike_coupled",
+               "high_gamma": "spike_coupled", "total": "spike_coupled"}
 
 
 def area_power(block: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -177,7 +190,7 @@ def run_one(path: Path, cohort: str, seed: int, dp_clip: bool = True) -> tuple[l
     for area, mask in areas.items():
         for bi, band in enumerate(bands):
             power = area_power(corridor[bi], mask)
-            tag = "interpretable" if band in INTERPRETABLE else "confounded"
+            tag = BAND_STATUS.get(band, "unknown")
             for epoch, trials in windows.items():
                 if trials.size < MIN_TRIALS:
                     continue

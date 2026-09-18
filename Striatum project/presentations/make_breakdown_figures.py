@@ -25,7 +25,14 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(__file__).resolve().parent / "figures_2026-09-18"
 INFO, LFP, TCCA = ROOT / "infotheory/results", ROOT / "lfp/results", ROOT / "tcca/results"
 AREAS = ("DMS", "DLS", "ACC", "V1", "CA1", "DG")
-BANDS = ("theta", "beta")
+BANDS = ("theta", "beta", "low_gamma", "high_gamma", "total")
+BAND_HZ = {"theta": "4–8", "beta": "15–30", "low_gamma": "30–80",
+           "high_gamma": "80–150", "total": "1–150"}
+# Measured, not inherited: mains is notched at 50/100/150 Hz when the cubes are
+# built, so the 50 Hz line peak is gone. What remains is spike bleed-through,
+# Spearman(firing rate, band power) = +0.03 theta, +0.06 beta, +0.11 low gamma,
+# +0.19 high gamma. Gamma is usable but partly a spike-rate readout.
+SPIKE_COUPLED = ("low_gamma", "high_gamma", "total")
 TASK_C, CTRL_C = "#1f4e79", "#e69f00"
 MUTED = "#6b7078"
 plt.rcParams.update({"font.size": 11, "axes.titlesize": 12, "axes.labelsize": 11,
@@ -100,50 +107,75 @@ def paired_area_panel(ax, get, title, ylabel):
 
 
 # ------------------------------------------------------- B1 anchor by band --
+def band_panel(ax, get, title, ylabel, zeroline=False):
+    """One panel: x = band, a task bar and a control bar at each."""
+    x = np.arange(len(BANDS))
+    for k, (coh, colour) in enumerate((("task", TASK_C), ("control", CTRL_C))):
+        m, e = [], []
+        for b in BANDS:
+            v = get(coh, b)
+            m.append(v.mean() if v.size else np.nan)
+            e.append(v.std(ddof=1) / np.sqrt(v.size) if v.size > 1 else np.nan)
+        ax.bar(x + (-0.2 + 0.4 * k), m, 0.38, yerr=e, capsize=2.5, color=colour,
+               label=coh.capitalize())
+    for xi, b in enumerate(BANDS):
+        ta, ca = get("task", b), get("control", b)
+        if not ta.size or not ca.size:
+            continue
+        p = between(ta, ca)
+        if np.isfinite(p) and p < 0.05:
+            top = max(ta.mean(), ca.mean())
+            ax.text(xi, top * 1.10 + 1e-9, f"p={p:.3f}", ha="center", fontsize=7.5,
+                    color="#a94436", fontweight="bold", va="bottom")
+    if zeroline:
+        ax.axhline(0, color="k", lw=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{b.replace('_', ' ')}\n{BAND_HZ[b]}" for b in BANDS], fontsize=7.5)
+    for xi, b in enumerate(BANDS):
+        if b in SPIKE_COUPLED:
+            ax.get_xticklabels()[xi].set_color("#a0522d")
+    ax.set_title(title, fontsize=11)
+    ax.set_ylabel(ylabel)
+    ax.spines[["top", "right"]].set_visible(False)
+
+
 def b1_anchor():
     data = {c: rows(INFO / f"lfp_mi_speed_{c}.csv", epoch="All") for c in ("task", "control")}
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.6), sharey=True)
-    for ax, band in zip(axes, BANDS):
-        paired_area_panel(
-            ax,
-            lambda coh, a, band=band: animals(
-                [r for r in data[coh] if r["area"] == a and r["band"] == band
-                 and r["band_status"] == "interpretable"], "mi_speed"),
-            f"{band} ({'4–8' if band == 'theta' else '15–30'} Hz)",
-            "I(band power ; running speed)\nshuffle-subtracted (bits)" if band == "theta" else "")
-    axes[0].legend(frameon=False)
-    fig.suptitle("ANCHOR — band power vs running speed, by area, band and cohort",
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    for ax, a in zip(axes.ravel(), AREAS):
+        band_panel(ax, lambda coh, b, a=a: animals(
+            [r for r in data[coh] if r["area"] == a and r["band"] == b], "mi_speed"),
+            a, "I(power ; speed)  (bits)")
+    axes[0][0].legend(frameon=False, fontsize=9)
+    fig.suptitle("ANCHOR — band power vs running speed: every band, every area, both cohorts",
                  fontweight="semibold", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "B1_anchor_by_area_band_cohort",
-         "Within spatial bin, engaged trials only. Bars are animal means ± s.e.m.; p is a two-sided "
-         "Mann-Whitney between cohorts at that area and band; counts under it are task vs control "
-         "animals. Beta exceeds theta in every area of both cohorts.")
+         "Within spatial bin, engaged trials only. Brown band labels are SPIKE-COUPLED: mains is "
+         "notched at 50/100/150 Hz when the cubes are built, but spike bleed-through is not "
+         "removable and rises with frequency — Spearman(firing rate, band power) = +0.03 theta, "
+         "+0.06 beta, +0.11 low gamma, +0.19 high gamma. Red p marks a nominal cohort difference "
+         "(Mann-Whitney, uncorrected).")
 
 
 # ------------------------------------- B2 information beyond speed by band --
 def b2_information():
     data = {c: [r for r in rows(INFO / f"lfp_mi_features_{c}.csv", epoch="All")
-                if r["band_status"] == "interpretable"] for c in ("task", "control")}
-    fig, axes = plt.subplots(2, 2, figsize=(14, 9.5), sharey="row")
-    for col, band in enumerate(BANDS):
-        for row_i, (key, what) in enumerate((("mi", "RAW  I(power ; feature)"),
-                                             ("cmi_given_speed", "CONDITIONED on speed"))):
-            paired_area_panel(
-                axes[row_i][col],
-                lambda coh, a, band=band, key=key: animals(
-                    [r for r in data[coh] if r["area"] == a and r["band"] == band], key),
-                f"{band} — {what}",
-                "shuffle-subtracted MI (bits)" if col == 0 else "")
-    axes[0][0].legend(frameon=False)
-    fig.suptitle("Information about behaviour, by area, band and cohort — raw (top) and "
-                 "speed-conditioned (bottom)", fontweight="semibold", fontsize=13)
+                if r["band_status"] in ("clean", "spike_coupled")] for c in ("task", "control")}
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    for ax, a in zip(axes.ravel(), AREAS):
+        band_panel(ax, lambda coh, b, a=a: animals(
+            [r for r in data[coh] if r["area"] == a and r["band"] == b], "cmi_given_speed"),
+            a, "I(power ; feature | speed)  (bits)")
+    axes[0][0].legend(frameon=False, fontsize=9)
+    fig.suptitle("Information about behaviour beyond running speed — every band, every area, "
+                 "both cohorts", fontweight="semibold", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "B2_information_by_area_band_cohort",
-         "Pooled over the nine usable behavioural features ('success' is excluded: it is 98% "
-         "constant within the engaged period, so no split of it carries information). The BOTTOM "
-         "row is the one to read — animals run faster as they learn and speed alone moves band "
-         "power. Engaged trials only; animal means ± s.e.m.; Mann-Whitney between cohorts.")
+         "Speed-conditioned, pooled over the nine usable behavioural features ('success' excluded: "
+         "98% constant within the engaged period). Engaged trials only; animal means ± s.e.m. Brown "
+         "band labels are spike-coupled — a gamma effect is partly a firing-rate effect. Red p marks "
+         "a nominal cohort difference, uncorrected over 30 area × band cells.")
 
 
 # ----------------------------------------------- B3 Gini by pair and cohort --
@@ -256,92 +288,87 @@ def b4_coupling():
 # ------------------------------- B5 learning contrast by area, band, cohort --
 def b5_learning():
     data = {c: [r for r in rows(INFO / f"lfp_mi_features_{c}.csv")
-                if r["band_status"] == "interpretable"] for c in ("task", "control")}
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.6), sharey=True)
+                if r["band_status"] in ("clean", "spike_coupled")] for c in ("task", "control")}
 
     def contrast(coh, area, band):
-        sub = [r for r in data[coh] if r["area"] == area and r["band"] == band]
-        n = {r["mouse_id"]: [] for r in sub}
-        e = {r["mouse_id"]: [] for r in sub}
-        for r in sub:
+        n, e = collections.defaultdict(list), collections.defaultdict(list)
+        for r in data[coh]:
+            if r["area"] != area or r["band"] != band:
+                continue
             v = num(r, "cmi_given_speed")
             if not np.isfinite(v):
                 continue
-            (n if r["epoch"] == "Naive" else e if r["epoch"] == "Expert" else {}).setdefault(
-                r["mouse_id"], []).append(v)
-        sh = [m for m in n if n[m] and e.get(m)]
+            if r["epoch"] == "Naive":
+                n[r["mouse_id"]].append(v)
+            elif r["epoch"] == "Expert":
+                e[r["mouse_id"]].append(v)
+        sh = sorted(set(n) & set(e))
         return np.array([np.mean(e[m]) - np.mean(n[m]) for m in sh])
 
-    for ax, band in zip(axes, BANDS):
-        paired_area_panel(ax, lambda coh, a, band=band: contrast(coh, a, band),
-                          f"{band} ({'4–8' if band == 'theta' else '15–30'} Hz)",
-                          "Expert − Naive\nI(power ; feature | speed)  (bits)"
-                          if band == "theta" else "")
-        ax.axhline(0, color="k", lw=1)
-    axes[0].legend(frameon=False)
-    fig.suptitle("Learning contrast by area, band and cohort — Naive (trials 1–10) vs "
-                 "Expert (10 trials from LP)", fontweight="semibold", fontsize=13)
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    for ax, a in zip(axes.ravel(), AREAS):
+        band_panel(ax, lambda coh, b, a=a: contrast(coh, a, b), a,
+                   "Expert − Naive  (bits)", zeroline=True)
+    axes[0][0].legend(frameon=False, fontsize=9)
+    fig.suptitle("Learning contrast — every band, every area, both cohorts. "
+                 "Naive (trials 1–10) vs Expert (10 trials from LP)",
+                 fontweight="semibold", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "B5_learning_by_area_band_cohort",
          "Ten trials per epoch, count-matched by construction. For this arm the unit of observation "
-         "is the TRIAL, so ten trials is ten samples: the contrast noise (~0.0037 bits) exceeds the "
-         "information level (~0.0033), and only a change larger than the whole effect would be "
-         "detectable. Read these as unpowered, not as null.")
+         "is the TRIAL, so ten trials is ten samples: contrast noise (~0.0037 bits) exceeds the "
+         "information level (~0.0033). Read as UNPOWERED, not null. Brown labels are spike-coupled "
+         "bands.")
 
 
-
-
-
-# --------------------------------- B6 which band carries it, task vs control --
 def b6_band_preference():
-    """POST-HOC. Found after the band-pooled comparison returned nothing, because
-    theta and beta move in OPPOSITE directions in DMS and cancelled. Stated as
-    post-hoc because it is: the areas were chosen after seeing B2."""
+    """Which band an animal carries its information in, normalised within animal.
+
+    Absolute information differs between animals for reasons that have nothing to
+    do with band (unit yield, impedance, session length). Subtracting each
+    animal's own mean across bands removes all of that and leaves the PROFILE:
+    which band that animal favours. Cohorts are then compared band by band.
+    """
     data = {c: [r for r in rows(INFO / f"lfp_mi_features_{c}.csv", epoch="All")
-                if r["band_status"] == "interpretable"] for c in ("task", "control")}
+                if r["band_status"] in ("clean", "spike_coupled")] for c in ("task", "control")}
 
-    def per_animal(coh, area, band):
-        d = collections.defaultdict(list)
-        for r in data[coh]:
-            if r["area"] == area and r["band"] == band:
-                v = num(r, "cmi_given_speed")
-                if np.isfinite(v):
-                    d[r["mouse_id"]].append(v)
-        return {k: float(np.mean(v)) for k, v in d.items()}
+    def profile(coh, area, band):
+        per = {}
+        for b in BANDS:
+            per[b] = animals([r for r in data[coh] if r["area"] == area and r["band"] == b],
+                             "cmi_given_speed", key="mouse_id")
+        ids = collections.defaultdict(dict)
+        for b in BANDS:
+            d = collections.defaultdict(list)
+            for r in data[coh]:
+                if r["area"] == area and r["band"] == b:
+                    v = num(r, "cmi_given_speed")
+                    if np.isfinite(v):
+                        d[r["mouse_id"]].append(v)
+            for m, v in d.items():
+                ids[m][b] = float(np.mean(v))
+        out = []
+        for m, bb in ids.items():
+            if len(bb) < len(BANDS):
+                continue
+            out.append(bb[band] - np.mean([bb[x] for x in BANDS]))
+        return np.array(out)
 
-    areas = ("DMS", "DLS", "ACC")
-    fig, axes = plt.subplots(1, len(areas), figsize=(13.5, 5.4), sharey=True)
-    for ax, a in zip(axes, areas):
-        vals, labels, colours = [], [], []
-        for coh, colour in (("task", TASK_C), ("control", CTRL_C)):
-            th, be = per_animal(coh, a, "theta"), per_animal(coh, a, "beta")
-            d = np.array([th[m] - be[m] for m in sorted(set(th) & set(be))])
-            vals.append(d); labels.append(coh.capitalize()); colours.append(colour)
-        for xi, (d, colour) in enumerate(zip(vals, colours)):
-            ax.scatter(np.full(d.size, xi) + np.random.default_rng(0).normal(0, 0.045, d.size),
-                       d, s=48, color=colour, zorder=3, edgecolor="white", linewidth=0.8)
-            ax.plot([xi - 0.22, xi + 0.22], [d.mean()] * 2, color="#c0392b", lw=3.5, zorder=4)
-        p = between(vals[0], vals[1])
-        ax.axhline(0, color="k", lw=1.1)
-        ax.set_xticks(range(len(labels)))
-        ax.set_xticklabels([f"{l}\nn={v.size}" for l, v in zip(labels, vals)])
-        ax.set_xlim(-0.5, len(labels) - 0.5)
-        ax.set_title(f"{a}\n{int((vals[0] > 0).sum())}/{vals[0].size} vs "
-                     f"{int((vals[1] > 0).sum())}/{vals[1].size} theta-dominant · {pstr(p)}",
-                     fontsize=11)
-        ax.spines[["top", "right"]].set_visible(False)
-    axes[0].set_ylabel("theta − beta\nI(power ; feature | speed)   (bits)\n"
-                       "above 0 = theta carries more")
-    fig.suptitle("Which band carries the behavioural information — task and control differ in DMS",
-                 fontweight="semibold", fontsize=13)
-    fig.tight_layout(rect=[0, 0, 1, 0.93])
-    save(fig, "B6_band_preference_by_cohort", pad=-0.05, caption=
-         "POST-HOC, and stated as such: the band-pooled comparison found nothing because these two "
-         "bands move in OPPOSITE directions and cancelled, and these three areas were chosen after "
-         "seeing that. One test per area rather than two, so three tests; DMS at p = 0.0029 "
-         "survives Bonferroni over them. Every one of the five control animals is beta-dominant in "
-         "DMS, against 12 of 16 task animals theta-dominant. This is a LEVEL difference over the "
-         "whole engaged session, not a change with learning. N = 5 controls — it needs confirming.")
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    for ax, a in zip(axes.ravel(), AREAS):
+        band_panel(ax, lambda coh, b, a=a: profile(coh, a, b), a,
+                   "band − animal's mean over bands\n(bits)", zeroline=True)
+    axes[0][0].legend(frameon=False, fontsize=9)
+    fig.suptitle("WHICH band carries the information — profile normalised within animal, "
+                 "task vs control", fontweight="semibold", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    save(fig, "B6_band_preference_by_cohort",
+         "Each animal's value minus its own mean across the five bands, which removes every "
+         "between-animal scale difference (unit yield, impedance, session length) and leaves only "
+         "the band profile. Red p is a nominal Mann-Whitney cohort difference at that area and "
+         "band, uncorrected over 30 cells. POST-HOC: the band-resolved view was examined after the "
+         "band-pooled comparison returned nothing, because theta and beta oppose each other in DMS "
+         "and cancelled. Brown labels are spike-coupled bands.")
 
 
 if __name__ == "__main__":
