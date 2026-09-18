@@ -92,3 +92,66 @@ def test_partial_cca_cv_collapses_z_mediated_coupling():
     part = partial.partial_cca_cv(x, y, z, CFG).held_out_r[0]
     assert plain > 0.6
     assert part < 0.3
+
+
+def test_partial_out_cv_has_an_intercept():
+    """Ported from tom_cca 9e03883. A constant offset in target and a nonzero-mean
+    confound: the train residual must be mean-zero and orthogonal to the confound.
+    Without an intercept the residual keeps a multiple of (I - P_Z)*1 -- the
+    sub-window trap, and this port's epoch windows are exactly that."""
+    rng = np.random.default_rng(21)
+    n = 500
+    confound = rng.standard_normal((n, 3)) + np.array([2.0, -1.0, 0.5])
+    target = 5.0 + confound @ rng.standard_normal((3, 2)) + 0.1 * rng.standard_normal((n, 2))
+    train = np.zeros(n, dtype=bool)
+    train[:350] = True
+    resid = partial.partial_out_cv(target, confound, train)
+    assert np.allclose(resid[train].mean(axis=0), 0.0, atol=1e-10)
+    zc = confound[train] - confound[train].mean(axis=0)
+    assert np.allclose(zc.T @ resid[train], 0.0, atol=1e-8)
+    tc = target[train] - target[train].mean(axis=0)
+    ref = tc - zc @ np.linalg.lstsq(zc, tc, rcond=None)[0]
+    assert np.allclose(resid[train], ref, atol=1e-8)
+
+
+def test_partial_out_cv_intercept_is_train_only():
+    """The intercept is estimated on the train rows and applied to held-out rows, so a
+    held-out block with a DIFFERENT offset keeps that difference."""
+    rng = np.random.default_rng(22)
+    n = 400
+    confound = rng.standard_normal((n, 2))
+    target = confound @ rng.standard_normal((2, 2)) + 0.05 * rng.standard_normal((n, 2))
+    train = np.zeros(n, dtype=bool)
+    train[:300] = True
+    target[~train] += 3.0                       # held-out rows sit 3 higher
+    resid = partial.partial_out_cv(target, confound, train)
+    assert np.allclose(resid[train].mean(axis=0), 0.0, atol=1e-10)
+    assert np.allclose(resid[~train].mean(axis=0), 3.0, atol=0.05)
+
+
+def test_the_intercept_free_form_creates_a_spurious_shared_channel():
+    """The trap itself, pinned. X and Y are INDEPENDENT quiet units on a sub-window
+    with nonzero column means; without an intercept both residuals keep the same
+    (I - P_Z)*1 image and CCA reads a channel that is not there."""
+    rng = np.random.default_rng(7)
+    n, kx, ky, kz = 4000, 12, 12, 6
+    Z = rng.standard_normal((n, kz)) + rng.standard_normal(kz) * 2.0
+    X = 0.05 * rng.standard_normal((n, kx)) + rng.standard_normal(kx) * 2.0
+    Y = 0.05 * rng.standard_normal((n, ky)) + rng.standard_normal(ky) * 2.0
+    train = np.zeros(n, dtype=bool)
+    train[: n // 2] = True
+
+    design = np.column_stack([Z, np.ones(n)])
+    def resid(M, D):
+        coef, *_ = np.linalg.lstsq(D[train], M[train], rcond=None)
+        return M - D @ coef
+    def cc1(A, B):
+        A = A - A.mean(0); B = B - B.mean(0)
+        qa, _ = np.linalg.qr(A); qb, _ = np.linalg.qr(B)
+        return float(np.linalg.svd(qa.T @ qb, compute_uv=False)[0])
+
+    bad = cc1(resid(X, Z)[~train], resid(Y, Z)[~train])
+    good = cc1(resid(X, design)[~train], resid(Y, design)[~train])
+    assert bad > 0.9, f"the trap must reproduce; got cc1 = {bad:.3f}"
+    assert good < bad - 0.3, (
+        f"the intercept must remove it; {bad:.3f} -> {good:.3f}")

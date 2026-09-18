@@ -22,13 +22,28 @@ def partial_out_cv(target: np.ndarray, confound: np.ndarray,
     This is the leak-free form: when residualising before a cross-validated fit,
     the confound regression must not see the held-out fold, or the "held-out"
     score is optimistic. Coefficients use the finite training rows; the result is
-    ``target - confound @ coef`` for all rows (NaN where inputs are NaN).
+    ``target - design @ coef`` for all rows (NaN where inputs are NaN).
+
+    The design carries an INTERCEPT column (estimated on the train rows, applied to
+    every row). Without it, any subset of rows z-scored over a LARGER reference -- an
+    epoch window, a trajectory window, a single trial -- has nonzero column means, and
+    every residual column of both areas keeps the same time-varying ``(I - P_Z)*1``
+    image, which CCA reads as a shared channel (held-out CC up to 1.0). A caller that
+    already appends a ones column gets a rank-deficient design; lstsq's minimum-norm
+    solution leaves the residual unchanged.
+
+    Ported from ``tom_cca`` 9e03883 (2026-09-15). This port's windows are subsets of
+    ``dataio.zscore_over_reference``'s engaged reference, so it is the same trap:
+    measured there, 17 of 54 epoch cells moved cc1 by more than 0.05 and contribution
+    rankings moved at rho < 0.8 in 31 of 54.
     """
+    confound = np.asarray(confound, dtype=float)
+    design = np.column_stack([confound, np.ones(confound.shape[0])])
     fit = (np.asarray(train_mask, dtype=bool)
            & np.all(np.isfinite(target), axis=1)
            & np.all(np.isfinite(confound), axis=1))
-    coef, *_ = np.linalg.lstsq(confound[fit], target[fit], rcond=None)
-    return target - confound @ coef
+    coef, *_ = np.linalg.lstsq(design[fit], target[fit], rcond=None)
+    return target - design @ coef
 
 
 def partial_out(target: np.ndarray, confound: np.ndarray) -> np.ndarray:
