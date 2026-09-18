@@ -38,8 +38,12 @@ class WindowSubspace:
     optimal_lag: int
     ifi_per_dim: np.ndarray   # (d,) IFI for each canonical dimension
     lag_per_dim: np.ndarray   # (d,) optimal lag (bins) for each canonical dimension
-    gini_x: float
+    gini_x: float             # AREA-INTRINSIC (partner-invariant -- see membership docstring)
     gini_y: float
+    gini_x_conn: float        # CONNECTION-SPECIFIC: canonical-r-weighted, depends on the partner
+    gini_y_conn: float
+    gini_x_sig: float         # CONNECTION-SPECIFIC: significant dims only (NaN if n_sig == 0)
+    gini_y_sig: float
     gini_pearson_x: float     # CCA-INDEPENDENT control: Gini of raw cross-corr coupling
     gini_pearson_y: float
     weights_x: np.ndarray     # (n_units_x, d)
@@ -57,10 +61,9 @@ class WindowSubspace:
 
 
 def _pca_fit(M: np.ndarray, k: int):
-    """Fit a k-component PCA: returns ``(mean, components (n_units, k))``."""
-    mu = M.mean(0)
-    _, _, vt = np.linalg.svd(M - mu, full_matrices=False)
-    return mu, vt[:k].T
+    """``(mean, components (n_units, k))`` -- alias of :func:`core.pca_fit_flat`."""
+    pca = core.pca_fit_flat(M, k)
+    return pca.mean, pca.components
 
 
 def _project(M: np.ndarray, mu: np.ndarray, comp: np.ndarray) -> np.ndarray:
@@ -246,6 +249,25 @@ def window_subspace(X, Y, groups, Z=None, k: int = 30, max_lag: int = 10,
     wy = membership.canonical_weight_scores(cy, model.B, d)
     contrib_x = membership.subspace_contribution(wx)
     contrib_y = membership.subspace_contribution(wy)
+    # Connection-specific participation: weight each canonical dim by its HELD-OUT
+    # correlation (clipped at 0 -- a dim that fails to generalise carries no
+    # communication). Unlike contrib_x/y above, this genuinely depends on the
+    # partner area; see membership.subspace_contribution_connection.
+    r_heldout = np.clip(np.nan_to_num(np.asarray(cc, dtype=float)), 0.0, 1.0)
+    contrib_x_conn = membership.subspace_contribution_connection(wx, r_heldout)
+    contrib_y_conn = membership.subspace_contribution_connection(wy, r_heldout)
+    # Second connection-specific definition: restrict to the SIGNIFICANT dims only.
+    # Cleaner conceptually ("participation in the dims that demonstrably carry
+    # communication") and free of the r-weighting's confound between concentration
+    # and how many dims survive clipping -- but undefined when nothing is
+    # significant, which is exactly when the area-intrinsic version misleads most.
+    sig_idx = np.flatnonzero(np.asarray(sig, dtype=bool)[:wx.shape[1]])
+    if sig_idx.size > 0:
+        gini_x_sig = membership.gini(membership.subspace_contribution(wx[:, sig_idx]))
+        gini_y_sig = membership.gini(membership.subspace_contribution(wy[:, sig_idx]))
+    else:
+        gini_x_sig = float("nan")
+        gini_y_sig = float("nan")
     # CCA-independent control: Gini of raw cross-area Pearson coupling (same
     # residualised window data, no CCA) — rules out the (p)CCA *weight machinery*
     # as the explanation for the weight-Gini de-sparsification. (It shares the
@@ -256,6 +278,9 @@ def window_subspace(X, Y, groups, Z=None, k: int = 30, max_lag: int = 10,
         cc=cc, n_sig=n_sig, mi_sig=mi_sig, ifi=ifi, optimal_lag=optimal_lag,
         ifi_per_dim=ifi_per_dim, lag_per_dim=lag_per_dim,
         gini_x=membership.gini(contrib_x), gini_y=membership.gini(contrib_y),
+        gini_x_conn=membership.gini(contrib_x_conn),
+        gini_y_conn=membership.gini(contrib_y_conn),
+        gini_x_sig=gini_x_sig, gini_y_sig=gini_y_sig,
         gini_pearson_x=membership.gini(cpx), gini_pearson_y=membership.gini(cpy),
         weights_x=wx, weights_y=wy,
         member_x=membership.member_mask(contrib_x, member_q),

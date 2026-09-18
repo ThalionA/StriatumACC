@@ -180,3 +180,92 @@ def test_jaccard_identical_and_disjoint():
     b = np.array([False, False, True, True])
     assert membership.jaccard(a, a) == 1.0
     assert membership.jaccard(a, b) == 0.0
+def _cca_weights(X, Y):
+    """Minimal stand-in for core.cca_fit's A, r (avoids a circular import)."""
+    from scipy import linalg
+
+    Xc, Yc = X - X.mean(0), Y - Y.mean(0)
+    ux, sx, vxt = linalg.svd(Xc, full_matrices=False)
+    uy, sy, vyt = linalg.svd(Yc, full_matrices=False)
+    tol = 1e-10
+    rx = int((sx > tol * sx[0]).sum())
+    ry = int((sy > tol * sy[0]).sum())
+    ux, sx, vxt = ux[:, :rx], sx[:rx], vxt[:rx]
+    uy, sy, vyt = uy[:, :ry], sy[:ry], vyt[:ry]
+    uc, rho, _ = linalg.svd(ux.T @ uy)
+    d = min(rx, ry)
+    A = (vxt.T @ (uc[:, :d] / sx[:, None])) * np.sqrt(X.shape[0] - 1)
+    return A, np.clip(rho[:d], 0.0, 1.0)
+
+
+def _two_partners(seed=0, n=2000, p=12, q=12):
+    """Same X; one partner strongly coupled to it, one pure noise."""
+    rng = np.random.default_rng(seed)
+    X = rng.standard_normal((n, p))
+    Y_coupled = X @ rng.standard_normal((p, q)) + 0.05 * rng.standard_normal((n, q))
+    Y_noise = rng.standard_normal((n, q))
+    components = rng.standard_normal((40, p))       # (n_units, k)
+    return X, Y_coupled, Y_noise, components
+
+
+def test_area_intrinsic_contribution_is_partner_invariant():
+    """Documents the identity: the unweighted norm cannot see the partner."""
+    X, Yc, Yn, comp = _two_partners()
+    Ac, _ = _cca_weights(X, Yc)
+    An, _ = _cca_weights(X, Yn)
+    c_coupled = membership.subspace_contribution(comp @ Ac)
+    c_noise = membership.subspace_contribution(comp @ An)
+    assert np.allclose(c_coupled, c_noise, atol=1e-8)
+    assert abs(membership.gini(c_coupled) - membership.gini(c_noise)) < 1e-9
+
+
+def test_connection_contribution_depends_on_partner():
+    """The rho-weighted norm must distinguish a coupled from an uncoupled partner."""
+    X, Yc, Yn, comp = _two_partners()
+    Ac, rc = _cca_weights(X, Yc)
+    An, rn = _cca_weights(X, Yn)
+    c_coupled = membership.subspace_contribution_connection(comp @ Ac, rc)
+    c_noise = membership.subspace_contribution_connection(comp @ An, rn)
+    assert not np.allclose(c_coupled, c_noise, atol=1e-3)
+
+
+def test_connection_contribution_reduces_to_area_intrinsic_when_rho_flat():
+    """Equal canonical correlations => same Gini (Gini is scale-invariant)."""
+    X, Yc, _, comp = _two_partners()
+    A, r = _cca_weights(X, Yc)
+    flat = np.full_like(r, 0.7)
+    plain = membership.subspace_contribution(comp @ A)
+    weighted = membership.subspace_contribution_connection(comp @ A, flat)
+    assert abs(membership.gini(plain) - membership.gini(weighted)) < 1e-9
+
+
+def test_connection_contribution_tracks_the_communicating_dimension():
+    """A unit loading on the one correlated dim must outrank one loading on a dead dim."""
+    scores = np.array([[1.0, 0.0], [0.0, 1.0]])     # unit 0 -> dim 0; unit 1 -> dim 1
+    r = np.array([0.9, 0.0])                        # dim 0 communicates, dim 1 does not
+    c = membership.subspace_contribution_connection(scores, r)
+    assert c[0] > c[1]
+    assert c[1] == 0.0
+
+
+def test_connection_contribution_zero_rho_gives_zero_everywhere():
+    """No communication at all => no participation (not an arbitrary ranking)."""
+    rng = np.random.default_rng(3)
+    scores = rng.standard_normal((15, 4))
+    c = membership.subspace_contribution_connection(scores, np.zeros(4))
+    assert np.all(c == 0.0)
+
+
+def test_connection_contribution_truncates_rho_to_available_dims():
+    scores = np.ones((6, 3))
+    c = membership.subspace_contribution_connection(scores, np.array([1.0, 1.0, 1.0, 1.0]))
+    assert c.shape == (6,)
+
+
+# ---------------------------------------------------------------------------
+# signed_dim_weights — the export of signed per-dimension canonical weights (Tom)
+# ---------------------------------------------------------------------------
+def _planted_pair(seed=0, n=3000, kx=10, ky=8):
+    from tom_cca import core
+    rng = np.random.default_rng(seed)
+    lat = rng.standard_normal((n, 2))

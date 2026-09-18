@@ -93,6 +93,36 @@ def subspace_contribution(score_matrix: np.ndarray) -> np.ndarray:
     return np.linalg.norm(np.atleast_2d(score_matrix), axis=1)
 
 
+def subspace_contribution_connection(
+    score_matrix: np.ndarray, canonical_r: np.ndarray
+) -> np.ndarray:
+    """Per-neuron contribution weighted by each dim's canonical correlation.
+
+    ``c_i = sqrt(sum_j rho_j^2 * w_ij^2)`` -- the L2 norm re-weighted so that a
+    canonical dimension counts in proportion to how much it actually correlates
+    the two areas. A dimension with ``rho = 0`` carries no communication and so
+    contributes nothing, which is what breaks the orthogonal-cancellation
+    identity in :func:`subspace_contribution` and makes the readout genuinely
+    partner-dependent.
+
+    Because Gini is scale-invariant, a flat ``rho`` reproduces the area-intrinsic
+    Gini exactly -- the two definitions diverge only insofar as the canonical
+    spectrum is uneven, which is precisely when "which dims communicate" is a
+    meaningful question.
+
+    Parameters
+    ----------
+    score_matrix : ndarray (n_units, d)   neuron-space canonical weights
+    canonical_r  : ndarray (d,)           canonical correlations, same dim order
+    """
+    W = np.atleast_2d(np.asarray(score_matrix, dtype=float))
+    r = np.abs(np.asarray(canonical_r, dtype=float).ravel())
+    d = min(W.shape[1], r.size)
+    if d == 0:
+        return np.zeros(W.shape[0])
+    return np.linalg.norm(W[:, :d] * r[:d], axis=1)
+
+
 def member_mask(contribution: np.ndarray, quantile: float = 0.75) -> np.ndarray:
     """Boolean mask of top-quantile neurons by |contribution|."""
     contribution = np.abs(np.asarray(contribution, dtype=float))

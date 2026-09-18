@@ -38,9 +38,8 @@ class ReferenceFit:
 
 
 def _pca_fit(M: np.ndarray, k: int):
-    mu = M.mean(0)
-    _, _, vt = np.linalg.svd(M - mu, full_matrices=False)
-    return mu, vt[:k].T
+    pca = core.pca_fit_flat(M, k)
+    return pca.mean, pca.components
 
 
 def reference_fit(X, Y, train_mask, Z=None, k: int = 30) -> ReferenceFit:
@@ -60,10 +59,13 @@ def reference_fit(X, Y, train_mask, Z=None, k: int = 30) -> ReferenceFit:
     return ReferenceFit(Xr=Xr, Yr=Yr, Sx=Sx, Sy=Sy, model=model)
 
 
-def _variates(fit: ReferenceFit, bins):
-    """Dominant-and-beyond canonical variates of the reference fit on ``bins``."""
+def variates(fit: ReferenceFit, bins, dims=None):
+    """Canonical variates ``(u, v)`` of the reference fit on ``bins`` -- all dims by
+    default, or the ``dims`` columns (an int index, list, or slice)."""
     u = (fit.Sx[bins] - fit.model.x_mean) @ fit.model.A
     v = (fit.Sy[bins] - fit.model.y_mean) @ fit.model.B
+    if dims is not None:
+        u, v = u[:, dims], v[:, dims]
     return u, v
 
 
@@ -78,7 +80,7 @@ def trial_ifi(fit: ReferenceFit, bins, max_lag: int = 10):
     """``(ifi, optimal_lag)`` of the dominant canonical variates within one trial.
     Positive lag / IFI ⇒ X leads Y. Lags act within the single trial, so there is
     no trial-boundary leakage."""
-    u, v = _variates(fit, bins)
+    u, v = variates(fit, bins)
     u, v = u[:, 0], v[:, 0]
     n = u.size
     lags = np.arange(-max_lag, max_lag + 1)
@@ -114,7 +116,7 @@ def trial_participation_gini(fit: ReferenceFit, bins):
     """Per-trial participation sparsity: the Gini of each neuron's |correlation|
     with the dominant canonical variate, within one trial. A per-trial analogue of
     the weight-Gini — low Gini ⇒ many neurons track the variate (de-sparsified)."""
-    u, v = _variates(fit, bins)
+    u, v = variates(fit, bins)
     return (_gini_of_corr(fit.Xr[bins], u[:, 0]),
             _gini_of_corr(fit.Yr[bins], v[:, 0]))
 

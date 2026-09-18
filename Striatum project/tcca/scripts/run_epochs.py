@@ -131,6 +131,15 @@ def main():
                     "mi_sig": round(ws.mi_sig, 4), "ifi": round(ws.ifi, 4),
                     "optimal_lag": ws.optimal_lag,
                     "gini_x": round(ws.gini_x, 4), "gini_y": round(ws.gini_y, 4),
+                    # CONNECTION-SPECIFIC participation (ported from tom_cca
+                    # e099eca): canonical-r-weighted, and the significant-dims-only
+                    # variant. These DO depend on the partner area, so they are the
+                    # ones that can answer "is the sparsity change a property of the
+                    # area or of the connection?" -- gini_x/y cannot.
+                    "gini_x_conn": round(ws.gini_x_conn, 4),
+                    "gini_y_conn": round(ws.gini_y_conn, 4),
+                    "gini_x_sig": round(ws.gini_x_sig, 4),
+                    "gini_y_sig": round(ws.gini_y_sig, 4),
                     # Partner-DEPENDENT sparsity control (CCA-free cross-area
                     # coupling). gini_x/y above is partner-invariant
                     # (area-intrinsic) — see FIGURE_PLAN_AUDIT.md §6.
