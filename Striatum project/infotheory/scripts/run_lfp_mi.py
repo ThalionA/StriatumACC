@@ -107,7 +107,7 @@ def pooled_codes(power, speed, trials, bins, variants):
     return np.concatenate(xs), np.concatenate(zs), np.concatenate(vs, axis=0)
 
 
-def run_one(path: Path, cohort: str, seed: int) -> tuple[list, list]:
+def run_one(path: Path, cohort: str, seed: int, dp_clip: bool = True) -> tuple[list, list]:
     t0 = time.time()
     z = np.load(path, allow_pickle=False)
     mouse, probe = int(z["mouse_id"]), str(z["probe"])
@@ -135,7 +135,7 @@ def run_one(path: Path, cohort: str, seed: int) -> tuple[list, list]:
     # engagement one. Measured 2026-09-17 before this clip existed: 9 of 13 task
     # animals had their entire late window past DP, so an early-versus-late
     # contrast was largely measuring whether the animal was still doing the task.
-    dp = analysis.disengagement_points(ch).get(mouse, np.nan)
+    dp = analysis.disengagement_points(ch).get(mouse, np.nan) if dp_clip else np.nan
     usable = np.flatnonzero(good)
     if np.isfinite(dp):
         usable = usable[usable + 1 <= dp]        # trial numbers are 1-based
@@ -250,6 +250,11 @@ def write(rows, path: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cohort", default="task", choices=("task", "control"))
+    # For the audit figure only. Without the clip, "late" trials are largely past
+    # the disengagement point (9 of 13 task animals, entirely), so the contrast
+    # measures whether the animal is still doing the task. Never for inference.
+    ap.add_argument("--no-dp-clip", action="store_true",
+                    help="AUDIT ONLY: do not clip at the disengagement point")
     args = ap.parse_args()
     files = sorted((LFP_RESULTS / f"lfp_band_trials_{args.cohort}").glob("*.npz"))
     if not files:
@@ -260,11 +265,12 @@ def main() -> None:
           f"pool {POOL_BINS} spatial bins, {N_SHUFFLES} shuffles")
     speed_rows, feat_rows = [], []
     for k, f in enumerate(files):
-        a, b = run_one(f, args.cohort, seed=2000 + k)
+        a, b = run_one(f, args.cohort, seed=2000 + k, dp_clip=not args.no_dp_clip)
         speed_rows += a
         feat_rows += b
-    write(speed_rows, RESULTS / f"lfp_mi_speed_{args.cohort}.csv")
-    write(feat_rows, RESULTS / f"lfp_mi_features_{args.cohort}.csv")
+    tag = "_NODPCLIP" if args.no_dp_clip else ""
+    write(speed_rows, RESULTS / f"lfp_mi_speed_{args.cohort}{tag}.csv")
+    write(feat_rows, RESULTS / f"lfp_mi_features_{args.cohort}{tag}.csv")
 
 
 if __name__ == "__main__":
