@@ -23,7 +23,6 @@ permutation over time windows, not against a single window's null.
 from __future__ import annotations
 
 import csv
-import sys
 from collections import defaultdict
 from pathlib import Path
 

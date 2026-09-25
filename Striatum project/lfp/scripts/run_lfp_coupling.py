@@ -55,12 +55,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, area_signals, config, coupling, filtering  # noqa: E402
+from striatum_lfp import area_signals, config, coupling, filtering, trials  # noqa: E402
 
 THETA = (4.0, 8.0)
 AMP_BANDS = {"low_gamma": (30.0, 80.0), "high_gamma": (80.0, 150.0)}
 SAME_BANDS = {"theta": THETA, **AMP_BANDS}
-EPOCHS = ("All", "Naive", "Intermediate", "Expert")
+EPOCHS = ("All", *trials.EPOCHS)
 #: One theta cycle is ~150-250 ms; a modulation index wants many of them.
 MIN_SAMPLES = 4000
 N_SURROGATES = 100
@@ -103,11 +103,11 @@ def _trial_rows(feats, chans, base) -> list[dict]:
     return rows
 
 
-def _epoch_rows(per_trial, trials, chans, base, sos_cache) -> list[dict]:
+def _epoch_rows(per_trial, epoch_trials, chans, base, sos_cache) -> list[dict]:
     """Per-epoch measures on concatenated trials, both references, with surrogates."""
     rows = []
     areas = sorted(chans)
-    joined = {(a, r): np.concatenate([per_trial[t][(a, r)] for t in trials])
+    joined = {(a, r): np.concatenate([per_trial[t][(a, r)] for t in epoch_trials])
               for a in areas for r in REFS}
     for ref in REFS:
         for a1, a2 in combinations(areas, 2):
@@ -151,7 +151,7 @@ def run_one(cache: Path, cohort_name: str):
 
     sos_cache = {b: filtering.design_band_sos(e, fs=int(config.FS))
                  for b, e in SAME_BANDS.items()}
-    lp = analysis.cohort_learning_points(ch).get(mouse)
+    lp = trials.sessions_for(ch.name)[mouse].lp
     tag = {"cohort": cohort_name, "mouse_id": mouse, "probe": probe,
            "learning_point": lp}
 
@@ -161,35 +161,25 @@ def run_one(cache: Path, cohort_name: str):
                  for a in chans}
         trial_rows += _trial_rows(feats, chans, {**tag, "trial": t + 1})
 
-    n_trials = int(min(analysis.cohort_trial_counts(ch).get(mouse, len(per_trial)),
-                       len(per_trial)))
-    # The project's THREE-epoch scheme: Naive = trials 1-10, Expert = the ten
-    # trials from the learning point. Ten trials each, so every across-epoch
-    # contrast is count-matched by construction -- which the Tort index REQUIRES,
-    # being positively biased at small n (Spearman(mi, n_trials) = -0.49 on the
-    # four-epoch scheme this replaces, whose Naive was three trials).
-    dp = analysis.disengagement_points(ch).get(mouse, np.nan)
-    usable = sorted(per_trial)
-    if np.isfinite(dp):
-        usable = [t for t in usable if t + 1 <= dp]
-    windows = {"All": usable}
-    for name, tr in zip(("Naive", "Intermediate", "Expert"),
-                        analysis.epoch_indices(lp, n_trials)):
-        keep = [t for t in (np.asarray(tr, int) - 1) if t in per_trial]
-        # An LP-relative epoch can run past disengagement when LP and DP are close
-        # (418: LP = 26, DP = 27). Drop it rather than compare engaged with
-        # disengaged -- that confound killed a headline result on 2026-09-18.
-        if keep and np.isfinite(dp) and max(keep) + 1 > dp:
-            keep = []
-        windows[name] = keep
+    # The project's THREE-epoch scheme from the trial layer: Naive = good trials
+    # 1-10, Expert = the ten from the learning point, all before disengagement
+    # (a window that would cross DP -- 418: LP 26, DP 27 -- does not exist).
+    # Ten trials each, so every across-epoch contrast is count-matched by
+    # construction -- which the Tort index REQUIRES, being positively biased at
+    # small n. A window missing any trial (too short to read) is therefore
+    # dropped rather than shortened.
+    windows = {"All": sorted(per_trial)}
+    for name, raw in trials.sessions_for(ch.name)[mouse].epochs().items():
+        keep = [int(t) for t in raw if t in per_trial]
+        windows[name] = keep if raw.size and len(keep) == raw.size else []
 
     epoch_rows = []
     for epoch in EPOCHS:
-        trials = windows.get(epoch, [])
-        if not trials:
+        epoch_trials = windows.get(epoch, [])
+        if not epoch_trials:
             continue
-        epoch_rows += _epoch_rows(per_trial, trials, chans,
-                                  {**tag, "epoch": epoch, "n_trials": len(trials)},
+        epoch_rows += _epoch_rows(per_trial, epoch_trials, chans,
+                                  {**tag, "epoch": epoch, "n_trials": len(epoch_trials)},
                                   sos_cache)
 
     print(f"[coup] {cohort_name[:4]:<4} {mouse}/{probe:9s} {len(chans)} areas "
@@ -231,17 +221,17 @@ def main() -> None:
     print(f"[coup] cohort={args.cohort}: {len(files)} files, "
           f"{N_SURROGATES} surrogates per PAC cell")
 
-    trials, epochs = [], []
+    trial_rows, epoch_rows = [], []
     for f in files:
         a, b = run_one(f, args.cohort)
-        trials += a
-        epochs += b
-    write(trials, config.RESULTS_DIR / f"lfp_coupling_trials_{args.cohort}.csv")
-    write(epochs, config.RESULTS_DIR / f"lfp_coupling_epochs_{args.cohort}.csv")
+        trial_rows += a
+        epoch_rows += b
+    write(trial_rows, config.RESULTS_DIR / f"lfp_coupling_trials_{args.cohort}.csv")
+    write(epoch_rows, config.RESULTS_DIR / f"lfp_coupling_epochs_{args.cohort}.csv")
 
     for measure in ("pac_within", "pac_between"):
         for ref in REFS:
-            sel = [r for r in epochs if r["measure"] == measure
+            sel = [r for r in epoch_rows if r["measure"] == measure
                    and r["reference"] == ref and r.get("epoch") == "All"
                    and np.isfinite(r.get("p", np.nan))]
             if not sel:

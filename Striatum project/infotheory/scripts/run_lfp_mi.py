@@ -47,6 +47,7 @@ import argparse
 import csv
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -56,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 
 from striatum_info import estimators as est  # noqa: E402
 from striatum_lfp import analysis, config as lfp_config  # noqa: E402
+from striatum_lfp import trials as lfp_trials  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 LFP_RESULTS = Path(__file__).resolve().parents[2] / "lfp" / "results"
@@ -139,28 +141,16 @@ def run_one(path: Path, cohort: str, seed: int, dp_clip: bool = True) -> tuple[l
                                     z["corridor_bin_stop_ms"])[:MAX_BIN]
     n_stored = corridor.shape[3]
     feats = zc["features"][:n_stored]
-    good = z["good_trials"].astype(bool)[:n_stored]
-
-    lp = analysis.cohort_learning_points(ch).get(mouse)
-    lp_source = analysis.learning_point_sources(ch).get(mouse, "unknown")
-    n_matlab = min(analysis.cohort_trial_counts(ch).get(mouse, n_stored), n_stored)
-    # CLIP AT THE DISENGAGEMENT POINT. good_trials is an ALIGNMENT flag, not an
-    # engagement one. Measured 2026-09-17 before this clip existed: 9 of 13 task
-    # animals had their entire late window past DP, so an early-versus-late
-    # contrast was largely measuring whether the animal was still doing the task.
-    dp = analysis.disengagement_points(ch).get(mouse, np.nan) if dp_clip else np.nan
-    usable = np.flatnonzero(good)
-    if np.isfinite(dp):
-        usable = usable[usable + 1 <= dp]        # trial numbers are 1-based
-    windows = {"All": usable}
-    for name, tr in zip(("Naive", "Intermediate", "Expert"),
-                        analysis.epoch_indices(lp, n_matlab)):
-        idx = np.asarray(tr, int) - 1
-        keep = np.array([t for t in idx if t < n_stored and good[t]])
-        # An LP-relative epoch can run past DP when the two are close (418: LP=26,
-        # DP=27). Drop the epoch rather than compare engaged with disengaged.
-        windows[name] = (np.array([], int) if keep.size and np.isfinite(dp)
-                         and (keep + 1 > dp).any() else keep)
+    # Trials, epochs and the DP clip all come from the one trial layer (good,
+    # engaged, covered; raw index -- the cache's features are raw-indexed too).
+    # `good_trials` alone is an ALIGNMENT flag: without the clip, 9 of 13 task
+    # animals had their entire late window past DP (measured 2026-09-17).
+    session = lfp_trials.sessions_for(ch.name)[mouse].with_data(z["good_trials"])
+    if not dp_clip:
+        session = replace(session, dp=np.nan)
+    lp, lp_source = session.lp, session.lp_source
+    usable = session.usable()
+    windows = {"All": usable, **session.epochs()}
 
     # EarlyHalf / LateHalf split the ENGAGED period in two, count-matched within
     # each animal so the information bias cancels in the paired difference. Their

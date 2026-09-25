@@ -22,12 +22,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, config  # noqa: E402
+from striatum_lfp import analysis, config, trials  # noqa: E402
 from striatum_lfp.results_io import hierarchical, load_arms as load  # noqa: E402
 from striatum_lfp.figstyle import (  # noqa: E402
     AREA_COLOUR, AREA_ORDER, BAND_LABEL, PLOT_BANDS, save_pair,
 )
-EPOCHS = list(analysis.EPOCH_NAMES)
+EPOCHS = list(trials.EPOCHS)
 WINDOWS = ["All"] + EPOCHS
 
 
@@ -433,15 +433,16 @@ def plot_moving_reliability_depth(cohort_name="task",
     ncol = 6
     nrow = int(np.ceil(len(files) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.0 * ncol, 2.7 * nrow), squeeze=False)
-    lps = analysis.cohort_learning_points(ch)
-    counts = analysis.cohort_trial_counts(ch)
+    sessions = trials.sessions_for(ch.name)
     for k, path in enumerate(files):
         ax = axes[k // ncol][k % ncol]
         z = np.load(path, allow_pickle=False)
         mouse, probe = int(z["mouse_id"]), str(z["probe"])
         bands = [str(b) for b in z["bands"]]
-        n_keep = min(counts.get(mouse, 0), z["corridor"].shape[3], 100)
-        cube = analysis.log_power(z["corridor"][bands.index(band)][:, :, :n_keep]
+        session = sessions[mouse].with_data(z["good_trials"])
+        usable = session.usable()[:100]        # x axis = good-trial number
+        n_keep = usable.size
+        cube = analysis.log_power(z["corridor"][bands.index(band)][:, :, usable]
                                   .astype(float))
         rel = arms.moving_window_reliability(cube)
         im = ax.imshow(rel, aspect="auto", cmap="magma", vmin=-0.2, vmax=0.8,
@@ -456,7 +457,7 @@ def plot_moving_reliability_depth(cohort_name="task",
                     color=AREA_COLOUR[area])
             ax.text(n_keep * 0.03, (d.min() + d.max()) / 2, area, fontsize=5.5,
                     color=AREA_COLOUR[area], va="center", fontweight="bold")
-        lp = lps.get(mouse)
+        lp = session.lp
         if lp and lp <= n_keep:
             ax.axvline(lp, color="#39ff14", lw=1.0)
         ax.set_title(f"{mouse}{'·v1' if probe == 'visual' else ''}", fontsize=8)
@@ -495,7 +496,7 @@ def plot_moving_vs_units(cohort_name="task", stem="lfp_reliability_moving_vs_uni
         want = "Task" if cohort_name == "task" else "Control 1"
         units = [r for r in csv.DictReader(fh) if r["group"].startswith(want)]
 
-    epochs3 = ["Naive", "Intermediate", "Expert"]
+    epochs3 = EPOCHS
     areas = [a for a in AREA_ORDER if any(r["area"] == a for r in lfp)]
     fig, axes = plt.subplots(1, len(areas), figsize=(2.5 * len(areas), 4.2),
                              sharey=True, squeeze=False)

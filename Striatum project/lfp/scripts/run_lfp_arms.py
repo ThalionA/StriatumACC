@@ -1,7 +1,7 @@
 """Four analyses on the binned LFP band power, mirroring the unit pipeline.
 
-1. **Evolution across learning** -- band power per area, per band, in the four
-   epoch windows, for corridor and dark. Carries the band/total ratio and the
+1. **Evolution across learning** -- band power per area, per band, in the three
+   epoch windows (``trials.EPOCHS``), for corridor and dark. Carries the band/total ratio and the
    per-epoch running speed alongside, because an aperiodic-slope change or a
    speed change would otherwise be read as a band change.
 2. **Spatial decoding** -- corridor position from band power, ridge with folds
@@ -16,6 +16,9 @@ Run from ``Striatum project/lfp``::
     /opt/anaconda3/bin/python scripts/run_lfp_arms.py [--jobs N]
 
 Writes ``results/lfp_arms_{evolution,decoding,reliability,cca}.csv``.
+
+Every window -- "All", "First 20" and the three epochs -- comes from
+``trials.SessionTrials``: good, engaged (<= DP) and covered trials only.
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, arms, config  # noqa: E402
+from striatum_lfp import analysis, arms, config, trials  # noqa: E402
 from striatum_lfp.analysis import log_power  # noqa: E402
 
 # Length of the unaligned early-session window (see `windows` in run_one).
@@ -55,15 +58,11 @@ def analyse_one(item) -> dict[str, list[dict]]:
     band_names = [str(b) for b in z["bands"]]
     corridor = z["corridor"].astype(np.float64)      # (band, ch, 50, trial)
     dark = z["dark"].astype(np.float64)
-    n_stored = corridor.shape[3]
 
-    lp = analysis.cohort_learning_points(ch).get(mouse)
-    # "measured" or "cohort_average": for a borrowed learning point the late
-    # window is a matched TIME window, not a matched level of performance, and
-    # anything quoting an epoch result should be able to say so.
-    lp_source = analysis.learning_point_sources(ch).get(mouse, "unknown")
-    n_trials_matlab = min(analysis.cohort_trial_counts(ch).get(mouse, n_stored), n_stored)
-    epochs = analysis.epoch_indices(lp, n_trials_matlab, naive_split=analysis.NAIVE_SPLIT)
+    session = trials.sessions_for(ch.name)[mouse].with_data(z["good_trials"])
+    usable = session.usable()
+    epochs = session.epochs()
+    lp = session.lp
     speed = analysis.bin_speed_cm_s(z["corridor_bin_start_ms"], z["corridor_bin_stop_ms"])
 
     areas = {a: z[f"is_{a.lower()}"] for a in config.AREAS}
@@ -74,15 +73,12 @@ def analyse_one(item) -> dict[str, list[dict]]:
     total_idx = band_names.index("total")
     rows = {"evolution": [], "decoding": [], "reliability": [], "cca": [],
             "moving_reliability": [], "moving_reliability_epochs": [], "behaviour": []}
-    # The single-unit stability figures roll the same moving metric up over the
-    # THREE-window epoch convention (IntegratedAll_v1.m:554 "the neural analyses
-    # use the three-window convention"), not the four-window one the corridor-vs-
-    # dark figures use. Match it, so figures/stability_by_animal.csv and the LFP
-    # table are the same statistic on the same windows and can sit side by side.
-    epochs3 = analysis.epoch_indices(lp, n_trials_matlab)
-    EPOCH3_NAMES = ("Naive", "Intermediate", "Expert")
+    # "measured" or "cohort_average": for a borrowed learning point the late
+    # window is a matched TIME window, not a matched level of performance, and
+    # anything quoting an epoch result should be able to say so.
     base = {"cohort": cohort_name, "mouse_id": mouse, "probe": probe,
-            "learning_point": lp, "lp_source": lp_source, "n_trials": n_trials_matlab}
+            "learning_point": lp, "lp_source": session.lp_source,
+            "disengagement_point": session.dp, "n_trials": int(usable.size)}
 
     # Precompute the z-scored log cubes once per (band, area).
     cubes: dict[tuple[str, str], np.ndarray] = {}
@@ -109,9 +105,7 @@ def analyse_one(item) -> dict[str, list[dict]]:
             zc_resid = arms.residualise_on(zc, log_speed)
 
             # --- 1. evolution ------------------------------------------------
-            for ei, name in enumerate(analysis.EPOCH_NAMES):
-                tr = epochs[ei] - 1
-                tr = tr[(tr >= 0) & (tr < n_stored)]
+            for name, tr in epochs.items():
                 if tr.size == 0:
                     continue
                 with warnings.catch_warnings():
@@ -145,19 +139,21 @@ def analyse_one(item) -> dict[str, list[dict]]:
             # power has no zero, so the NaN is left to reach the z-score step
             # inside batch_triu_corr_mean, where it becomes that trial's own mean
             # -- the neutral fill. It affects 0.2-3% of cells.
-            keep = np.arange(min(n_trials_matlab, n_stored))
-            cube_all = zc[:, :, keep]
+            #
+            # Neighbours are the usable trials in order, so a non-good or
+            # disengaged trial never sits inside anyone's window; position k in
+            # that sequence is good-trial number k + 1.
+            cube_all = zc[:, :, usable]
             if cube_all.shape[2] >= 2:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
                     moving = arms.moving_window_reliability(cube_all)
                     shuffled = arms.moving_window_reliability(
                         arms.shuffle_trials(cube_all, np.random.default_rng(0)))
-                for ei, ename in enumerate(EPOCH3_NAMES):
-                    idx = epochs3[ei] - 1
-                    idx = idx[(idx >= 0) & (idx < cube_all.shape[2])]
-                    if idx.size == 0:
+                for ename, raw in epochs.items():
+                    if raw.size == 0:
                         continue
+                    idx = np.searchsorted(usable, raw)
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", RuntimeWarning)
                         # Mean over channels then over the epoch's trials, as
@@ -176,6 +172,7 @@ def analyse_one(item) -> dict[str, list[dict]]:
                     rows["moving_reliability"].append({
                         **base, "area": area, "band": band,
                         "trial": ti + 1,
+                        "raw_trial": int(usable[ti]) + 1,
                         "trial_rel_lp": (ti + 1 - lp) if lp else "",
                         "n_channels": n_ch,
                         "reliability": float(np.nanmedian(moving[:, ti])),
@@ -183,24 +180,14 @@ def analyse_one(item) -> dict[str, list[dict]]:
                     })
 
             # --- 2. decoding + 3. reliability --------------------------------
-            # Windows are all 0-based here; `analysis.epoch_indices` returns 1-based
-            # MATLAB trial numbers, so it is converted once, at construction. (The
-            # loop used to special-case "All" as 0-based and subtract 1 from every
-            # other window inside the body, which is the kind of asymmetry that
-            # eventually gets a new window wrong.)
-            #
+            # All windows are raw 0-based trial indices from the trial layer.
             # "First 20" is deliberately NOT learning-point aligned: it is the first
-            # 20 trials of the session for every animal, so task and yoked control
-            # are compared over the same stretch of exposure rather than over
-            # windows defined by a learning point the controls do not have.
-            windows = [
-                ("All", np.arange(n_trials_matlab)),
-                ("First 20", np.arange(min(FIRST_N_TRIALS, n_trials_matlab))),
-            ] + [(name, np.asarray(epochs[ei], int) - 1)
-                 for ei, name in enumerate(analysis.EPOCH_NAMES)]
-            for name, trials in windows:
-                tr = np.asarray(trials, int)
-                tr = tr[(tr >= 0) & (tr < n_stored)]
+            # 20 usable trials of the session for every animal, so task and yoked
+            # control are compared over the same stretch of exposure rather than
+            # over windows defined by a learning point the controls do not have.
+            windows = [("All", usable), ("First 20", usable[:FIRST_N_TRIALS]),
+                       *epochs.items()]
+            for name, tr in windows:
                 if tr.size < 4:
                     continue
                 sub = zc[:, :, tr]
@@ -262,10 +249,9 @@ def analyse_one(item) -> dict[str, list[dict]]:
     if probe == "striatum":
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            tr_all = np.arange(n_trials_matlab)[z["good_trials"][:n_trials_matlab]]
-            sp = speed[:, tr_all]
+            sp = speed[:, usable]
             rows["behaviour"].append({
-                **base, "n_trials_used": int(tr_all.size),
+                **base, "n_trials_used": int(usable.size),
                 "speed_profile_split_half_r": float(
                     arms.split_half_reliability(sp[None, :, :])[0]),
                 "mean_speed_cm_s": float(np.nanmean(sp)),
@@ -276,8 +262,8 @@ def analyse_one(item) -> dict[str, list[dict]]:
     # --- 4. cross-area CCA ---------------------------------------------------
     for band in band_names:
         for a, b in itertools.combinations(sorted(areas), 2):
-            Xa, _, ga = arms.design_matrix(cubes[(band, a)][:, :, :n_trials_matlab])
-            Xb, _, gb = arms.design_matrix(cubes[(band, b)][:, :, :n_trials_matlab])
+            Xa, _, ga = arms.design_matrix(cubes[(band, a)][:, :, usable])
+            Xb, _, gb = arms.design_matrix(cubes[(band, b)][:, :, usable])
             n = min(Xa.shape[0], Xb.shape[0])
             if n < 100 or not np.array_equal(ga[:n], gb[:n]):
                 continue
@@ -317,9 +303,9 @@ def write_evolution_stats(rows: list[dict], cohort_name: str = "task") -> None:
     from scipy import stats
 
     out_rows = []
-    for metric, naive_epoch in (("z_corridor", "Trials 4-10"),
-                                ("z_corridor_speed_resid", "Trials 4-10"),
-                                ("frac_of_total_corridor", "Trials 4-10")):
+    for metric, naive_epoch in (("z_corridor", "Naive"),
+                                ("z_corridor_speed_resid", "Naive"),
+                                ("frac_of_total_corridor", "Naive")):
         cells = []
         for area in config.AREAS:
             for band in [b for b in bandpower_bands(rows) if b != "total"]:

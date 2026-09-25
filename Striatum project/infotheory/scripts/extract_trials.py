@@ -9,7 +9,15 @@ structs never load -- and writes one npz per animal:
     spikes        (n_units, n_bins, n_trials) uint8, binarised at 10 ms
     unit_area     (n_units,)              area label per unit
     entry_ms      (n_trials,)             reward-zone entry, trial-relative
-    valid         (n_trials,)             trial usable: event found, window fits
+    valid         (n_trials,)             trial usable: MATLAB-good, event found, window fits
+
+Every array is on the RAW trial index -- the index of ``binned_spikes_trials``,
+``npx_times_trials``, ``trial_metrics``, the LFP band-power cubes and the
+disengagement point. ``trialData`` and ``zscored_lick_errors`` are MATLAB's
+good-filtered arrays, so they are read through the good-trial map from
+``striatum_lfp.trials``; a raw trial MATLAB dropped (1212's raw trial 102) keeps
+its slot with NaN features and ``valid = False``. Indexing both sides by one
+counter used to pair every later 1212 trial with the next trial's behaviour.
 
 Aligned to REWARD-ZONE ENTRY, restricted to the corridor. See `trials` for why
 the corridor restriction is not optional.
@@ -31,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 
 from striatum_info import trials as T  # noqa: E402
 from striatum_lfp import config as lfp_config  # noqa: E402
+from striatum_lfp import trials as lfp_trials  # noqa: E402
 
 WINDOW_MS = (-1000, 500)
 BIN_MS = 10
@@ -55,7 +64,7 @@ def unit_areas(h, pd, i: int, n_units: int) -> np.ndarray:
     return labels
 
 
-def run_animal(h, pd, i: int, mouse_label: str) -> dict | None:
+def run_animal(h, pd, i: int, mouse_label: str, matlab_good: np.ndarray) -> dict | None:
     t0 = time.time()
     td = h[pd["trialData"][i, 0]]
     bs = h[pd["binned_spikes_trials"][i, 0]]
@@ -64,30 +73,35 @@ def run_animal(h, pd, i: int, mouse_label: str) -> dict | None:
     tm = h[pd["trial_metrics"][i, 0]]
     success = np.asarray(tm["trial_success"]).ravel() if "trial_success" in tm else None
 
-    # The cell arrays do NOT always agree: 1212 and 409 carry one more entry in
-    # binned_spikes_trials and npx_times_trials than in trialData / n_trials /
-    # zscored_lick_errors. `n_trials` is the declared count and matches the
-    # behavioural side, so it wins; indexing spikes by their own length would
-    # silently read a trial that has no behaviour attached to it.
-    declared = int(np.asarray(h[pd["n_trials"][i, 0]]).ravel()[0])
-    lengths = {"n_trials": declared, "spikes": int(bs.shape[0]),
-               "world": int(td["trial_world"].shape[0]), "npx": int(npxs.shape[0])}
-    n_trials = min(lengths.values())
-    if len(set(lengths.values())) > 1:
-        print(f"  {mouse_label}: trial-count mismatch {lengths} -> using {n_trials}",
-              flush=True)
+    # Raw-indexed: spikes, npx times, trial_metrics. Good-indexed: trialData and
+    # zscored_lick_errors. The two differ exactly by MATLAB's good-trial filter,
+    # so the lengths must reconcile through it or the map is wrong.
+    n_trials = int(bs.shape[0])
+    good_raw = np.flatnonzero(matlab_good)
+    n_good = int(td["trial_world"].shape[0])
+    if matlab_good.size != n_trials or good_raw.size != n_good or zle.size != n_good:
+        raise ValueError(f"{mouse_label}: raw {n_trials} / mask {matlab_good.size} / "
+                         f"good {good_raw.size} vs trialData {n_good}, lick errors {zle.size}")
+    good_number = np.full(n_trials, -1)
+    good_number[good_raw] = np.arange(n_good)
     feats, spikes, entries, valid = [], [], [], []
     n_units = None
     for t in range(n_trials):
-        world = _cell(h, td["trial_world"][t, 0]).ravel()
-        pos = _cell(h, td["trial_position"][t, 0]).ravel()
-        tim = _cell(h, td["trial_times_zeroed"][t, 0]).ravel()
-        licks = _cell(h, td["trial_licks"][t, 0]).ravel()
+        k = int(good_number[t])
+        if k < 0:                                  # MATLAB dropped this trial
+            feats.append([np.nan] * len(T.FEATURE_NAMES))
+            entries.append(np.nan)
+            valid.append(False)
+            spikes.append(None)
+            continue
+        world = _cell(h, td["trial_world"][k, 0]).ravel()
+        pos = _cell(h, td["trial_position"][k, 0]).ravel()
+        tim = _cell(h, td["trial_times_zeroed"][k, 0]).ravel()
+        licks = _cell(h, td["trial_licks"][k, 0]).ravel()
         f = T.behavioural_features(
-            world, pos, tim, licks,
-            lick_error_z=float(zle[t]) if t < zle.size else np.nan,
+            world, pos, tim, licks, lick_error_z=float(zle[k]),
             success=float(success[t]) if success is not None and t < success.size else np.nan)
-        feats.append([f[k] for k in T.FEATURE_NAMES])
+        feats.append([f[k2] for k2 in T.FEATURE_NAMES])
 
         entry = T.reward_zone_entry(world, pos, tim)
         entries.append(np.nan if entry is None else entry)
@@ -144,9 +158,10 @@ def main() -> None:
         pd = h["preprocessed_data"]
         n = pd["trialData"].shape[0]
         ids = ch.mouse_ids
+        masks = lfp_trials.matlab_good_masks(ch)
         for i in range(n):
-            label = str(ids[i]) if i < len(ids) else f"index{i + 1}"
-            out = run_animal(h, pd, i, label)
+            label = str(ids[i])
+            out = run_animal(h, pd, i, label, masks[ids[i]])
             if out is None:
                 continue
             path = OUT_DIR / f"trials_{args.cohort}_{label}.npz"

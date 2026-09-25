@@ -24,7 +24,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from . import config, psi
+from . import config, psi, trials
 from .cohort import discover_lfp_files
 from .reader import DATASET
 
@@ -72,7 +72,8 @@ def read_trial_signals(z, cohort, *, min_samples: int,
                        min_channels: int = MIN_CHANNELS):
     """``(chans, {trial index: {(area, reference): signal}}, seconds)``.
 
-    Only the corridor samples of each good trial are read, and each read is
+    Only the corridor samples of each usable trial (good, engaged and covered:
+    ``trials.SessionTrials.usable``) are read, and each read is
     reduced to per-area signals immediately, so a whole session never sits in
     memory. Trials shorter than ``min_samples`` are skipped rather than padded.
     Returns an empty dict when the export is missing or nothing is long enough.
@@ -87,13 +88,13 @@ def read_trial_signals(z, cohort, *, min_samples: int,
     if not path.exists():
         return chans, {}, time.time() - t0
 
-    good = np.flatnonzero(z["good_trials"].astype(bool))
+    usable = trials.sessions_for(cohort.name)[mouse].with_data(z["good_trials"]).usable()
     starts, stops = z["corridor_start_sample"], z["trial_stop_sample"]
     per_trial: dict[int, dict] = {}
     with h5py.File(path, "r") as fh:
         dset = fh[DATASET]
         n_total = int(dset.shape[0])
-        for t in good:
+        for t in usable:
             a, b = int(starts[t]), min(int(stops[t]), n_total)
             if b - a < min_samples:
                 continue

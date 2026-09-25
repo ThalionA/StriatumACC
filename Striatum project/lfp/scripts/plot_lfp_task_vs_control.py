@@ -155,7 +155,7 @@ def main() -> None:
     for c, colour, name in (("task", TASK_C, "Task"), ("control", CTRL_C, "Control 1")):
         ev = load_arms("evolution", c)
         naive = hierarchical([r for r in ev if r["area"] == "DLS" and r["band"] == "theta"
-                              and r["epoch"] == "Trials 4-10"], ("area",), "z_corridor")
+                              and r["epoch"] == "Naive"], ("area",), "z_corridor")
         expert = hierarchical([r for r in ev if r["area"] == "DLS" and r["band"] == "theta"
                                and r["epoch"] == "Expert"], ("area",), "z_corridor")
         if ("DLS",) not in naive or ("DLS",) not in expert:

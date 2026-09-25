@@ -46,7 +46,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import figstyle  # noqa: E402
+from striatum_lfp import figstyle, trials  # noqa: E402
 from striatum_lfp.results_io import load_arms  # noqa: E402
 
 # Cohort key -> (legend label, colour). Colours are the ones the task-vs-control
@@ -144,7 +144,7 @@ def moving_figure(xkey: str, xlim: tuple[int, int], stem: str, title: str,
 
 
 def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
-    epochs = ("Trials 1-3", "Trials 4-10", "Intermediate", "Expert")
+    epochs = trials.EPOCHS
     per_cohort = {c: load_arms("evolution", c) for c, _, _ in COHORTS}
     if not any(per_cohort.values()):
         print(f"[plot] no evolution tables; skipping {stem}")

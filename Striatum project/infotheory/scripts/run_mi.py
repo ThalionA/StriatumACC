@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 
 from striatum_info import estimators as est  # noqa: E402
-from striatum_lfp import analysis, config as lfp_config  # noqa: E402
+from striatum_lfp import trials as lfp_trials  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 N_FEATURE_BINS = 2   # median split, matching MutualInformationStriatum_v2's mi_behav_bins
@@ -60,8 +60,8 @@ N_SHUFFLES = 50
 MIN_TRIALS = 8      # a 10-trial epoch gives 5 per bin at 2 bins
 
 
-def epoch_windows(lp, n_trials: int, valid: np.ndarray) -> dict[str, np.ndarray]:
-    """``{epoch: trial indices}`` — the project's standard THREE-epoch scheme.
+def epoch_windows(mouse: int, cohort: str, valid: np.ndarray) -> dict[str, np.ndarray]:
+    """``{epoch: raw trial indices}`` — the project's standard THREE-epoch scheme.
 
     Naive / Intermediate / Expert, ten trials each, learning-point relative
     (``project_cfg`` ``epoch_names``). Ten trials is thin for an information
@@ -74,13 +74,8 @@ def epoch_windows(lp, n_trials: int, valid: np.ndarray) -> dict[str, np.ndarray]
     matching is needed — and each epoch's bias is removed against its own
     shuffles anyway, which is what makes the comparison across epochs fair.
     """
-    usable = set(np.flatnonzero(valid).tolist())
-    out = {"All": np.array(sorted(usable))}
-    for name, tr in zip(("Naive", "Intermediate", "Expert"),
-                        analysis.epoch_indices(lp, n_trials)):
-        idx = np.asarray(tr, int) - 1
-        out[name] = np.array([t for t in idx if t in usable])
-    return out
+    session = lfp_trials.sessions_for(cohort)[mouse].with_data(valid)
+    return {"All": session.usable(), **session.epochs()}
 
 
 def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
@@ -93,9 +88,7 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
     valid = z["valid"].astype(bool)
     mouse = int(path.stem.split("_")[-1]) if path.stem.split("_")[-1].isdigit() else 0
 
-    ch = lfp_config.get_cohort(cohort)
-    lp = analysis.cohort_learning_points(ch).get(mouse)
-    windows = epoch_windows(lp, spikes.shape[2], valid)
+    windows = epoch_windows(mouse, cohort, valid)
     n_bins = spikes.shape[1]
     starts = np.arange(0, n_bins - POOL_WIN + 1, POOL_SHIFT)
     rng = np.random.default_rng(rng_seed)
@@ -183,7 +176,7 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
                 })
 
     used = sorted({r["epoch"] for r in unit_rows})
-    print(f"[mi] {cohort[:4]:<4} {mouse:>5}: epochs {used}, lp={lp}, "
+    print(f"[mi] {cohort[:4]:<4} {mouse:>5}: epochs {used}, lp={lfp_trials.sessions_for(cohort)[mouse].lp}, "
           f"{len(starts)} windows -> {len(unit_rows):5d} unit rows "
           f"({time.time() - t0:.0f}s)", flush=True)
     return tc_rows, unit_rows

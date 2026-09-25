@@ -37,7 +37,7 @@ from striatum_lfp import arms, config  # noqa: E402
 from striatum_lfp.results_io import load_arms  # noqa: E402
 
 MIN_PER_GROUP = 3
-NAIVE_EPOCH = "Trials 4-10"
+NAIVE_EPOCH = "Naive"            # trials.EPOCHS[0]: good trials 1-10
 
 
 def _mouse(row) -> int:

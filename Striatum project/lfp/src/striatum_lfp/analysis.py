@@ -1,7 +1,7 @@
 """Shared analysis layer: learning points, epoch windows, area aggregation.
 
 Every "across learning" statement in this project is plotted against the same
-axis -- a per-animal learning point and the four epoch windows around it. These
+axis -- a per-animal learning point and the epoch windows around it. These
 are ports of ``find_learning_points.m`` and ``epoch_indices.m`` rather than
 re-derivations, and ``tests/test_analysis.py`` checks the port against MATLAB's
 own logged learning points for all 16 animals.
@@ -18,9 +18,6 @@ LP_Z_THRESHOLD = -2.0
 LP_WINDOW = 10
 LP_MIN_CONSECUTIVE = 7
 TRIALS_PER_EPOCH = 10
-# CorridorVsDarkActivity.m:50 and SpatioTemporalActivityEvolution's {1:3, 4:10, ...}
-NAIVE_SPLIT = 3
-EPOCH_NAMES = ("Trials 1-3", "Trials 4-10", "Intermediate", "Expert")
 
 BIN_SIZE_CM = 5.0       # project_cfg cfg.bin_size_cm
 

@@ -40,7 +40,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, area_signals, config, psi  # noqa: E402
+from striatum_lfp import area_signals, config, psi, trials  # noqa: E402
 
 #: 2.048 s at 1 kHz -> 0.49 Hz bins, so theta (4-8 Hz) still holds ~9 of them.
 NPERSEG = 2048
@@ -48,7 +48,7 @@ MIN_SEGMENTS = 8
 MIN_CHANNELS = area_signals.MIN_CHANNELS
 BANDS = {"theta": (4.0, 8.0), "beta": (15.0, 30.0),
          "low_gamma": (30.0, 80.0), "high_gamma": (80.0, 150.0)}
-EPOCHS = ("All", "Trials 1-3", "Trials 4-10", "Intermediate", "Expert")
+EPOCHS = ("All", *trials.EPOCHS)
 
 
 def run_one(cache: Path, cohort_name: str) -> list[dict]:
@@ -63,27 +63,25 @@ def run_one(cache: Path, cohort_name: str) -> list[dict]:
     if not per_trial:
         print(f"[psi] {mouse}/{probe}: no trial long enough / export missing", flush=True)
         return []
-    lp = analysis.cohort_learning_points(ch).get(mouse)
-    good = np.flatnonzero(z["good_trials"].astype(bool))
-
-    n_trials = int(min(analysis.cohort_trial_counts(ch).get(mouse, len(good)), len(good)))
+    # Trials come from the trial layer (good, engaged, covered). PSI pools
+    # spectral segments, so a trial too short for one segment is simply absent.
+    session = trials.sessions_for(ch.name)[mouse]
     windows = {"All": np.array(sorted(per_trial))}
-    idx4 = analysis.epoch_indices(lp, n_trials, naive_split=analysis.NAIVE_SPLIT)
-    for name, tr in zip(analysis.EPOCH_NAMES, idx4):
-        windows[name] = np.array([t for t in (np.asarray(tr, int) - 1) if t in per_trial])
+    for name, raw in session.epochs().items():
+        windows[name] = np.array([t for t in raw if t in per_trial], int)
 
     rows: list[dict] = []
     for epoch in EPOCHS:
-        trials = windows.get(epoch, np.array([], int))
-        if trials.size == 0:
+        epoch_trials = windows.get(epoch, np.array([], int))
+        if epoch_trials.size == 0:
             continue
         for (a1, a2) in combinations(sorted(chans), 2):
             for ref in ("monopolar", "bipolar"):
                 # Pass the trials as SNIPPETS, not joined: a spectral window is
                 # never allowed to span two trials, whose phase relationship
                 # would be arbitrary.
-                x = [per_trial[t][(a1, ref)] for t in trials]
-                y = [per_trial[t][(a2, ref)] for t in trials]
+                x = [per_trial[t][(a1, ref)] for t in epoch_trials]
+                y = [per_trial[t][(a2, ref)] for t in epoch_trials]
                 if psi.count_segments(x, NPERSEG) < MIN_SEGMENTS:
                     continue
                 # The reported z is the JACKKNIFE one. A mismatched-trial
@@ -100,7 +98,7 @@ def run_one(cache: Path, cohort_name: str) -> list[dict]:
                         continue
                     rows.append({
                         "cohort": cohort_name, "mouse_id": mouse, "probe": probe,
-                        "learning_point": lp, "epoch": epoch, "n_trials": int(trials.size),
+                        "learning_point": session.lp, "epoch": epoch, "n_trials": int(epoch_trials.size),
                         "area_a": a1, "area_b": a2, "reference": ref, "band": band,
                         "n_ch_a": int(chans[a1].size), "n_ch_b": int(chans[a2].size),
                         **out,

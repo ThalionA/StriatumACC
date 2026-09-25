@@ -32,7 +32,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import config, distance  # noqa: E402
+from striatum_lfp import config, distance, trials  # noqa: E402
 
 SEP_BIN_UM = 100.0
 #: A class needs at least this many pairs in the matched range to be reported.
@@ -67,14 +67,16 @@ def run_one(path: Path, cohort_name: str) -> tuple[list[dict], list[dict]]:
     z = np.load(path, allow_pickle=False)
     mouse, probe = int(z["mouse_id"]), str(z["probe"])
     labels = area_labels(z)
-    good = z["good_trials"].astype(bool)
+    # Good, engaged (<= DP) and covered trials: `good_trials` alone is an
+    # alignment flag and would keep the disengaged tail of the session.
+    usable = trials.sessions_for(cohort_name)[mouse].with_data(z["good_trials"]).usable()
     depths = z["channel_depth_um"]
     bands = [str(b) for b in z["bands"]]
 
     by_bin: list[dict] = []
     matched: list[dict] = []
     for bi, band in enumerate(bands):
-        cube = z["corridor"][bi][:, :, good].astype(np.float64)
+        cube = z["corridor"][bi][:, :, usable].astype(np.float64)
         res = distance.pairwise_coupling(cube, depths, labels)
         if res.separation_um.size == 0:
             continue
@@ -105,7 +107,7 @@ def run_one(path: Path, cohort_name: str) -> tuple[list[dict], list[dict]]:
 
     n_lab = int(sum(1 for a in labels if a))
     print(f"[dist] {cohort_name[:4]:<4} {mouse}/{probe:9s} "
-          f"{n_lab:3d} labelled ch, {good.sum():3d} trials, "
+          f"{n_lab:3d} labelled ch, {usable.size:3d} trials, "
           f"{len(bands)} bands, {len(by_bin):4d} bins  {time.time() - t0:5.1f}s",
           flush=True)
     return by_bin, matched
