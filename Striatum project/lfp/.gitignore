@@ -39,3 +39,8 @@ results/lfp_arms_moving_reliability_control.csv
 !results/lfp_arms_behaviour_*.csv
 !results/lfp_group_contrast.csv
 !results/lfp_probe2_clock_audit.csv
+# Across-animal test tables (2026-09-25): small, and they carry every verdict.
+!results/lfp_arms_decoding_stats_*.csv
+!results/lfp_arms_cca_distance_stats_*.csv
+!results/lfp_psi_stats_*.csv
+!results/lfp_distance_stats_*.csv

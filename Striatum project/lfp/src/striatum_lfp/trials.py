@@ -9,10 +9,12 @@ neighbours' behaviour before this module existed:
   indexed this way, and so is the disengagement point (``change_point_mean`` is
   computed before ``ProcessStriatumTask.m`` filters anything).
 * **Good trials** -- raw trials whose corridor reward is non-empty, MATLAB's own
-  filter (``ProcessStriatumTask.m:94``). ``zscored_lick_errors`` and therefore the
-  learning point are numbered this way, and ``epoch_indices.m`` windows count
-  good trials. The mask is read back from ``corridorData.trial_reward``, so it is
-  MATLAB's rule, not a re-derivation.
+  filter (``ProcessStriatumTask.m:94``). ``trialData``, ``zscored_lick_errors`` and
+  therefore the learning point are numbered this way. The mask is read back from
+  ``corridorData.trial_reward``, so it is MATLAB's rule, not a re-derivation.
+  (MATLAB's own unit arrays are NOT: ``spatial_binned_fr_all`` is the first
+  ``n_trials`` RAW trials -- binned before the filter -- so for 1212 they sit one
+  trial off the behaviour after raw trial 102. Its epochs all fall before it.)
 * **Covered trials** -- raw trials the voltage export actually spans (407's stops
   26 min early; the cubes store at most 200 trials).
 

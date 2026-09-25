@@ -58,6 +58,35 @@ date; band power on a *vertical* bipolar derivation as primary with the
 as-exported signal (ch191 dropped) as sensitivity; group contrast primary test =
 Δlog10 + exact permutation, pre-registered before the re-run.
 
+**Progress (same day, branch `lfp-simplify`):**
+1. July code deleted (tag `lfp-july-archive`). `features.py` → `filtering.py`.
+2. One trial layer, `trials.SessionTrials`: MATLAB's own good mask (read back
+   from `corridorData.trial_reward`), LP on the good numbering, DP as a raw
+   trial number (NaN = no clip, as MATLAB), three epochs, windows dropped not
+   shortened. Every lfp/ and infotheory/ driver uses it; a guard test forbids
+   drivers building windows. infotheory's cache is now raw-indexed (1212 fixed).
+3. Signal layer. **Probe-2 clock settled by measurement**
+   (`scripts/audit_probe2_clock.py`, `results/lfp_probe2_clock_audit.csv`): the
+   probe-2 LFP is on probe 2's clock (LFP→MUA lag 0 ± 3 ms while the bundle
+   offset drifts 116→158 ms in 817) and the V1 bundle's VR times give all three
+   controls the same onset transient; **MATLAB's crop of control probe-2 UNITS
+   with probe 1's times is the misalignment** (not fixed here; flagged as a
+   separate task). Depths now in the unit convention (+20 µm); ch191 never in an
+   area; bipolar = vertical pairs (c, c+2) on raw voltage; coupling/PSI reads
+   mains-notched; `truncated_trials` against the export length (cube good flags
+   now equal MATLAB's mask in 28/29 sessions; 407 genuinely truncated).
+4. Statistics. `striatum_lfp.stats` (exact sign-flip / two-sample permutation,
+   floors, BH). Group contrast primary = `delta_log_corridor` (log of mean
+   linear power). Decoding now actually tested. CCA null permutes cube trials;
+   the within-area ceiling is gone. CC1-vs-distance is a within-animal slope.
+   PSI/distance tests moved into src. infotheory: 5-trial within-block null,
+   tie-safe splits in both arms, shared-feature contrasts, speed-confound floor.
+   **Open decision:** the spike-MI per-animal value is the median over units and
+   is exactly 0 in 13-15/16 animals; old Wilcoxon silently dropped the zeros.
+
+Not yet done: re-run (step 5) and docs (step 6). Every committed table and
+figure still predates all of the above.
+
 ## 2026-09-17 (b) — Direction of communication: nothing survives removing the far field
 
 The third question from 2026-09-09, asked with the phase-slope index because it
