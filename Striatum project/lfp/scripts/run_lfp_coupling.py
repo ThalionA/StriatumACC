@@ -109,6 +109,23 @@ def _epoch_rows(per_trial, epoch_trials, chans, base, sos_cache) -> list[dict]:
     areas = sorted(chans)
     joined = {(a, r): np.concatenate([per_trial[t][(a, r)] for t in epoch_trials])
               for a in areas for r in REFS}
+    # The calibration null, per cell: amplitude from the same trials re-paired
+    # so none meets itself (coupling.trial_derangement). Its p < 0.05 rate over
+    # cells is the false-positive rate on REAL LFP that the observed rate is read
+    # against -- computed here, on the same trials, not typed into a figure.
+    order = (coupling.trial_derangement(len(epoch_trials), seed=int(base["mouse_id"]))
+             if len(epoch_trials) > 1 else [0])     # one trial: the "null" is itself
+    deranged = {(a, r): np.concatenate([per_trial[epoch_trials[k]][(a, r)] for k in order])
+                for a in areas for r in REFS}
+
+    def pac(phase, amp_key, band_edges):
+        """Observed PAC with time-shift surrogates, plus the re-paired-trial null's p."""
+        amp = None if amp_key is None else joined[amp_key]
+        out = coupling.modulation_index_with_surrogates(
+            phase, amp, fs=config.FS, phase_band=THETA, amp_band=band_edges,
+            n_surrogates=N_SURROGATES, seed=int(base["mouse_id"]))
+        out["mi_corrected"] = out["mi"] - out["mi_surrogate_mean"]
+        return out
     for ref in REFS:
         for a1, a2 in combinations(areas, 2):
             for band, edges in SAME_BANDS.items():
@@ -120,21 +137,24 @@ def _epoch_rows(per_trial, epoch_trials, chans, base, sos_cache) -> list[dict]:
                                  x, y, sos_cache[band])})
         for area in areas:
             for band, edges in AMP_BANDS.items():
-                out = coupling.modulation_index_with_surrogates(
-                    joined[(area, ref)], None, fs=config.FS, phase_band=THETA,
-                    amp_band=edges, n_surrogates=N_SURROGATES, seed=int(base["mouse_id"]))
-                out["mi_corrected"] = out["mi"] - out["mi_surrogate_mean"]
+                out = pac(joined[(area, ref)], None, edges)
+                null = coupling.modulation_index_with_surrogates(
+                    joined[(area, ref)], deranged[(area, ref)], fs=config.FS,
+                    phase_band=THETA, amp_band=edges, n_surrogates=N_SURROGATES,
+                    seed=int(base["mouse_id"]))
                 rows.append({**base, "reference": ref, "measure": "pac_within",
-                             "band": band, "area_a": area, "area_b": area, **out})
+                             "band": band, "area_a": area, "area_b": area, **out,
+                             "p_trial_repaired_null": null["p"]})
         for a1, a2 in permutations(areas, 2):
             for band, edges in AMP_BANDS.items():
-                out = coupling.modulation_index_with_surrogates(
-                    joined[(a1, ref)], joined[(a2, ref)], fs=config.FS,
-                    phase_band=THETA, amp_band=edges,
-                    n_surrogates=N_SURROGATES, seed=int(base["mouse_id"]))
-                out["mi_corrected"] = out["mi"] - out["mi_surrogate_mean"]
+                out = pac(joined[(a1, ref)], (a2, ref), edges)
+                null = coupling.modulation_index_with_surrogates(
+                    joined[(a1, ref)], deranged[(a2, ref)], fs=config.FS,
+                    phase_band=THETA, amp_band=edges, n_surrogates=N_SURROGATES,
+                    seed=int(base["mouse_id"]))
                 rows.append({**base, "reference": ref, "measure": "pac_between",
-                             "band": band, "area_a": a1, "area_b": a2, **out})
+                             "band": band, "area_a": a1, "area_b": a2, **out,
+                             "p_trial_repaired_null": null["p"]})
     return rows
 
 

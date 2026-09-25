@@ -216,41 +216,45 @@ def fig_gini():
 
 # ------------------------------------------------------------------- 04 PAC --
 def fig_pac():
-    NULL_RATE, NULL_N = 7 / 96, 96
     fig, ax = plt.subplots(figsize=(9.5, 6))
-    groups, vals, cols = [], [], []
+    groups, vals, cols, nulls = [], [], [], []
     for measure, mlab in (("pac_within", "within area"), ("pac_between", "between areas")):
         for ref, rlab, c in (("monopolar", "monopolar", "#c6c2bb"),
                              ("bipolar", "bipolar\n(far field removed)", "#1c6b58")):
             rs = rows(LFP / "lfp_coupling_epochs_task.csv", epoch="All",
                       measure=measure, reference=ref)
             p = np.array([num(r, "p") for r in rs])
-            p = p[np.isfinite(p)]
+            p0 = np.array([num(r, "p_trial_repaired_null") for r in rs])
+            p, p0 = p[np.isfinite(p)], p0[np.isfinite(p0)]
             if not p.size:
                 continue
-            groups.append(f"{mlab}\n{rlab}"); vals.append(100 * (p < 0.05).mean()); cols.append(c)
+            groups.append(f"{mlab}\n{rlab}")
+            vals.append(100 * (p < 0.05).mean())
+            nulls.append(100 * (p0 < 0.05).mean() if p0.size else np.nan)
+            cols.append(c)
     x = np.arange(len(groups))
     ax.bar(x, vals, 0.62, color=cols, edgecolor="#444", linewidth=0.7)
     for xi, v in zip(x, vals):
         ax.text(xi, v + 1.6, f"{v:.0f}%", ha="center", fontweight="semibold")
-    ax.axhline(100 * NULL_RATE, color="#a94436", lw=2, ls="--",
-               label=f"calibrated null on REAL LFP: {100*NULL_RATE:.0f}%  (7/{NULL_N} cells)")
+    # The null is computed per cell by run_lfp_coupling.py on the same engaged
+    # trials (amplitude re-paired across trials), so it is like-for-like.
+    ax.scatter(x, nulls, marker="_", s=900, lw=2.5, color="#a94436", zorder=3,
+               label="calibrated null: same trials, amplitude re-paired across trials")
     ax.axhline(5, color=MUTED, lw=1, ls=":", label="nominal 5%")
     ax.set_xticks(x); ax.set_xticklabels(groups, fontsize=10.5)
     ax.set_ylabel("cells with significant theta–gamma coupling (%)")
     ax.set_ylim(0, 108)
-    ax.set_title("Theta–gamma coupling is real, and survives removing the far field",
+    ax.set_title("Theta–gamma coupling: observed vs calibrated-null rate of significant cells",
                  fontweight="semibold")
     ax.legend(frameon=False, loc="lower left", fontsize=10)
     ax.spines[["top", "right"]].set_visible(False)
     save(fig, "04_theta_gamma_coupling",
-         "Tort modulation index against a time-shift surrogate, whole session, task cohort. The null "
-         "was calibrated on REAL LFP, not synthetic: the amplitude series rebuilt from the SAME trials "
-         "in permuted order, so each trial's statistics, the concatenation boundaries and the session "
-         "drift all survive and only within-trial phase–amplitude pairing is destroyed. Bipolar is the "
-         "number to read — monopolar shares a field across the shank. Engaged trials only (clipped at "
-         "the disengagement point); clipping lowered the bipolar rates from 80% and 67%, so "
-         "disengaged trials had been inflating them. The 7% null was measured before clipping.")
+         "Tort modulation index against a time-shift surrogate, whole engaged session, task cohort. "
+         "The red mark is the rate on a calibration null computed per cell on the SAME trials "
+         "(amplitude re-paired so no trial meets itself): each trial's statistics, the concatenation "
+         "boundaries and the session drift survive; only within-trial phase–amplitude pairing is "
+         "destroyed. Cells are animal × area × band, so these rates are descriptive, not a test "
+         "across animals. Bipolar = vertical pairs one row apart.")
 
 
 # ------------------------------------------------------- 05 the learning null --

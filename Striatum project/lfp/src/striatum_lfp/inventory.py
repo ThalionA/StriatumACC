@@ -327,12 +327,16 @@ def coupling_envelope(path: Path, start: int, n_samples_win: int,
     smoothing pass is needed, and no complex copy of a multi-gigabyte block is
     ever allocated. ``channel_step`` subsamples channels; the statistic is a mean
     over channels, so a quarter of the probe is ample.
+
+    The block is mains-notched first, as every other band-power path is: 30-90
+    Hz contains 50 Hz, and in 1105 mains is 1097x the spectral shoulder, so an
+    un-notched envelope scored the mains amplitude, not the neural signal.
     """
-    from .bandpower import band_power_series
+    from .bandpower import apply_notches, band_power_series
     from .cohort import bin_mean
 
     with h5py.File(path, "r") as handle:
         block = np.asarray(handle[DATASET][start:start + n_samples_win, ::channel_step],
                            dtype=np.float64)
-    power = band_power_series(block, band, fs=fs)
+    power = band_power_series(apply_notches(block, fs=fs), band, fs=fs)
     return np.sqrt(bin_mean(power, int(fs * bin_ms / 1000)))

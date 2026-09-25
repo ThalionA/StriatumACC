@@ -174,7 +174,8 @@ def summarise(res: PairCoupling, *, bin_um: float = 100.0,
             rows.append(row)
     return rows
 
-def exact_matched_contrast(res: PairCoupling, *, min_pairs: int = 10) -> dict:
+def exact_matched_contrast(res: PairCoupling, *, min_pairs: int = 10,
+                           boundary: tuple[str, str] | None = None) -> dict:
     """Within minus across at EXACTLY equal separation, averaged over separations.
 
     Restricting both classes to a shared separation RANGE is not the same as
@@ -189,17 +190,28 @@ def exact_matched_contrast(res: PairCoupling, *, min_pairs: int = 10) -> dict:
     outright rather than modelled: compare the two classes only at IDENTICAL
     separation values, then average those differences. Separations are weighted
     equally, so a separation with many pairs cannot dominate.
+
+    ``boundary=(A, B)`` restricts the contrast to one boundary: across = A-B
+    pairs, within = pairs inside A or inside B. Pooled, a striatal DMS-DLS
+    boundary and a cortico-striatal one dilute each other, and the matched
+    separations mostly probe the nearer (striatal) one.
     """
     out: dict = {"n_separations": 0, "n_pairs_used": 0}
     if res.separation_um.size == 0:
         return out
+    within_cls, across_cls = res.same_area, ~res.same_area
+    if boundary is not None:
+        a_, b_ = boundary
+        ai, aj = res.area_i.astype(str), res.area_j.astype(str)
+        within_cls = res.same_area & np.isin(ai, boundary)
+        across_cls = ((ai == a_) & (aj == b_)) | ((ai == b_) & (aj == a_))
     diffs_raw: list[float] = []
     diffs_res: list[float] = []
     seps_used: list[float] = []
     n_used = 0
     for s in np.unique(res.separation_um):
         at = res.separation_um == s
-        w, a = at & res.same_area, at & ~res.same_area
+        w, a = at & within_cls, at & across_cls
         if w.sum() < min_pairs or a.sum() < min_pairs:
             continue
         diffs_raw.append(float(np.nanmean(res.r_raw[w]) - np.nanmean(res.r_raw[a])))
@@ -222,7 +234,8 @@ def exact_matched_contrast(res: PairCoupling, *, min_pairs: int = 10) -> dict:
     return out
 
 
-def contrast_stats(matched: list[dict], *, bands, field: str = "d_raw") -> list[dict]:
+def contrast_stats(matched: list[dict], *, bands, field: str = "d_raw",
+                   boundary: str = "all") -> list[dict]:
     """Within - across at identical separation, tested across animals, per band.
 
     An animal's probes are averaged first (the animal is the unit); cells with no
@@ -249,7 +262,7 @@ def contrast_stats(matched: list[dict], *, bands, field: str = "d_raw") -> list[
         sem = float(vals.std(ddof=1) / np.sqrt(n)) if n > 1 else np.nan
         half = float(t_dist.ppf(0.975, n - 1) * sem) if n > 1 else np.nan
         floor = stats.sign_flip_floor(n)
-        rows.append({"band": band, "field": field, "n_animals": n,
+        rows.append({"band": band, "boundary": boundary, "field": field, "n_animals": n,
                      "mean": float(vals.mean()), "sem": sem,
                      "ci95_low": float(vals.mean()) - half if n > 1 and sem > 0
                      else float(vals.mean()),

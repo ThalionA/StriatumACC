@@ -223,3 +223,14 @@ def test_phase_bins_partition_the_circle():
     phase = rng.uniform(-np.pi, np.pi, 200_000)
     amp = np.ones_like(phase)
     assert coupling.modulation_index(phase, amp) == pytest.approx(0.0, abs=1e-12)
+
+
+def test_trial_derangement_moves_every_trial():
+    for n in (2, 3, 10, 40):
+        order = coupling.trial_derangement(n, seed=n)
+        assert sorted(order) == list(range(n))
+        assert all(order[i] != i for i in range(n))
+
+
+def test_trial_derangement_is_reproducible():
+    assert coupling.trial_derangement(12, seed=3) == coupling.trial_derangement(12, seed=3)

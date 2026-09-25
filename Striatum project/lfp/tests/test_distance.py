@@ -265,3 +265,35 @@ def test_contrast_stats_skips_cells_without_matched_separations():
     rows[0]["n_separations"] = 0
     (r,) = distance.contrast_stats(rows, bands=("theta",))
     assert r["n_animals"] == 5
+
+
+# --- one boundary at a time (2026-09-25) --------------------------------------
+
+def _pairs(spec):
+    """PairCoupling from (area_i, area_j, separation, r) tuples, 12 copies each."""
+    rows = [s for s in spec for _ in range(12)]
+    ai = np.array([r[0] for r in rows], dtype=object)
+    aj = np.array([r[1] for r in rows], dtype=object)
+    sep = np.array([r[2] for r in rows], float)
+    r = np.array([r[3] for r in rows], float)
+    n = len(rows)
+    return distance.PairCoupling(np.arange(n), np.arange(n), sep, ai == aj, ai, aj, r, r)
+
+
+def test_contrast_can_be_restricted_to_one_boundary():
+    """An area term at the DLS-ACC boundary and none at DMS-DLS: pooled, the two
+    dilute each other; split, each boundary reports its own difference."""
+    res = _pairs([("DMS", "DMS", 200, 0.5), ("DLS", "DLS", 200, 0.5), ("ACC", "ACC", 200, 0.5),
+                  ("DMS", "DLS", 200, 0.5),               # no boundary effect
+                  ("DLS", "ACC", 200, 0.3)])              # boundary effect of 0.2
+    striatal = distance.exact_matched_contrast(res, min_pairs=10, boundary=("DMS", "DLS"))
+    cortical = distance.exact_matched_contrast(res, min_pairs=10, boundary=("DLS", "ACC"))
+    assert striatal["d_raw"] == pytest.approx(0.0)
+    assert cortical["d_raw"] == pytest.approx(0.2)
+
+
+def test_boundary_order_does_not_matter():
+    res = _pairs([("DLS", "DLS", 200, 0.5), ("ACC", "ACC", 200, 0.5), ("ACC", "DLS", 200, 0.3)])
+    a = distance.exact_matched_contrast(res, min_pairs=10, boundary=("DLS", "ACC"))
+    b = distance.exact_matched_contrast(res, min_pairs=10, boundary=("ACC", "DLS"))
+    assert a["d_raw"] == pytest.approx(b["d_raw"]) == pytest.approx(0.2)

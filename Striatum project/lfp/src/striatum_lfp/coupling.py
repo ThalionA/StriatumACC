@@ -197,3 +197,22 @@ def modulation_index_with_surrogates(phase_signal: np.ndarray,
         "p": float(p),
         "n_surrogates": int(surr.size),
     }
+
+
+def trial_derangement(n: int, seed: int = 0) -> list[int]:
+    """A permutation of ``range(n)`` that moves every trial (a derangement).
+
+    The calibration null for PAC on concatenated trials: phase from trials in
+    order, amplitude from the SAME trials re-paired so no trial meets itself.
+    Each trial's statistics, the concatenation boundaries and the session's slow
+    drift all survive; only the within-trial phase-amplitude pairing is gone.
+    The fraction of cells this null calls significant is the real false-positive
+    rate the observed rate must be read against.
+    """
+    if n < 2:
+        raise ValueError("a derangement needs at least two trials")
+    rng = np.random.default_rng(seed)
+    while True:
+        order = rng.permutation(n)
+        if np.all(order != np.arange(n)):
+            return [int(i) for i in order]

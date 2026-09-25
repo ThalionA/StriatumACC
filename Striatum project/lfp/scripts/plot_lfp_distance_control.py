@@ -52,7 +52,7 @@ def _load(name: str, cohort: str) -> list[dict]:
     for r in rows:
         for k, v in r.items():
             if k in ("cohort", "probe", "band", "pair_class", "field", "reachable",
-                     "survives_fdr"):
+                     "survives_fdr", "boundary"):
                 continue
             try:
                 r[k] = float(v)
@@ -101,7 +101,12 @@ def main() -> None:
     for ci, (key, label, _) in enumerate(COHORTS):
         by_bin = _load("distance_control", key)
         matched = _load("distance_matched", key)
-        tested = {r["band"]: r for r in _load("distance_stats", key) if r["field"] == "d_raw"}
+        stats_rows = _load("distance_stats", key)
+        tested = {r["band"]: r for r in stats_rows
+                  if r["field"] == "d_raw" and r.get("boundary", "all") == "all"}
+        matched = [r for r in matched if r.get("boundary", "all") == "all"]
+        per_boundary = [r for r in stats_rows
+                        if r["field"] == "d_raw" and r.get("boundary", "all") != "all"]
         if not by_bin:
             axes[0][ci].axis("off")
             axes[1][ci].axis("off")
@@ -150,6 +155,11 @@ def main() -> None:
             ax.text(bi, max(st["ci95_high"], 0) + 0.012, mark, ha="center",
                     fontsize=9 if mark == "*" else 6.5, color="0.25")
             summary_lines.append(f"{label}:")
+            for st in per_boundary:
+                summary_lines.append(
+                    f"   boundary {st['boundary']:9s} {st['band']:11s} within − across = "
+                    f"{st['mean']:+.4f}, 95% CI [{st['ci95_low']:+.4f}, {st['ci95_high']:+.4f}]"
+                    f" (N = {int(st['n_animals'])}, p_FDR = {st['p_fdr']:.3f})")
             for bi in xs:
                 st = tested[BANDS[bi]]
                 verdict = (f"sign-flip p = {st['p_raw']:.3f}, p_FDR = {st['p_fdr']:.3f}"

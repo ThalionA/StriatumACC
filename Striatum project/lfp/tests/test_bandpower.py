@@ -260,18 +260,45 @@ def test_truncated_trials_none_when_the_session_fits():
                                           crop_start0=0).any()
 
 
-# --- coupling envelope now reuses band_power_series (dedup, 2026-08-28) -----
+# --- the file-identity envelope ----------------------------------------------
 
-def test_coupling_envelope_equals_binned_band_power_root():
-    """The refactor must not change the statistic, only where it is defined."""
+def _voltage_file(tmp_path, data):
+    import h5py
+    from striatum_lfp.reader import DATASET
+
+    path = tmp_path / "v.mat"
+    with h5py.File(path, "w") as fh:
+        fh.create_dataset(DATASET, data=data.astype(np.float32))
+    return path
+
+
+def test_coupling_envelope_is_the_notched_binned_band_power_root(tmp_path):
+    from striatum_lfp import inventory
     from striatum_lfp.cohort import bin_mean
 
     rng = np.random.default_rng(0)
     block = rng.normal(size=(5_000, 8))
-    power = bandpower.band_power_series(block, (30.0, 90.0), fs=1000)
-    expected = np.sqrt(bin_mean(power, 100))
-    assert expected.shape == (50, 8)
-    assert (expected >= 0).all()
+    env = inventory.coupling_envelope(_voltage_file(tmp_path, block), 0, 5_000,
+                                      channel_step=1)
+    expected = np.sqrt(bin_mean(bandpower.band_power_series(
+        bandpower.apply_notches(block.astype(np.float32).astype(np.float64)),
+        (30.0, 90.0), fs=1000), 100))
+    np.testing.assert_allclose(env, expected, rtol=1e-6)
+
+
+def test_coupling_envelope_does_not_follow_mains(tmp_path):
+    """30-90 Hz contains 50 Hz. Mains swinging slowly in amplitude (1105's is
+    1097x the shoulder) must not drive the envelope the identity test scores."""
+    from striatum_lfp import inventory
+
+    rng = np.random.default_rng(1)
+    t = np.arange(20_000) / 1000
+    mains = (1 + np.sin(2 * np.pi * 0.2 * t)) * 20 * np.sin(2 * np.pi * 50 * t)
+    block = rng.normal(size=(20_000, 4)) + mains[:, None]
+    env = inventory.coupling_envelope(_voltage_file(tmp_path, block), 0, 20_000,
+                                      channel_step=1).mean(axis=1)
+    swing = 1 + np.sin(2 * np.pi * 0.2 * (np.arange(env.size) * 0.1 + 0.05))
+    assert abs(np.corrcoef(env[5:-5], swing[5:-5])[0, 1]) < 0.3
 
 
 def test_band_power_series_uses_the_shared_sos_designer():

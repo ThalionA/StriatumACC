@@ -26,6 +26,7 @@ import argparse
 import csv
 import sys
 import time
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
@@ -86,7 +87,7 @@ def run_one(path: Path, cohort_name: str) -> tuple[list[dict], list[dict]]:
 
         # The result: within minus across at IDENTICAL separation. A shared
         # separation RANGE is not enough -- see exact_matched_contrast's note.
-        row = {**tag}
+        row = {**tag, "boundary": "all"}
         row.update(distance.exact_matched_contrast(res, min_pairs=MIN_PAIRS))
         # Kept alongside so the confound stays visible rather than being quietly
         # corrected away: the range-restricted numbers and how mismatched the
@@ -105,6 +106,13 @@ def run_one(path: Path, cohort_name: str) -> tuple[list[dict], list[dict]]:
             row["range_sep_imbalance_um"] = (row["range_mean_sep_within_um"]
                                              - row["range_mean_sep_across_um"])
         matched.append(row)
+        # ...and one boundary at a time, so a striatal and a cortico-striatal
+        # boundary cannot dilute each other in the pooled number.
+        present = sorted({str(x) for x in np.concatenate([res.area_i, res.area_j])} - {""})
+        for pair in combinations(present, 2):
+            one = distance.exact_matched_contrast(res, min_pairs=MIN_PAIRS, boundary=pair)
+            if one.get("n_separations", 0):
+                matched.append({**tag, "boundary": "-".join(pair), **one})
 
     n_lab = int(sum(1 for a in labels if a))
     print(f"[dist] {cohort_name[:4]:<4} {mouse}/{probe:9s} "
@@ -154,10 +162,13 @@ def main() -> None:
     bands = list(dict.fromkeys(r["band"] for r in matched))
     contrast = [{"cohort": args.cohort, **r}
                 for field in ("d_raw", "d_residual")
-                for r in distance.contrast_stats(matched, bands=bands, field=field)]
+                for boundary in dict.fromkeys(r["boundary"] for r in matched)
+                for r in distance.contrast_stats(
+                    [m for m in matched if m["boundary"] == boundary],
+                    bands=bands, field=field, boundary=boundary)]
     write(contrast, config.RESULTS_DIR / f"lfp_distance_stats_{args.cohort}.csv")
 
-    usable = [r for r in matched if r.get("n_separations", 0) > 0]
+    usable = [r for r in matched if r.get("n_separations", 0) > 0 and r["boundary"] == "all"]
     if not usable:
         return
     d_raw = np.array([r["d_raw"] for r in usable])
