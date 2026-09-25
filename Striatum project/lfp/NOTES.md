@@ -84,8 +84,27 @@ as-exported signal (ch191 dropped) as sensitivity; group contrast primary test =
    **Open decision:** the spike-MI per-animal value is the median over units and
    is exactly 0 in 13-15/16 animals; old Wilcoxon silently dropped the zeros.
 
-Not yet done: re-run (step 5) and docs (step 6). Every committed table and
-figure still predates all of the above.
+5. Every other flagged issue fixed in code (Theo: "fix all the issues"):
+   MATLAB `probe2_on_probe1_clock.m` (control probe-2 units onto probe 1's clock
+   through the shared VR frames; tested) used by both organisers;
+   `ProcessStriatum{Task,Control}.m` now filter corridorData/darkData too and
+   save `good_trials` -- before, lick errors (so the LP) and the spatial unit
+   arrays were the first n_trials RAW trials (1212, 409 only); Python readers
+   accept both product generations. Spike MI averages ACTIVE units (the median
+   was 0 in 13-15/16 animals). Identity envelope notched. PAC calibration null
+   computed per cell (`p_trial_repaired_null`) instead of a typed-in 7/96.
+   Distance contrast per boundary (only DMS-DLS is testable by exact matching;
+   ACC is too far). Speed slope from within-trial variation. Depth panel and
+   the units join computed/joined properly. Last dark bin closed as histcounts.
+   Per-trial PAC on a fixed 4 s. De-duplication (CSV writer, --cohort, area
+   floor = 5 everywhere, save_pair/colours). `regen_chain.sh` stops on failure
+   and runs IntegratedAll_v1.
+   Left as is, deliberately: the one-VR-frame lag (shared with the units, so
+   like-for-like) and controls taking the task-average LP (MATLAB's convention;
+   no yoked-partner map exists).
+
+Not yet done: MATLAB regeneration, the LFP re-run (step 5) and docs (step 6).
+Every committed table and figure still predates all of the above.
 
 ## 2026-09-17 (b) — Direction of communication: nothing survives removing the far field
 
