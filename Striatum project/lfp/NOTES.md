@@ -1,5 +1,63 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-25 — Soundness review before simplifying: most headline claims are at risk
+
+Agent-written review (four independent reviewers on 2d1fc3f, key items re-measured
+by the main session). Nothing was re-run on real data; every number is from the
+committed tables or synthetic known-answer scripts. **Treat the claims below as
+UNDER REVIEW until the fixed pipeline re-runs.** Branch `lfp-simplify`.
+
+Note: `main` had been left 28 commits behind `meeting-2026-08-28-figures`; it was
+fast-forwarded to it (local only) on 2026-09-25.
+
+**Claims at risk**
+- *DLS theta task ≠ control* — passes only with the trials 4-10 baseline and no
+  DP rule. Dropping the two animals whose Expert window is past DP (418; control
+  1205, DP = 18) → p_FDR 0.18-0.40. NOTES 08-28 "also survives the speed control"
+  was false even then (speed-resid p_FDR 0.0508, `differs=False`).
+- *Decoding beats its null in every striatal/ACC cell (BH-FDR)* — no committed
+  code runs that test; `plot_lfp_arms.py:175` prints it anyway.
+- *Reliability gap is behavioural* — never tested; control 407 runs stereotypically
+  (speed split-half 0.935) yet DMS beta reliability −0.03; task 624/731/822 run at
+  control speed and reach 0.53-0.74.
+- *No direction survives removing the far field (PSI)* — the "bipolar" pairs are
+  same-row (depth = (c//2)*20, so depth-sorted neighbours share a row: 0 µm
+  vertical, ~32 µm lateral), 13-15 % sign-flipped by unstable argsort, and
+  `area_signals` never notches mains (55-96 % of low-gamma power in 1105).
+- *Coupling is distance and nothing else* — theta CI ≈ [−0.21, +0.09] cannot
+  exclude an area term of ~0.1; matched separations only probe DMS/DLS.
+- *PAC is real, 7 % null vs 71 %* — the 7 % is a hard-coded constant measured
+  before DP clipping (`presentations/make_meeting_figures.py:217`).
+- *infotheory: band power carries information beyond speed* — the label shuffle
+  is global, so shared slow drift reads as information (synthetic: 95-101 %
+  "survives speed" from drift alone), and speed is conditioned on a 2-bin split.
+- Survives review: PAC does not change with learning (robust to count and
+  reference); decoding CV and circular-shift null; LP/epoch ports vs MATLAB;
+  filters, overlap-save, notch in the band-power cubes; animal as unit.
+
+**Data-path defects (confirmed)**
+1. Control probe-2 clock: V1-bundle `VR_times_synched` is 6-48 ms (513) and
+   116-159 ms (817) off probe 1's; task bundles identical. Which side is right is
+   untested (needs a 1 ms lag scan of probe-2 LFP vs V1 MUA).
+2. `validate_lfp_bandpower.py` compares Python with Python — the "0.0 ms" is circular.
+3. Exports are already CMR'd (channel median exactly 0 in 42 % of samples, 822);
+   ch191 (probe reference, SD 13.7× median) is binned as tissue in 11 area signals.
+4. `truncated_trials` fires on the last trial of every session by rounding
+   (compare against `n_lfp − crop_start0`, not the crop).
+5. 1212 raw trial 102 is non-good; infotheory pairs 52-53 trials with the NEXT
+   trial's behaviour (raw vs good-filtered index).
+6. LFP depths 0-3820 µm vs unit depths 20-3840 µm — area boundaries 2 channels off.
+7. DP is applied only in coupling and infotheory; arms, group contrast, PSI and
+   distance ignore it. MATLAB treats NaN DP as "no clip" (`min([cp, n])`).
+8. Three epoch schemes coexist (4-window 3/7/10/10 in arms + PSI; 4-10 vs Expert
+   in the contrast; 3-window in coupling/MI) — "one epoch definition everywhere"
+   is not yet true.
+
+**Decisions (Theo, 2026-09-25):** delete the July code (git tag); split NOTES by
+date; band power on a *vertical* bipolar derivation as primary with the
+as-exported signal (ch191 dropped) as sensitivity; group contrast primary test =
+Δlog10 + exact permutation, pre-registered before the re-run.
+
 ## 2026-09-17 (b) — Direction of communication: nothing survives removing the far field
 
 The third question from 2026-09-09, asked with the phase-slope index because it
