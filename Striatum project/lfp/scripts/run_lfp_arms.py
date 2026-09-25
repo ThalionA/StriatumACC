@@ -45,6 +45,31 @@ FIRST_N_TRIALS = 20
 
 
 MIN_SITES = config.DEFAULT.min_sites          # 5 channels per area
+DEPTH_PANEL_BAND = "low_gamma"               # channel x trial reliability image
+DEPTH_PANEL_TRIALS = 100
+
+
+def write_depth_panel(z, usable, lp, cohort_name: str) -> None:
+    """Channel x trial moving reliability for one file, for the depth figure.
+
+    The LFP analogue of the neurons x trials ``imagesc(avg_corrs)`` panel in
+    ProcessStriatumTask.m:997. Computed here, not in the plotting script, and
+    saved as results/lfp_arms_moving_depth_<cohort>/<mouse>_<probe>.npz.
+    """
+    bands = [str(b) for b in z["bands"]]
+    keep = usable[:DEPTH_PANEL_TRIALS]              # x axis = good-trial number
+    cube = log_power(z["corridor"][bands.index(DEPTH_PANEL_BAND)][:, :, keep]
+                     .astype(np.float64))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        rel = arms.moving_window_reliability(cube)
+    out = config.RESULTS_DIR / f"lfp_arms_moving_depth_{cohort_name}"
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        out / f"{int(z['mouse_id'])}_{z['probe']}.npz", reliability=rel,
+        channel_depth_um=z["channel_depth_um"], band=DEPTH_PANEL_BAND,
+        learning_point=-1 if lp is None else lp, n_trials=keep.size,
+        **{f"is_{a.lower()}": z[f"is_{a.lower()}"] for a in config.AREAS})
 N_CCA_SHUFFLES = 20
 BIN_CM = analysis.BIN_SIZE_CM
 
@@ -249,6 +274,8 @@ def analyse_one(item) -> dict[str, list[dict]]:
                     "null_r2_median": float(np.nanmedian(null_r2)),
                     "chance_mae_bins": float(np.mean(np.abs(y - np.mean(y)))),
                 })
+
+    write_depth_panel(z, usable, lp, cohort_name)
 
     # --- 0. behaviour: how stereotyped is the traversal itself? --------------
     # Load-bearing, not decorative. The LFP spatial profile largely tracks the

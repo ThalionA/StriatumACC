@@ -133,6 +133,15 @@ def test_dark_segments_are_50_bins_of_100_ms():
     assert segs[-1] == (4_900, 4_999)
 
 
+def test_the_last_dark_bin_includes_its_closing_edge_as_histcounts_does():
+    """histcounts(1:n, 1:100:5001) closes the LAST bin, so 1-based sample 5001
+    (0-based 5000) lands in bin 50: 101 samples when the dark period is long
+    enough. Every other bin is half-open."""
+    segs = bandpower.dark_bin_segments(n_dark_samples=8_000)
+    assert segs[-1] == (4_900, 5_000)
+    assert segs[-2] == (4_800, 4_899)
+
+
 def test_dark_segments_stop_at_a_short_dark_period():
     segs = bandpower.dark_bin_segments(n_dark_samples=250)
     assert segs[0] == (0, 99) and segs[1] == (100, 199)

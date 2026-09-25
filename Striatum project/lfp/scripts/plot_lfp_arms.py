@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, config, trials  # noqa: E402
+from striatum_lfp import config, trials  # noqa: E402
 from striatum_lfp.results_io import hierarchical, load_arms as load  # noqa: E402
 from striatum_lfp.figstyle import (  # noqa: E402
     AREA_COLOUR, AREA_ORDER, BAND_LABEL, PLOT_BANDS, save_pair,
@@ -419,31 +419,23 @@ def plot_moving_reliability_absolute(rows, stem="lfp_reliability_moving_session"
     save_pair(fig, stem)
 
 
-def plot_moving_reliability_depth(cohort_name="task",
-                                  stem="lfp_reliability_moving_depth", band="low_gamma"):
+def plot_moving_reliability_depth(cohort_name="task", stem="lfp_reliability_moving_depth"):
     """Per-file depth x trial reliability -- the LFP analogue of the neurons x trials
-    ``imagesc(avg_corrs)`` panel in ProcessStriatumTask.m:997."""
-    from striatum_lfp import arms
-
-    ch = config.get_cohort(cohort_name)
-    files = sorted((config.RESULTS_DIR / f"lfp_band_trials_{cohort_name}").glob("*.npz"))
+    ``imagesc(avg_corrs)`` panel in ProcessStriatumTask.m:997. Draws the matrices
+    run_lfp_arms.py saves; computes nothing."""
+    files = sorted((config.RESULTS_DIR / f"lfp_arms_moving_depth_{cohort_name}").glob("*.npz"))
     if not files:
         return
     ncol = 6
     nrow = int(np.ceil(len(files) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.0 * ncol, 2.7 * nrow), squeeze=False)
-    sessions = trials.sessions_for(ch.name)
     for k, path in enumerate(files):
         ax = axes[k // ncol][k % ncol]
         z = np.load(path, allow_pickle=False)
-        mouse, probe = int(z["mouse_id"]), str(z["probe"])
-        bands = [str(b) for b in z["bands"]]
-        session = sessions[mouse].with_data(z["good_trials"])
-        usable = session.usable()[:100]        # x axis = good-trial number
-        n_keep = usable.size
-        cube = analysis.log_power(z["corridor"][bands.index(band)][:, :, usable]
-                                  .astype(float))
-        rel = arms.moving_window_reliability(cube)
+        mouse, probe = path.stem.split("_", 1)
+        rel = z["reliability"]
+        n_keep = int(z["n_trials"])
+        band = str(z["band"])
         im = ax.imshow(rel, aspect="auto", cmap="magma", vmin=-0.2, vmax=0.8,
                        extent=(0.5, n_keep + 0.5, z["channel_depth_um"].max(), 0),
                        interpolation="nearest")
@@ -456,7 +448,7 @@ def plot_moving_reliability_depth(cohort_name="task",
                     color=AREA_COLOUR[area])
             ax.text(n_keep * 0.03, (d.min() + d.max()) / 2, area, fontsize=5.5,
                     color=AREA_COLOUR[area], va="center", fontweight="bold")
-        lp = session.lp
+        lp = int(z["learning_point"]) if int(z["learning_point"]) > 0 else None
         if lp and lp <= n_keep:
             ax.axvline(lp, color="#39ff14", lw=1.0)
         ax.set_title(f"{mouse}{'·v1' if probe == 'visual' else ''}", fontsize=8)
@@ -478,75 +470,83 @@ def plot_moving_reliability_depth(cohort_name="task",
 def plot_moving_vs_units(cohort_name="task", stem="lfp_reliability_moving_vs_units"):
     """The LFP moving metric beside the single-unit one, same window, same epochs.
 
-    ``figures/stability_by_animal.csv`` is written by IntegratedAll_v1 from exactly
-    this statistic on exactly this 5-trial window, so the two are directly
-    comparable. Both are plotted as observed minus their own trial-shuffled
-    control, which removes the part of the correlation that any two trials of that
-    signal would share.
+    ``figures/stability_by_animal.csv`` is written by IntegratedAll_v1 from this
+    statistic on this 5-trial window. Like for like means the same ANIMALS too:
+    its ``animal`` column is the position in the organiser's list, so it is
+    mapped to the mouse id and only (mouse, area, epoch) cells present in BOTH
+    tables are compared (IntegratedAll_v1 skips non-learners; the LFP arm does
+    not). Raw reliability is plotted with each signal's own trial shuffle: the
+    difference measures drift, not single-trial reliability, and a stationary,
+    perfectly reliable profile scores ~0 on it.
     """
     lfp_path = config.RESULTS_DIR / f"lfp_arms_moving_reliability_epochs_{cohort_name}.csv"
-    unit_path = Path(config.PKG_DIR).parent / "figures" / "stability_by_animal.csv"
+    unit_path = config.STABILITY_BY_ANIMAL_CSV
     if not lfp_path.exists() or not unit_path.exists():
         print("[plot] moving-vs-units needs both tables; skipping")
         return
+    ids = config.get_cohort(cohort_name).mouse_ids
     with lfp_path.open() as fh:
         lfp = list(csv.DictReader(fh))
     with unit_path.open() as fh:
         want = "Task" if cohort_name == "task" else "Control 1"
-        units = [r for r in csv.DictReader(fh) if r["group"].startswith(want)]
+        units = [dict(r, mouse=str(ids[int(r["animal"]) - 1]))
+                 for r in csv.DictReader(fh) if r["group"].startswith(want)]
+    for r in lfp:
+        r["mouse"] = str(r["animal"])
+    unit_cells = {(r["mouse"], r["area"], r["epoch"]) for r in units}
 
-    epochs3 = EPOCHS
-    areas = [a for a in AREA_ORDER if any(r["area"] == a for r in lfp)]
-    fig, axes = plt.subplots(1, len(areas), figsize=(2.5 * len(areas), 4.2),
+    areas = [a for a in AREA_ORDER if any(r["area"] == a for r in lfp)
+             and any(c[1] == a for c in unit_cells)]
+    fig, axes = plt.subplots(1, len(areas), figsize=(2.6 * len(areas), 4.4),
                              sharey=True, squeeze=False)
 
-    def agg(rows, pred):
+    def agg(rows, pred, field):
         out = {}
-        for ep in epochs3:
-            vals = [float(r["obs_minus_shuffle"]) for r in rows
-                    if r["epoch"] == ep and pred(r)
-                    and r["obs_minus_shuffle"] not in ("", "None")]
+        for ep in EPOCHS:
+            vals = [float(r[field]) for r in rows
+                    if r["epoch"] == ep and pred(r) and r[field] not in ("", "None")
+                    and (r["mouse"], r["area"], ep) in unit_cells]
             vals = [v for v in vals if np.isfinite(v)]
             if len(vals) >= 2:
                 out[ep] = (float(np.mean(vals)),
                            float(np.std(vals, ddof=1) / np.sqrt(len(vals))), len(vals))
         return out
 
-    x = np.arange(len(epochs3))
+    def draw(ax, stats_by_epoch, **kw):
+        ax.errorbar(x, [stats_by_epoch.get(e, (np.nan,) * 3)[0] for e in EPOCHS],
+                    yerr=[stats_by_epoch.get(e, (np.nan,) * 3)[1] for e in EPOCHS], **kw)
+
+    x = np.arange(len(EPOCHS))
     for ai, area in enumerate(areas):
         ax = axes[0][ai]
-        u = agg(units, lambda r: r["area"] == area)
+        u = agg(units, lambda r: r["area"] == area, "reliability")
         if u:
-            ax.errorbar(x, [u.get(e, (np.nan,) * 3)[0] for e in epochs3],
-                        yerr=[u.get(e, (np.nan,) * 3)[1] for e in epochs3],
-                        marker="s", ms=6, lw=2.2, capsize=3, color="k",
-                        label=f"single units (N={max(v[2] for v in u.values())})")
+            n = max(v[2] for v in u.values())
+            draw(ax, u, marker="s", ms=6, lw=2.2, capsize=3, color="k",
+                 label=f"single units (N={n})")
+            draw(ax, agg(units, lambda r: r["area"] == area, "shuffle"),
+                 lw=1.0, ls="--", color="k", label="units, trial shuffle")
         for band in PLOT_BANDS:
-            b = agg(lfp, lambda r, band=band: r["area"] == area and r["band"] == band)
+            def same(r, band=band):
+                return r["area"] == area and r["band"] == band
+            b = agg(lfp, same, "reliability")
             if not b:
                 continue
-            ax.errorbar(x, [b.get(e, (np.nan,) * 3)[0] for e in epochs3],
-                        yerr=[b.get(e, (np.nan,) * 3)[1] for e in epochs3],
-                        marker="o", ms=4, lw=1.2, capsize=2, alpha=0.9,
-                        label=f"LFP {band}")
+            draw(ax, b, marker="o", ms=4, lw=1.2, capsize=2, alpha=0.9, label=f"LFP {band}")
         ax.axhline(0, color="0.5", lw=0.7, ls=":")
         ax.set_xticks(x)
-        ax.set_xticklabels(epochs3, rotation=30, fontsize=7, ha="right")
+        ax.set_xticklabels(EPOCHS, rotation=30, fontsize=7, ha="right")
         ax.set_title(area, fontsize=10, color=AREA_COLOUR[area], fontweight="bold")
         if ai == 0:
-            ax.set_ylabel("reliability above its own trial-shuffled control")
-        if not u:
-            ax.text(0.5, 0.06, "no unit reference:\nDG is excluded from the\n"
-                    "single-unit figures", transform=ax.transAxes, ha="center",
-                    fontsize=6, color="0.45")
-        if ai == 0:
-            ax.legend(fontsize=6, loc="upper left")
+            ax.set_ylabel("moving reliability (raw)")
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=len(labels), fontsize=7,
+               frameon=False)
     fig.suptitle("Single-trial spatial reliability: LFP band power vs single units\n"
-                 "identical statistic, identical 5-trial centred window, identical "
-                 "epochs and animals (units from figures/stability_by_animal.csv)\n"
-                 "LFP single-trial structure is real but several-fold weaker than "
-                 "the spiking it sits in", fontsize=10)
-    fig.tight_layout(rect=(0, 0, 1, 0.88))
+                 "same statistic, same 5-trial window and epochs, only (mouse, area, epoch) "
+                 "cells present in both tables; dashed = units' trial shuffle",
+                 fontsize=10)
+    fig.tight_layout(rect=(0, 0.07, 1, 0.9))
     save_pair(fig, stem)
 
 

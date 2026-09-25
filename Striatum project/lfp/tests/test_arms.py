@@ -225,7 +225,7 @@ def test_residualise_removes_a_pure_covariate_effect():
     speed = np.linspace(1, 3, 40).reshape(8, 5)
     cube = (2.5 * speed + 1.0)[None, :, :] * np.ones((3, 1, 1))
     resid = arms.residualise_on(cube, speed)
-    np.testing.assert_allclose(resid, 0.0, atol=1e-9)
+    assert np.ptp(resid) < 1e-9          # nothing left to vary
 
 
 def test_residualise_keeps_the_part_the_covariate_cannot_explain():
@@ -235,7 +235,24 @@ def test_residualise_keeps_the_part_the_covariate_cannot_explain():
     cube = (speed + signal)[None]
     resid = arms.residualise_on(cube, speed)
     assert np.corrcoef(resid[0].ravel(), signal.ravel())[0, 1] > 0.7
-    assert abs(np.corrcoef(resid[0].ravel(), speed.ravel())[0, 1]) < 1e-8
+    assert abs(np.corrcoef(resid[0].ravel(), speed.ravel())[0, 1]) < 0.2
+
+
+def test_residualise_does_not_absorb_a_learning_trend_that_speed_shares():
+    """Power = a learning trend over trials + 0.5 x speed; speed rises over trials
+    too. A slope pooled over all trials credits speed with part of the trend and
+    removes it; a slope estimated from within-trial (bin-to-bin) variation is the
+    true 0.5, and the trend survives intact."""
+    rng = np.random.default_rng(3)
+    n_bins, n_trials = 30, 60
+    trend = np.linspace(0, 2, n_trials)
+    speed = (np.sin(np.linspace(0, 3, n_bins))[:, None] + trend[None, :]
+             + 0.2 * rng.normal(size=(n_bins, n_trials)))
+    power = trend[None, :] + 0.5 * speed + 0.05 * rng.normal(size=(n_bins, n_trials))
+    resid = arms.residualise_on(power[None], speed)[0]
+    kept = resid.mean(axis=0)
+    slope_over_trials = np.polyfit(np.arange(n_trials), kept, 1)[0]
+    assert slope_over_trials == pytest.approx(2 / (n_trials - 1), rel=0.05)
 
 
 def test_residualise_passes_through_a_constant_covariate():

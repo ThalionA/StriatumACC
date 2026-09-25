@@ -122,6 +122,10 @@ def raw_mat(mouse_id: int, probe: str = "striatum", cohort: Cohort = TASK) -> Pa
 PKG_DIR = _PROJECT / "lfp"
 RESULTS_DIR = PKG_DIR / "results"
 FIGURES_DIR = PKG_DIR / "figures"
+# Written by IntegratedAll_v1.m: the single-unit moving reliability per animal,
+# the reference the LFP moving metric is compared against. Its `animal` column
+# is the position in the organiser's mouse list, not the mouse id.
+STABILITY_BY_ANIMAL_CSV = _PROJECT / "figures" / "stability_by_animal.csv"
 
 # --- Sampling / grid ---------------------------------------------------------
 FS = 1000       # inferred exported-grid Hz; source metadata is not shipped

@@ -144,7 +144,9 @@ def dark_bin_segments(n_dark_samples: int) -> list[tuple[int, int] | None]:
 
     ``temp_bin_edges = 1:100:5001`` in ProcessStriatumTask, i.e. the first 5 s.
     Bins beyond the dark period return ``None``; a partial final bin is kept,
-    matching ``histcounts`` assigning whatever samples exist.
+    matching ``histcounts`` assigning whatever samples exist. ``histcounts``
+    closes its LAST bin, so bin 50 also takes the sample on edge 5001 (101
+    samples when the dark period reaches it).
     """
     out: list[tuple[int, int] | None] = []
     for b in range(N_DARK_BINS):
@@ -152,7 +154,8 @@ def dark_bin_segments(n_dark_samples: int) -> list[tuple[int, int] | None]:
         if start >= n_dark_samples:
             out.append(None)
             continue
-        out.append((start, min(start + DARK_BIN_MS, n_dark_samples) - 1))
+        closing = 1 if b == N_DARK_BINS - 1 else 0
+        out.append((start, min(start + DARK_BIN_MS + closing, n_dark_samples) - 1))
     return out
 
 

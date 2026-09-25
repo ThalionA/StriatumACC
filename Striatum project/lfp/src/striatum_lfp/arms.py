@@ -20,6 +20,8 @@ Three questions, each with the guard that makes the answer mean something:
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from sklearn.cross_decomposition import CCA
 from sklearn.decomposition import PCA
@@ -211,24 +213,34 @@ def residualise_on(cube: np.ndarray, covariate: np.ndarray) -> np.ndarray:
     """Remove the linear component of ``covariate`` from each channel of ``cube``.
 
     ``cube`` is ``(n_channels, n_bins, n_trials)`` and ``covariate`` is
-    ``(n_bins, n_trials)`` -- typically log running speed, which rises ~34% from
-    the first trials to expert. Any band-power change over learning that is
-    really a speed change disappears here; what survives is the part speed does
-    not explain.
+    ``(n_bins, n_trials)`` -- typically log running speed.
+
+    The slope is estimated from WITHIN-TRIAL variation only (each trial's power
+    and speed profiles centred on their own trial means) and then applied to the
+    whole covariate. Speed also rises across trials as the animal learns, so a
+    slope pooled over all trials credits speed with part of any learning trend
+    in power and removes it (pre-2026-09-25 behaviour). Bin-to-bin variation
+    within a trial carries the speed-power relation without the trend.
     """
     cube = np.asarray(cube, dtype=float)
-    cov = np.asarray(covariate, dtype=float).ravel()
+    cov = np.asarray(covariate, dtype=float)
     out = np.full_like(cube, np.nan)
     for c in range(cube.shape[0]):
-        v = cube[c].ravel()
-        ok = np.isfinite(v) & np.isfinite(cov)
-        if ok.sum() < 10 or np.nanstd(cov[ok]) == 0:
-            out[c] = cube[c]
+        x = cube[c]
+        ok = np.isfinite(x) & np.isfinite(cov)
+        # Centre both on the SAME bins of each trial (those finite in both).
+        with np.errstate(invalid="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            x_w = x - np.nanmean(np.where(ok, x, np.nan), axis=0, keepdims=True)
+            cov_w = cov - np.nanmean(np.where(ok, cov, np.nan), axis=0, keepdims=True)
+        denom = np.sum(cov_w[ok] ** 2)
+        if ok.sum() < 10 or denom == 0:
+            out[c] = x
             continue
-        slope, intercept = np.polyfit(cov[ok], v[ok], 1)
-        resid = np.full(v.shape, np.nan)
-        resid[ok] = v[ok] - (slope * cov[ok] + intercept)
-        out[c] = resid.reshape(cube.shape[1:])
+        slope = np.sum(x_w[ok] * cov_w[ok]) / denom
+        resid = x - slope * (cov - np.nanmean(cov[ok]))
+        resid[~ok] = np.nan
+        out[c] = resid
     return out
 
 
