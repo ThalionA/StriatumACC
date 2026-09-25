@@ -228,18 +228,36 @@ def test_band_power_is_non_negative():
 
 # --- truncated trials (1212's export stops before its session does) ----------
 
-def test_truncated_trials_flags_only_those_past_the_end():
+def test_truncated_trials_flags_only_those_past_the_end_of_the_export():
     ends = np.array([100.0, 500.0, 999.0, 1000.0, 5000.0])
-    mask = bandpower.truncated_trials(ends, n_npx=1000)
+    mask = bandpower.truncated_trials(ends, n_lfp_samples=1000, crop_start0=0)
     assert mask.tolist() == [False, False, False, True, True]
 
 
 def test_a_trial_ending_exactly_at_the_last_sample_is_not_truncated():
-    assert not bandpower.truncated_trials(np.array([999.0]), n_npx=1000)[0]
+    assert not bandpower.truncated_trials(np.array([999.0]), n_lfp_samples=1000,
+                                          crop_start0=0)[0]
+
+
+def test_truncated_trials_counts_samples_after_the_crop_start():
+    # 300 samples precede the crop: only 700 remain for the session.
+    mask = bandpower.truncated_trials(np.array([699.0, 700.0]), n_lfp_samples=1000,
+                                      crop_start0=300)
+    assert mask.tolist() == [False, True]
+
+
+def test_a_sub_millisecond_overhang_of_the_crop_is_not_truncation():
+    """The bug fixed 2026-09-25: the crop is floor(t_end) - ceil(t0) ms long, so the
+    last VR frame always sits 0.1-1.7 ms past it and the last trial of every
+    session was dropped -- although the export holds ~1 M more samples."""
+    last_vr_ms = 7_199_812.94          # 1106: rint -> 7_199_813 > crop - 1
+    assert not bandpower.truncated_trials(np.array([last_vr_ms]),
+                                          n_lfp_samples=8_400_000, crop_start0=1_000)[0]
 
 
 def test_truncated_trials_none_when_the_session_fits():
-    assert not bandpower.truncated_trials(np.arange(10, dtype=float), n_npx=1000).any()
+    assert not bandpower.truncated_trials(np.arange(10, dtype=float), n_lfp_samples=1000,
+                                          crop_start0=0).any()
 
 
 # --- coupling envelope now reuses band_power_series (dedup, 2026-08-28) -----

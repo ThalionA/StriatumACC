@@ -59,6 +59,7 @@ def area_labels(z) -> np.ndarray:
     labels = np.full(z["channel_depth_um"].shape, "", dtype=object)
     for a, m in masks.items():
         labels[m] = a
+    labels[list(config.REFERENCE_CHANNELS)] = ""     # caches built before 2026-09-25
     return labels
 
 

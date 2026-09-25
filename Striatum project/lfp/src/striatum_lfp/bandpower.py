@@ -225,14 +225,19 @@ class SegmentAccumulator:
         return out
 
 
-def truncated_trials(trial_end_ms: np.ndarray, n_npx: int) -> np.ndarray:
-    """Boolean mask of trials whose VR end falls past the end of the recording.
+def truncated_trials(trial_end_ms: np.ndarray, n_lfp_samples: int,
+                     crop_start0: int) -> np.ndarray:
+    """Boolean mask of trials whose VR end falls past the end of the EXPORT.
 
-    Needed because the recording length is imposed *before* trial indices are
-    taken: ``npx_index`` clips to ``n_npx - 1``, so a trial that runs off the end
-    of the file comes back looking like a trial that happens to finish exactly at
-    the last sample. Only the unclipped VR time can tell the two apart. This
-    matters for one animal -- 1212's export stops 41 min before its session does
-    -- and a half-trial there would otherwise be averaged in as a whole one.
+    ``trial_end_ms`` is crop-relative (ms after ``crop_start0``). A trial is cut
+    short only if the voltage file stops before it ends, so the test is against
+    the samples the file holds after the crop start -- not against the crop
+    itself, whose ``floor(t_end) - ceil(t0)`` length always sits 0.1-1.7 ms short
+    of the last VR frame and used to flag the last trial of every session.
+
+    Needed because ``npx_index`` clips to the crop, so a trial that runs off the
+    end of a short export (1212's August file, 407's) comes back looking like a
+    trial that happens to finish exactly at the last sample.
     """
-    return np.rint(np.asarray(trial_end_ms, dtype=float)) > (n_npx - 1)
+    available = int(n_lfp_samples) - int(crop_start0)
+    return np.rint(np.asarray(trial_end_ms, dtype=float)) > (available - 1)

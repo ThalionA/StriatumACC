@@ -135,6 +135,10 @@ FS = 1000       # inferred exported-grid Hz; source metadata is not shipped
 PITCH_UM = 20.0
 CH_PER_ROW = 2
 N_CHANNELS = 384
+# The Neuropixels 1.0 internal reference site (0-based). It carries the
+# reference, not tissue: SD 13.7x the median channel in 822, r ~ -0.1 with its
+# neighbours (0.87 between ordinary neighbours). Never assigned to an area.
+REFERENCE_CHANNELS: tuple[int, ...] = (191,)
 
 AU_TO_CM = 1.25         # VR position scale (project_cfg cfg.au_to_cm)
 CORRIDOR_CM = 250.0     # 200 a.u. * 1.25 cm/a.u.

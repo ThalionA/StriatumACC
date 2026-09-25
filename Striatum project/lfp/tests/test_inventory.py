@@ -10,7 +10,7 @@ from striatum_lfp import inventory
 
 # --- depth vs geometry -------------------------------------------------------
 
-def test_depth_matches_neuropixels_geometry():
+def test_depth_matches_the_export_convention():
     depth = (np.arange(384) // 2) * 20.0
     ok, err = inventory.check_depth_against_geometry(depth, 384)
     assert ok and err == 0.0

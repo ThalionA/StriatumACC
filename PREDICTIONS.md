@@ -1,5 +1,34 @@
 # Predictions (newest first)
 
+## 2026-09-25 — which clock the control probe-2 (visual) bundles are on
+
+The control V1 bundles' `VR_times_synched` differ from probe 1's by 6-48 ms (513)
+and 116-159 ms (817), drifting over the session; task bundles are identical.
+Python bins probe-2 LFP with the V1 bundle's times; MATLAB crops probe-2 units
+with probe 1's. Test: V1-probe MUA (and LFP) locked to corridor onset, aligned
+once with each bundle's VR times; task 1105 (bundles identical) is the reference.
+
+- **P1 (each bundle is synced to its own probe):** with the V1 bundle's times the
+  onset-response latency in 513/515/817 matches task 1105's within ±10 ms; with
+  probe 1's times 817 is off by roughly its 116-159 ms offset. ~70%.
+- **P2 (the LFP shares probe 2's spike clock):** probe-2 LFP high-gamma envelope
+  vs probe-2 MUA peaks at lag 0 ± 2 ms. ~85%.
+- **Falsifier:** latency matches 1105 with probe 1's times and not with the V1
+  bundle's, or no onset response clear enough to time (then use the lag scan
+  against a probe-1 signal instead).
+- **Outcome (same day): P2 CONFIRMED, P1 HALF-RIGHT.** `scripts/audit_probe2_clock.py`.
+  LFP→MUA lag is 0 ± 3 ms in every window of every animal while the bundle
+  offset drifts (817: 0,0,1,0,−1,−1 ms against offsets 116→158 ms), so the probe-2
+  LFP is on probe 2's clock. With the V1 bundle's times all three controls show
+  the same sharp onset transient (half-rise 106-116 ms, peak 113-128 ms); with
+  probe 1's times 817's response is late (227/246 ms) and smeared, since the
+  drifting offset blurs it. So the V1 bundle's times are right for probe-2 data
+  and **MATLAB's crop of control probe-2 units with probe 1's times is the
+  misalignment.** The part that failed: 1105 is no latency reference (half-rise
+  16 ms, a weak response from 53 units) — the controls agree with each other,
+  not with it. Lesson: pick a reference with a response as sharp as the thing
+  being timed; the across-control consistency was the diagnostic, not 1105.
+
 ## 2026-08-12 — spatial CCA rerun on the corrected 5 cm cache
 
 First spatial-arm run since (a) the 5 cm standardisation, (b) the depth fix,

@@ -55,7 +55,8 @@ def build_segments(beh: dict, n_lfp_samples: int) -> dict:
 
     npx_start0 = bandpower.npx_index(corrected_vr_ms[starts_vr], n_npx)
     npx_end0 = bandpower.npx_index(corrected_vr_ms[ends_vr], n_npx)
-    truncated = bandpower.truncated_trials(corrected_vr_ms[ends_vr], n_npx)
+    truncated = bandpower.truncated_trials(corrected_vr_ms[ends_vr], n_lfp_samples,
+                                           beh["crop_start0"])
     edges = bandpower.spatial_bin_edges()
 
     corridor_segs: list[tuple[int, int, int]] = []

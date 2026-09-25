@@ -104,14 +104,14 @@ def read_structure(path: Path) -> dict:
 
 
 def check_depth_against_geometry(depth: np.ndarray, n_channels: int) -> tuple[bool, float]:
-    """Compare the shipped depths with ``geometry.channel_depths``.
+    """Compare the shipped depths with ``geometry.export_depths``.
 
     The area mapping assumes 2 channels per 20 um row; the 2026-08 export ships
     the depths, so the assumption is now falsifiable rather than inherited.
     """
     if depth.size != n_channels:
         return False, float("nan")
-    predicted = geometry.channel_depths(n_channels)
+    predicted = geometry.export_depths(n_channels)
     err = float(np.max(np.abs(depth - predicted)))
     return err == 0.0, err
 

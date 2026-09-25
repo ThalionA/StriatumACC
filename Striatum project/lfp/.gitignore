@@ -38,3 +38,4 @@ results/lfp_arms_moving_reliability_task.csv
 results/lfp_arms_moving_reliability_control.csv
 !results/lfp_arms_behaviour_*.csv
 !results/lfp_group_contrast.csv
+!results/lfp_probe2_clock_audit.csv

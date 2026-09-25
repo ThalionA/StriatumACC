@@ -44,13 +44,15 @@ def behaviour_bounds(mouse_id: int, probe: str, ch):
     return float(vr.min()), float(vr.max()), beh["n_spike_bins"]
 
 
-def area_counts(mouse_id: int, probe: str, depth: np.ndarray, n_channels: int, ch):
+def area_counts(mouse_id: int, probe: str, n_channels: int, ch):
     """Channels per area, using the same depth boundaries the sorted units use."""
     try:
         bounds = geometry.load_area_boundaries(mouse_id, probe=probe, cohort=ch)
     except KeyError:
         return {}, [f"mouse {mouse_id} absent from the {probe} depth CSV"]
-    depths = depth if depth.size == n_channels else geometry.channel_depths(n_channels)
+    # Unit (Kilosort) convention, not the shipped 0-3820 um: the boundaries were
+    # drawn against unit depths, one row above the export's.
+    depths = geometry.channel_depths(n_channels)
     masks = geometry.channel_area_masks(depths, bounds)
     counts = {area: int(mask.sum()) for area, mask in masks.items()}
     notes = [f"{area}: 0 channels in [{bounds[area][0]:g}, {bounds[area][1]:g}] um"
@@ -103,8 +105,7 @@ def inventory_one(item) -> dict:
                                      first=first, last=last)
     spec = inventory.spectral_profile(path, starts, win, fs=FS)
 
-    counts, area_notes = area_counts(mouse_id, probe, struct["depth"],
-                                     struct["n_channels"], ch)
+    counts, area_notes = area_counts(mouse_id, probe, struct["n_channels"], ch)
     notes += area_notes
 
     row = {

@@ -160,7 +160,12 @@ def count_segments(snippets, nperseg: int, noverlap: int | None = None) -> int:
 
 
 def bipolar_derivation(channels: np.ndarray) -> np.ndarray:
-    """Mean of NON-OVERLAPPING adjacent-channel differences: (samples,) from (samples, n).
+    """Mean of NON-OVERLAPPING column-pair differences: (samples,) from (samples, n).
+
+    Columns come in pairs -- ``(0, 1), (2, 3), ...`` -- and each pair contributes
+    ``x[:, 2k] - x[:, 2k + 1]``. Which channels form a pair is decided by the
+    caller (``geometry.vertical_pairs`` via ``area_signals.reduce_block``); this
+    function only does the arithmetic.
 
     Differencing two nearby electrodes cancels the far field to first order,
     which is what makes a bipolar derivation worth computing on a probe whose
@@ -173,8 +178,7 @@ def bipolar_derivation(channels: np.ndarray) -> np.ndarray:
     less of the field than a local pair. Verified identical to that wide pair
     before this helper existed (2026-09-17).
 
-    Channels are expected in depth order. An odd last channel is dropped, since
-    it has no partner.
+    An odd last column is dropped, since it has no partner.
     """
     x = np.asarray(channels, dtype=float)
     if x.ndim != 2:

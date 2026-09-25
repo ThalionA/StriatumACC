@@ -10,14 +10,54 @@ import numpy as np
 from striatum_lfp import geometry
 
 
-def test_channel_depths_geometry():
-    d = geometry.channel_depths()
+def test_export_depths_are_what_the_file_ships():
+    d = geometry.export_depths()
     assert d.shape == (384,)
     assert d[0] == 0.0 and d[1] == 0.0          # first row at the tip
     assert d[2] == 20.0 and d[3] == 20.0        # second row, 20 um up
     assert d[382] == 3820.0 and d[383] == 3820.0
-    assert np.all(np.diff(d) >= 0)              # monotone non-decreasing
     assert np.all(d == (np.arange(384) // 2) * 20.0)
+
+
+def test_channel_depths_use_the_unit_convention():
+    """Area boundaries are applied to Kilosort unit depths (``goodcluster2``,
+    20-3840 um over every bundle), one 20 um row above the export's 0-3820.
+    Channels must be placed in the same convention or every boundary lands two
+    channels off."""
+    d = geometry.channel_depths()
+    assert d[0] == 20.0 and d[1] == 20.0
+    assert d[383] == 3840.0
+    np.testing.assert_array_equal(d, geometry.export_depths() + 20.0)
+
+
+def test_reference_channel_is_never_assigned_to_an_area():
+    """Channel 191 is the Neuropixels 1.0 internal reference: SD 13.7x the median
+    channel in 822 and uncorrelated with its neighbours. It is not tissue."""
+    depths = geometry.channel_depths()
+    masks = geometry.channel_area_masks(depths, {"ACC": (0.0, 4000.0)})
+    assert not masks["ACC"][191]
+    assert masks["ACC"].sum() == 383
+
+
+def test_vertical_pairs_are_one_row_apart_and_skip_the_reference():
+    idx = np.arange(184, 200)
+    pairs = geometry.vertical_pairs(idx)
+    depths = geometry.channel_depths()
+    assert pairs.shape[1] == 2
+    assert np.all(depths[pairs[:, 1]] - depths[pairs[:, 0]] == 20.0)   # deep, then shallow
+    assert not np.isin(pairs, geometry.config.REFERENCE_CHANNELS).any()
+    assert len(np.unique(pairs)) == pairs.size                          # non-overlapping
+    # 184..199 minus 191: (184,186),(185,187),(188,190),(192,194),(193,195),(196,198),(197,199)
+    assert pairs.tolist() == [[184, 186], [185, 187], [188, 190], [192, 194],
+                              [193, 195], [196, 198], [197, 199]]
+
+
+def test_vertical_pairs_never_pair_within_a_row():
+    """Same-row channels share a depth: their difference cancels the local depth
+    gradient along with the far field (the pre-2026-09-25 derivation did this)."""
+    pairs = geometry.vertical_pairs(np.arange(0, 40))
+    d = geometry.channel_depths()
+    assert np.all(d[pairs[:, 0]] != d[pairs[:, 1]])
 
 
 def test_channel_area_masks_inclusive():
