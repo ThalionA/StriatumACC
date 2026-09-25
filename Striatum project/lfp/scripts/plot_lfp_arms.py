@@ -63,7 +63,10 @@ def plot_evolution(rows, value_c, value_d, ylabel, stem, suptitle, stats=None):
                 for ei, ep in enumerate(EPOCHS):
                     if (area, band, ep) in agg:
                         mu, sem, n = agg[(area, band, ep)]
-                        x.append(ei); m.append(mu); e.append(sem); ns.append(n)
+                        x.append(ei)
+                        m.append(mu)
+                        e.append(sem)
+                        ns.append(n)
                 if x:
                     ax.errorbar(x, m, yerr=e, marker="o", ms=3.5, lw=1.3,
                                 capsize=2, color=colour, label=label)
@@ -109,7 +112,9 @@ def plot_speed(rows, stem="lfp_evolution_speed"):
         for ei, ep in enumerate(EPOCHS):
             if (area, ep) in agg:
                 mu, sem, _ = agg[(area, ep)]
-                x.append(ei); m.append(mu); e.append(sem)
+                x.append(ei)
+                m.append(mu)
+                e.append(sem)
         ax.errorbar(x, m, yerr=e, marker="o", ms=4, lw=1.4, capsize=2,
                     color=AREA_COLOUR[area], label=area)
     _epoch_axis(ax)
@@ -164,7 +169,8 @@ def plot_decoding(rows, stem="lfp_decoding"):
             ax.scatter(*zip(*pts), s=26, alpha=0.85, color=AREA_COLOUR[area], label=area)
     lim = [-0.06, 0.16]
     ax.plot(lim, lim, "k--", lw=1)
-    ax.set_xlim(lim); ax.set_ylim(lim)
+    ax.set_xlim(lim)
+    ax.set_ylim(lim)
     ax.set_xlabel("R² with position labels rotated within each trial (null)")
     ax.set_ylabel("R² with the true position labels")
     ax.set_title("(b) One point per animal, high gamma\n"

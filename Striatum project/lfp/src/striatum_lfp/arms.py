@@ -21,7 +21,9 @@ from __future__ import annotations
 import numpy as np
 from sklearn.cross_decomposition import CCA
 from sklearn.decomposition import PCA
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit
+from sklearn.preprocessing import StandardScaler
 
 
 def design_matrix(cube: np.ndarray, trials: np.ndarray | None = None):
@@ -163,6 +165,31 @@ def within_area_ceiling(A: np.ndarray, groups: np.ndarray, *, k: int = 5,
         scores.append(heldout_cca_grouped(A[:, perm[:half]], A[:, perm[half:]],
                                           groups, k=k, seed=rep))
     return float(np.nanmedian(scores))
+
+
+def ridge_cv_decode(X: np.ndarray, y: np.ndarray, groups: np.ndarray,
+                    alpha: float = 1.0, n_splits: int = 5):
+    """Group k-fold ridge regression (groups = trial ids -> no within-trial leakage).
+
+    Standardises features on each train fold. Returns ``(r2, mae, y_pred)`` where
+    r2/mae are cross-validated.
+    """
+    X = np.asarray(X, float)
+    y = np.asarray(y, float)
+    groups = np.asarray(groups)
+    keep = np.all(np.isfinite(X), axis=1) & np.isfinite(y)
+    X, y, groups = X[keep], y[keep], groups[keep]
+    n_splits = int(min(n_splits, np.unique(groups).size))
+    y_pred = np.full(len(y), np.nan)
+    for tr, te in GroupKFold(n_splits=n_splits).split(X, y, groups):
+        sc = StandardScaler().fit(X[tr])
+        model = Ridge(alpha=alpha).fit(sc.transform(X[tr]), y[tr])
+        y_pred[te] = model.predict(sc.transform(X[te]))
+    ok = np.isfinite(y_pred)
+    ss_tot = np.sum((y[ok] - y[ok].mean()) ** 2)
+    r2 = 1 - np.sum((y[ok] - y_pred[ok]) ** 2) / ss_tot if ss_tot > 0 else np.nan
+    mae = float(np.mean(np.abs(y[ok] - y_pred[ok])))
+    return float(r2), mae, y_pred
 
 
 def circular_shift_targets(y: np.ndarray, groups: np.ndarray, rng) -> np.ndarray:

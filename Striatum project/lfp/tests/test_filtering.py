@@ -1,4 +1,4 @@
-"""Ground-truth tests for band-power extraction.
+"""Ground-truth tests for the shared zero-phase band filters.
 
 Known sinusoids of known amplitude/frequency must produce the right band
 envelopes; a band that contains a tone recovers its amplitude, a band that does
@@ -8,15 +8,15 @@ envelope must peak at the modulation peak (no lag).
 
 import numpy as np
 
-from striatum_lfp import features
-from striatum_lfp.config import BANDS
+from striatum_lfp import filtering
+from striatum_lfp.bandpower import ANALYSIS_BANDS as BANDS
 
 FS = 1000
 INTERIOR = slice(500, -500)  # drop filtfilt edge transients
 
 
 def _env(x, band):
-    return features.band_envelope(x, features.design_band_sos(band, fs=FS))
+    return filtering.band_envelope(x, filtering.design_band_sos(band, fs=FS))
 
 
 def test_pure_tone_recovers_amplitude_in_its_band():
@@ -48,9 +48,9 @@ def test_broadband_captures_more_than_a_narrow_band():
     rng = np.random.default_rng(3)
     n = 20000
     x = rng.standard_normal(n)  # white -> power in every band
-    e_broad = _env(x, BANDS["broadband"])[INTERIOR].mean()
+    e_broad = _env(x, BANDS["total"])[INTERIOR].mean()
     e_theta = _env(x, BANDS["theta"])[INTERIOR].mean()
-    assert e_broad > e_theta  # 1-100 Hz spans far more than 4-8 Hz
+    assert e_broad > e_theta  # 1-150 Hz spans far more than 4-8 Hz
 
 
 def test_zero_phase_envelope_peaks_at_modulation_peak():
@@ -63,22 +63,11 @@ def test_zero_phase_envelope_peaks_at_modulation_peak():
     assert abs(peak_t - 3.0) < 0.02  # < 20 ms: no causal lag
 
 
-def test_extract_bands_returns_all_bands_shape_preserved():
+def test_envelope_and_phase_preserve_shape_along_axis():
     x = np.random.default_rng(0).standard_normal((4000, 3))  # (time, channels)
-    out = features.extract_bands(x)
-    assert set(out) == set(BANDS)
-    for env in out.values():
-        assert env.shape == x.shape
-        assert np.all(env >= 0)
-
-
-def test_square_smooth_alternative_tracks_hilbert():
-    n = 5000
-    t = np.arange(n) / FS
-    x = 2.0 * np.sin(2 * np.pi * 6 * t)
-    sos = features.design_band_sos(BANDS["theta"], fs=FS)
-    hil = features.band_envelope(x, sos, method="hilbert")[INTERIOR].mean()
-    sq = features.band_envelope(x, sos, method="square_smooth", smooth_samples=50)[INTERIOR].mean()
-    # sqrt(mean power) of a sinusoid amplitude A is A/sqrt(2); hilbert gives A
-    assert abs(hil - 2.0) < 0.3
-    assert abs(sq - 2.0 / np.sqrt(2)) < 0.3
+    sos = filtering.design_band_sos(BANDS["theta"], fs=FS)
+    env = filtering.band_envelope(x, sos)
+    phase = filtering.band_phase(x, sos)
+    assert env.shape == phase.shape == x.shape
+    assert np.all(env >= 0)
+    assert np.all(np.abs(phase) <= np.pi)

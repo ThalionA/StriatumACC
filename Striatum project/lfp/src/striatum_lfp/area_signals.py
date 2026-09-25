@@ -25,6 +25,7 @@ import h5py
 import numpy as np
 
 from . import config, psi
+from .cohort import discover_lfp_files
 from .reader import DATASET
 
 #: An area with fewer channels than this cannot give a bipolar derivation.
@@ -64,10 +65,7 @@ def reduce_block(block: np.ndarray, chans: dict[str, np.ndarray]) -> dict:
 
 def lfp_file_for(mouse: int, probe: str, cohort) -> Path:
     """The voltage export for one probe of one animal."""
-    if cohort.name == "task":
-        return config.lfp_path(mouse, probe)
-    suffix = "_v1" if probe == "visual" else ""
-    return cohort.lfp_dir / f"{mouse}{suffix}_voltage_data_384ch.mat"
+    return discover_lfp_files(cohort.lfp_dir, cohort.mouse_ids)[(mouse, probe)]
 
 
 def read_trial_signals(z, cohort, *, min_samples: int,

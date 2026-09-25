@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from scipy.signal import butter, sosfiltfilt
 
-from striatum_lfp import config, reader
+from striatum_lfp import cohort, config, reader
 
 
 def test_block_spans_tile_and_pad():
@@ -86,10 +86,10 @@ def test_overlap_save_small_pad_is_visibly_worse():
     assert err_small > 20 * err_big
 
 
-_LFP_614 = config.LFP_DIR / config.FILE_BY_MOUSE[614]
+_LFP_614 = cohort.discover_lfp_files(config.LFP_DIR).get((614, "striatum"))
 
 
-@pytest.mark.skipif(not _LFP_614.exists(), reason="LFP file not present")
+@pytest.mark.skipif(_LFP_614 is None, reason="LFP file not present")
 def test_reader_real_file_small_block():
     assert reader.n_channels(_LFP_614) == 384
     assert reader.n_samples(_LFP_614) == 8_400_000

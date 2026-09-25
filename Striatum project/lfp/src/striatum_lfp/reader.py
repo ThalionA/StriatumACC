@@ -3,7 +3,7 @@
 The voltage array is ~8-11 M samples x 384 channels of float32 (~12-16 GB), too
 large for RAM. h5py opens it lazily; :func:`iter_time_blocks` yields contiguous
 time blocks with an **overlap-save** pad on each side so a downstream zero-phase
-filter (:func:`features.band_envelope`) sees no seam between blocks: the padded
+filter (:func:`filtering.band_envelope`) sees no seam between blocks: the padded
 region is filtered but discarded, only the pad-free ``core`` is kept.
 
 MATLAB stores the array column-major, so an h5py view of ``data_to_save`` has

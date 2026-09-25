@@ -152,14 +152,34 @@ def test_circular_shift_actually_changes_the_targets():
         assert sorted(shifted[groups == g]) == sorted(y[groups == g])
 
 
+def test_ridge_recovers_a_linear_position_code():
+    rng = np.random.default_rng(0)
+    n_trials, n_bins = 40, 20
+    pos = np.tile(np.linspace(0, 200, n_bins), n_trials)
+    groups = np.repeat(np.arange(n_trials), n_bins)
+    # two features linearly related to position + noise
+    X = np.column_stack([pos, 200 - pos]) + rng.normal(0, 8, (len(pos), 2))
+    r2, mae, _ = arms.ridge_cv_decode(X, pos, groups)
+    assert r2 > 0.9 and mae < 15
+
+
+def test_ridge_at_chance_for_unrelated_features():
+    rng = np.random.default_rng(1)
+    n = 600
+    y = rng.uniform(0, 200, n)
+    X = rng.normal(size=(n, 3))
+    groups = np.repeat(np.arange(60), 10)
+    r2, _, _ = arms.ridge_cv_decode(X, y, groups)
+    assert r2 < 0.1  # no information -> ~0 or negative
+
+
 def test_circular_shift_destroys_a_decodable_mapping():
     rng = np.random.default_rng(1)
     groups = np.repeat(np.arange(30), 20)
     y = np.tile(np.arange(20), 30)
     X = y[:, None] + rng.normal(size=(600, 3)) * 0.5
-    from striatum_lfp.decode import ridge_cv_decode
-    real = ridge_cv_decode(X, y.astype(float), groups)[0]
-    null = ridge_cv_decode(X, arms.circular_shift_targets(y, groups, rng).astype(float),
+    real = arms.ridge_cv_decode(X, y.astype(float), groups)[0]
+    null = arms.ridge_cv_decode(X, arms.circular_shift_targets(y, groups, rng).astype(float),
                            groups)[0]
     assert real > 0.9
     assert null < 0.1
@@ -351,6 +371,9 @@ def test_trial_shuffle_control_destroys_moving_reliability():
     shuffled = np.nanmean(arms.moving_window_reliability(
         arms.shuffle_trials(cube, rng)))
     assert real > 0.99
+    # ...and so does its shuffle: for a stationary profile obs - shuffle is ~0,
+    # which is why that difference measures drift, not single-trial reliability.
+    assert shuffled > 0.99
     # A pure spatial profile survives shuffling; add trial-specific structure and
     # the shuffle must break it.
     cube2 = cube + np.arange(30)[None, :, None] * drift[None, None, :] * 0.3

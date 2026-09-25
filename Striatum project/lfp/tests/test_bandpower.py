@@ -257,7 +257,7 @@ def test_coupling_envelope_equals_binned_band_power_root():
 
 
 def test_band_power_series_uses_the_shared_sos_designer():
-    from striatum_lfp.features import design_band_sos
+    from striatum_lfp.filtering import design_band_sos
     from scipy.signal import sosfiltfilt
 
     rng = np.random.default_rng(1)

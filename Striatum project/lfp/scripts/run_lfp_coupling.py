@@ -55,7 +55,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, area_signals, config, coupling, features  # noqa: E402
+from striatum_lfp import analysis, area_signals, config, coupling, filtering  # noqa: E402
 
 THETA = (4.0, 8.0)
 AMP_BANDS = {"low_gamma": (30.0, 80.0), "high_gamma": (80.0, 150.0)}
@@ -69,8 +69,8 @@ REFS = ("monopolar", "bipolar")
 
 def _filtered(sig: np.ndarray, sos_cache: dict) -> dict:
     """``{band: envelope}`` plus ``('phase', 'theta')``, filtered once per signal."""
-    out = {("env", b): features.band_envelope(sig, sos_cache[b]) for b in SAME_BANDS}
-    out[("phase", "theta")] = features.band_phase(sig, sos_cache["theta"])
+    out = {("env", b): filtering.band_envelope(sig, sos_cache[b]) for b in SAME_BANDS}
+    out[("phase", "theta")] = filtering.band_phase(sig, sos_cache["theta"])
     return out
 
 
@@ -149,7 +149,7 @@ def run_one(cache: Path, cohort_name: str):
               flush=True)
         return [], []
 
-    sos_cache = {b: features.design_band_sos(e, fs=int(config.FS))
+    sos_cache = {b: filtering.design_band_sos(e, fs=int(config.FS))
                  for b, e in SAME_BANDS.items()}
     lp = analysis.cohort_learning_points(ch).get(mouse)
     tag = {"cohort": cohort_name, "mouse_id": mouse, "probe": probe,

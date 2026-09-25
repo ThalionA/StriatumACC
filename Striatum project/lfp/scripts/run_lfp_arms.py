@@ -35,7 +35,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import analysis, arms, config  # noqa: E402
 from striatum_lfp.analysis import log_power  # noqa: E402
-from striatum_lfp.decode import ridge_cv_decode  # noqa: E402
 
 # Length of the unaligned early-session window (see `windows` in run_one).
 FIRST_N_TRIALS = 20
@@ -234,14 +233,14 @@ def analyse_one(item) -> dict[str, list[dict]]:
                 X, y, groups = arms.design_matrix(sub, trials=np.arange(tr.size))
                 if X.shape[0] < 40 or np.unique(groups).size < 5:
                     continue
-                r2, mae, _ = ridge_cv_decode(X, y.astype(float), groups)
+                r2, mae, _ = arms.ridge_cv_decode(X, y.astype(float), groups)
                 rng = np.random.default_rng(0)
                 # Null: rotate the position labels within each trial. A trial
                 # PERMUTATION does nothing here -- every trial carries the same
                 # 0..49 sequence, so it leaves y bit-identical and silently
                 # re-runs the real decoder (the defect this replaces).
                 null_r2 = [
-                    ridge_cv_decode(X, arms.circular_shift_targets(y, groups, rng).astype(float),
+                    arms.ridge_cv_decode(X, arms.circular_shift_targets(y, groups, rng).astype(float),
                                     groups)[0]
                     for _ in range(5)
                 ]

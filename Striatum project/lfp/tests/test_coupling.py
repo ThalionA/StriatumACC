@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 from scipy.signal import hilbert, sosfiltfilt
 
-from striatum_lfp import coupling, features
+from striatum_lfp import coupling, filtering
 
 FS = 1000.0
 N = 60_000                       # 60 s
@@ -53,7 +53,7 @@ def _pac_signal(n, rng, *, depth=1.0, f_gamma=55.0):
     ``depth=0`` gives theta and gamma that coexist with no relationship, which is
     the null these tests need as well as the effect.
     """
-    sos_t = features.design_band_sos(THETA, fs=int(FS))
+    sos_t = filtering.design_band_sos(THETA, fs=int(FS))
     theta = sosfiltfilt(sos_t, _pink(n, rng))
     theta = theta / (theta.std() or 1.0)
     phase = np.angle(hilbert(theta))
@@ -70,8 +70,8 @@ def _pac_signal(n, rng, *, depth=1.0, f_gamma=55.0):
 def test_band_phase_recovers_a_known_oscillation():
     t = np.arange(N) / FS
     x = np.sin(2 * np.pi * 6.0 * t)
-    sos = features.design_band_sos(THETA, fs=int(FS))
-    phase = features.band_phase(x, sos)
+    sos = filtering.design_band_sos(THETA, fs=int(FS))
+    phase = filtering.band_phase(x, sos)
     # Unwrapped phase of a 6 Hz sine advances by 2*pi*6 rad per second.
     slope = np.polyfit(t[1000:-1000], np.unwrap(phase)[1000:-1000], 1)[0]
     assert slope == pytest.approx(2 * np.pi * 6.0, rel=0.02)
@@ -88,7 +88,7 @@ def test_shared_field_inflates_raw_but_not_orthogonalised_correlation():
     source = _pink(N, rng)
     a = source + 0.3 * _pink(N, rng)
     b = source + 0.3 * _pink(N, rng)
-    sos = features.design_band_sos(GAMMA, fs=int(FS))
+    sos = filtering.design_band_sos(GAMMA, fs=int(FS))
     raw = coupling.envelope_correlation(a, b, sos)
     orth = coupling.orthogonalised_envelope_correlation(a, b, sos)
     assert raw > 0.4, f"a shared field should inflate the raw correlation, got {raw:.3f}"
@@ -103,7 +103,7 @@ def test_genuine_lagged_comodulation_survives_orthogonalisation():
     drive = np.abs(_pink(N + lag, rng))
     carrier_a = _pink(N + lag, rng)
     carrier_b = _pink(N, rng)
-    sos = features.design_band_sos(GAMMA, fs=int(FS))
+    sos = filtering.design_band_sos(GAMMA, fs=int(FS))
     a = drive[lag:] * carrier_a[lag:]
     b = drive[:-lag] * carrier_b                 # same drive, delayed, own carrier
     orth = coupling.orthogonalised_envelope_correlation(a, b, sos)
@@ -112,7 +112,7 @@ def test_genuine_lagged_comodulation_survives_orthogonalisation():
 
 def test_independent_signals_give_no_amplitude_coupling():
     rng = np.random.default_rng(2)
-    sos = features.design_band_sos(GAMMA, fs=int(FS))
+    sos = filtering.design_band_sos(GAMMA, fs=int(FS))
     orth = coupling.orthogonalised_envelope_correlation(_pink(N, rng), _pink(N, rng), sos)
     assert abs(orth) < 0.1
 
@@ -120,7 +120,7 @@ def test_independent_signals_give_no_amplitude_coupling():
 def test_orthogonalised_correlation_is_symmetric():
     rng = np.random.default_rng(3)
     a, b = _pink(N, rng), _pink(N, rng)
-    sos = features.design_band_sos(GAMMA, fs=int(FS))
+    sos = filtering.design_band_sos(GAMMA, fs=int(FS))
     ab = coupling.orthogonalised_envelope_correlation(a, b, sos)
     ba = coupling.orthogonalised_envelope_correlation(b, a, sos)
     assert ab == pytest.approx(ba, abs=1e-12), "the measure averages both directions"

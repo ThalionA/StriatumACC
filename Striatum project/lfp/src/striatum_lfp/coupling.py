@@ -23,7 +23,7 @@ Both families are therefore computed on whatever signal the caller passes, and
 the drivers pass bipolar derivations as the primary and monopolar alongside, so
 the two can be compared the way they were for the phase-slope index.
 
-Filtering and envelopes come from :mod:`striatum_lfp.features`; nothing is
+Filtering and envelopes come from :mod:`striatum_lfp.filtering`; nothing is
 re-implemented here.
 
 Created 2026-09-17.
@@ -33,7 +33,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.signal import hilbert, sosfiltfilt
 
-from . import features
+from . import filtering
 
 #: Phase bins for the modulation index. 18 bins of 20 degrees is Tort's default.
 N_PHASE_BINS = 18
@@ -50,8 +50,8 @@ def envelope_correlation(x: np.ndarray, y: np.ndarray, sos: np.ndarray) -> float
     one: two electrodes in a shared field produce a large value here with no
     interaction of any kind.
     """
-    ex = features.band_envelope(np.asarray(x, float), sos)
-    ey = features.band_envelope(np.asarray(y, float), sos)
+    ex = filtering.band_envelope(np.asarray(x, float), sos)
+    ey = filtering.band_envelope(np.asarray(y, float), sos)
     if np.std(ex) == 0 or np.std(ey) == 0:
         return np.nan
     return float(np.corrcoef(ex, ey)[0, 1])
@@ -139,10 +139,10 @@ def modulation_index_from_signal(phase_signal: np.ndarray,
     """
     if amp_signal is None:
         amp_signal = phase_signal
-    p_sos = features.design_band_sos(phase_band, fs=int(fs))
-    a_sos = features.design_band_sos(amp_band, fs=int(fs))
-    phase = features.band_phase(np.asarray(phase_signal, float), p_sos)
-    amp = features.band_envelope(np.asarray(amp_signal, float), a_sos)
+    p_sos = filtering.design_band_sos(phase_band, fs=int(fs))
+    a_sos = filtering.design_band_sos(amp_band, fs=int(fs))
+    phase = filtering.band_phase(np.asarray(phase_signal, float), p_sos)
+    amp = filtering.band_envelope(np.asarray(amp_signal, float), a_sos)
     return modulation_index(phase, amp, n_bins=n_bins)
 
 
@@ -166,10 +166,10 @@ def modulation_index_with_surrogates(phase_signal: np.ndarray,
     """
     if amp_signal is None:
         amp_signal = phase_signal
-    p_sos = features.design_band_sos(phase_band, fs=int(fs))
-    a_sos = features.design_band_sos(amp_band, fs=int(fs))
-    phase = features.band_phase(np.asarray(phase_signal, float), p_sos)
-    amp = features.band_envelope(np.asarray(amp_signal, float), a_sos)
+    p_sos = filtering.design_band_sos(phase_band, fs=int(fs))
+    a_sos = filtering.design_band_sos(amp_band, fs=int(fs))
+    phase = filtering.band_phase(np.asarray(phase_signal, float), p_sos)
+    amp = filtering.band_envelope(np.asarray(amp_signal, float), a_sos)
 
     observed = modulation_index(phase, amp, n_bins=n_bins)
     n = amp.size

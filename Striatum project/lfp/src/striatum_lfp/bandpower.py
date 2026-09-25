@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import iirnotch, sosfiltfilt, tf2sos
 
-from .features import design_band_sos
+from .filtering import design_band_sos
 
 from . import config
 

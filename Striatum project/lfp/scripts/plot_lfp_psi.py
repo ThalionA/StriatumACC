@@ -37,7 +37,7 @@ from scipy import stats  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import arms, config, figstyle  # noqa: E402
+from striatum_lfp import config, figstyle  # noqa: E402
 
 BANDS = ("theta", "beta", "low_gamma", "high_gamma")
 EPOCHS = ("Trials 1-3", "Trials 4-10", "Intermediate", "Expert")
