@@ -151,6 +151,11 @@ def main() -> None:
 
     write(by_bin, config.RESULTS_DIR / f"lfp_distance_control_{args.cohort}.csv")
     write(matched, config.RESULTS_DIR / f"lfp_distance_matched_{args.cohort}.csv")
+    bands = list(dict.fromkeys(r["band"] for r in matched))
+    contrast = [{"cohort": args.cohort, **r}
+                for field in ("d_raw", "d_residual")
+                for r in distance.contrast_stats(matched, bands=bands, field=field)]
+    write(contrast, config.RESULTS_DIR / f"lfp_distance_stats_{args.cohort}.csv")
 
     usable = [r for r in matched if r.get("n_separations", 0) > 0]
     if not usable:

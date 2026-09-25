@@ -16,7 +16,7 @@ Three panels, answering the three questions from the 2026-09-09 meeting in order
 (c) Does it differ between task and yoked control? Both cohorts throughout.
 
 The animal is the unit of analysis. Each per-animal value is itself a z-score
-against a jackknife over segments; the population test is a Wilcoxon signed-rank
+against a jackknife over segments; the population test is an exact sign-flip
 against zero across animals, BH-FDR within each panel's family.
 
     /opt/anaconda3/bin/python scripts/plot_lfp_psi.py
@@ -33,11 +33,10 @@ import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from scipy import stats  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import config, figstyle, trials  # noqa: E402
+from striatum_lfp import config, figstyle, psi, trials  # noqa: E402
 
 BANDS = ("theta", "beta", "low_gamma", "high_gamma")
 EPOCHS = trials.EPOCHS
@@ -62,29 +61,19 @@ def _load(cohort: str) -> list[dict]:
     return rows
 
 
-def _per_animal(rows, *, pair, band, ref, epoch):
-    by_mouse = defaultdict(list)
-    for r in rows:
-        if (r["area_a"], r["area_b"]) != pair or r["band"] != band:
-            continue
-        if r["reference"] != ref or r["epoch"] != epoch:
-            continue
-        if np.isfinite(r["z"]):
-            by_mouse[int(r["mouse_id"])].append(r["z"])
-    return {m: float(np.mean(v)) for m, v in by_mouse.items()}
-
-
-def _test(vals: np.ndarray):
-    """(mean, sem, p, floor). p is nan when the signed-rank test cannot reach 0.05."""
-    n = vals.size
-    mean = float(vals.mean())
-    sem = float(vals.std(ddof=1) / np.sqrt(n)) if n > 1 else np.nan
-    p = float(stats.wilcoxon(vals).pvalue) if n >= 6 else np.nan
-    return mean, sem, p, 2.0 / 2 ** n
+def _load_stats(cohort: str) -> dict:
+    """{(pair, band, reference): row} from run_lfp_psi.py's direction test."""
+    path = config.RESULTS_DIR / f"lfp_psi_stats_{cohort}.csv"
+    if not path.exists():
+        return {}
+    with path.open() as fh:
+        return {((r["area_a"], r["area_b"]), r["band"], r["reference"]): r
+                for r in csv.DictReader(fh)}
 
 
 def main() -> None:
     data = {k: _load(k) for k, _, _ in COHORTS}
+    tested = {k: _load_stats(k) for k, _, _ in COHORTS}
     if not any(data.values()):
         print("[plot] no PSI tables; run scripts/run_lfp_psi.py first")
         return
@@ -106,19 +95,23 @@ def main() -> None:
             drew = False
             for ref, marker, dx in (("monopolar", "o", -0.16), ("bipolar", "s", 0.16)):
                 for key, label, colour in COHORTS:
-                    vals = _per_animal(data.get(key, []), pair=pair, band=band,
+                    vals = psi.per_animal_z(data.get(key, []), pair=pair, band=band,
                                        ref=ref, epoch="All")
                     if len(vals) < MIN_MICE:
                         continue
                     v = np.array(list(vals.values()))
-                    mean, sem, p, floor = _test(v)
+                    st = tested[key].get((pair, band, ref), {})
+                    mean = float(v.mean())
+                    sem = float(v.std(ddof=1) / np.sqrt(v.size)) if v.size > 1 else np.nan
+                    floor = float(st.get("p_floor", np.nan))
+                    p = (float(st["p_fdr"]) if st.get("reachable") == "True" else np.nan)
                     off = dx + (0.06 if key == "control" else -0.06)
                     axa.errorbar(x + off, mean, yerr=sem, fmt=marker, ms=7,
                                  color=colour, capsize=3,
                                  mfc=colour if ref == "bipolar" else "white",
                                  mew=1.6, zorder=3)
                     drew = True
-                    verdict = (f"p = {p:.3f}" if np.isfinite(p)
+                    verdict = (f"p_FDR = {p:.3f}" if np.isfinite(p)
                                else f"UNDERPOWERED (n = {v.size}, floor {floor:.3f})")
                     lines.append(f"  {pair[0]}->{pair[1]:4s} {band:11s} {ref:10s} "
                                  f"{label:9s} z = {mean:+6.2f} ± {sem:4.2f} "
@@ -139,10 +132,10 @@ def main() -> None:
     axb = fig.add_subplot(gs[1])
     xe = np.arange(len(EPOCHS))
     # Only the pairs a cohort can actually test. The hippocampal pairs rest on
-    # three animals, where a signed-rank test cannot reach 0.05 at all, and
+    # three animals, where a sign-flip test cannot reach 0.05 at all, and
     # plotting them here would fill the panel with lines that carry no evidence.
     testable = [pr for pr in pairs
-                if max((len(_per_animal(data.get(k, []), pair=pr, band=b,
+                if max((len(psi.per_animal_z(data.get(k, []), pair=pr, band=b,
                                         ref="bipolar", epoch="All"))
                         for k, _, _ in COHORTS for b in BANDS), default=0) >= 6]
     for pi, pair in enumerate(testable):
@@ -155,7 +148,7 @@ def main() -> None:
                 # on replication that is not there.
                 by_mouse = defaultdict(list)
                 for band in BANDS:
-                    for mouse, val in _per_animal(data.get(key, []), pair=pair,
+                    for mouse, val in psi.per_animal_z(data.get(key, []), pair=pair,
                                                   band=band, ref="bipolar",
                                                   epoch=ep).items():
                         by_mouse[mouse].append(val)
@@ -174,7 +167,7 @@ def main() -> None:
                          label=f"{label}, {pair[0]}→{pair[1]}")
     axb.axhline(0, color="k", lw=1.0)
     axb.set_xticks(xe)
-    axb.set_xticklabels(["1-3", "4-10", "Inter", "Expert"])
+    axb.set_xticklabels(list(EPOCHS))
     axb.set_ylabel("phase-slope index (z), bipolar")
     axb.set_title("(b) Does it change with learning? Bipolar reference; an animal's bands "
                   "are averaged before the animals are.\nOnly pairs with N >= 6 mice are "
@@ -188,9 +181,9 @@ def main() -> None:
     for pair in pairs:
         for band in BANDS:
             for key, _, _ in COHORTS:
-                a = _per_animal(data.get(key, []), pair=pair, band=band,
+                a = psi.per_animal_z(data.get(key, []), pair=pair, band=band,
                                 ref="monopolar", epoch="All")
-                b = _per_animal(data.get(key, []), pair=pair, band=band,
+                b = psi.per_animal_z(data.get(key, []), pair=pair, band=band,
                                 ref="bipolar", epoch="All")
                 for m in set(a) & set(b):
                     mono.append(a[m])
@@ -207,8 +200,7 @@ def main() -> None:
         r = float(np.corrcoef(mono, bip)[0, 1])
         keep = float(np.mean(np.sign(mono) == np.sign(bip)))
         axc.set_title(f"(c) The same cells under both references: r = {r:+.2f}, "
-                      f"sign agrees in {keep:.0%}. Points on the diagonal mean the "
-                      f"far field was not what produced the direction.", fontsize=10)
+                      f"sign agrees in {keep:.0%}", fontsize=10)
         axc.set_xlabel("monopolar z")
         axc.set_ylabel("bipolar z")
         axc.legend(fontsize=8, frameon=False)
@@ -216,9 +208,9 @@ def main() -> None:
                      f"r = {r:+.2f}, sign agreement {keep:.0%}")
 
     fig.suptitle("Direction of communication from the LFP (phase-slope index)\n"
-                 "PSI is blind to instantaneous mixing by construction, which is why it is "
-                 "usable here at all:\nthe distance control showed cross-area coupling on this "
-                 "probe is a shared field.", fontsize=12)
+                 "PSI is blind to instantaneous mixing by construction; bipolar = vertical "
+                 "pairs one row apart.\nVerdicts: exact sign-flip across animals, BH over "
+                 "pairs × bands per reference (run_lfp_psi.py)", fontsize=12)
     figstyle.save_pair(fig, "lfp_psi_direction")
     print("\n".join(lines))
 

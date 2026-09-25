@@ -274,3 +274,21 @@ def test_the_jackknife_is_the_calibrated_statistic_not_the_shuffle():
     assert sd_shuf > sd_jack, (
         "the shuffled surrogate must be the wider, anti-conservative one: "
         f"sd {sd_shuf:.2f} vs jackknife {sd_jack:.2f}")
+
+
+# --- the across-animal direction test (moved out of the plot script) --------
+
+def test_direction_stats_one_row_per_pair_band_reference_with_bh():
+    rows = []
+    for m in range(8):
+        for ref in ("monopolar", "bipolar"):
+            rows.append({"mouse_id": m, "area_a": "DMS", "area_b": "ACC", "band": "theta",
+                         "reference": ref, "epoch": "All",
+                         "z": 2.0 if ref == "monopolar" else (-1) ** m * 0.5})
+    out = psi.direction_stats(rows, bands=("theta",))
+    by_ref = {r["reference"]: r for r in out}
+    assert set(by_ref) == {"monopolar", "bipolar"}
+    assert by_ref["monopolar"]["p_raw"] == pytest.approx(2 / 2**8)
+    assert by_ref["bipolar"]["p_raw"] > 0.5
+    assert by_ref["monopolar"]["n_animals"] == 8
+    assert "p_fdr" in by_ref["bipolar"]

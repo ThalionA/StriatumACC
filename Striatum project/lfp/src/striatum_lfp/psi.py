@@ -269,3 +269,50 @@ def trial_shuffled_null(x, y, *, fs: float, band: tuple[float, float],
     return trial_shuffled_nulls(x, y, fs=fs, bands={"band": band}, nperseg=nperseg,
                                 n_shuffles=n_shuffles, seed=seed,
                                 noverlap=noverlap)["band"]
+
+
+def per_animal_z(rows, *, pair, band, ref, epoch) -> dict[int, float]:
+    """``{mouse: mean PSI z}`` for one area pair x band x reference x epoch."""
+    by_mouse: dict[int, list[float]] = {}
+    for r in rows:
+        if ((r["area_a"], r["area_b"]) != tuple(pair) or r["band"] != band
+                or r["reference"] != ref or r["epoch"] != epoch):
+            continue
+        if np.isfinite(r["z"]):
+            by_mouse.setdefault(int(r["mouse_id"]), []).append(float(r["z"]))
+    return {m: float(np.mean(v)) for m, v in by_mouse.items()}
+
+
+def direction_stats(rows, *, bands, epoch: str = "All") -> list[dict]:
+    """Is there a consistent direction across animals? One row per pair x band x reference.
+
+    Exact sign-flip on the per-animal jackknife z (the animal is the unit), BH
+    over pairs x bands within each reference, with the test's floor carried so
+    an untestable pair (three hippocampal animals) is marked, not read as null.
+    """
+    from . import stats
+
+    pairs = sorted({(r["area_a"], r["area_b"]) for r in rows})
+    out = []
+    for ref in ("monopolar", "bipolar"):
+        cells = []
+        for pair in pairs:
+            for band in bands:
+                vals = np.array(list(per_animal_z(rows, pair=pair, band=band, ref=ref,
+                                                  epoch=epoch).values()))
+                if not vals.size:
+                    continue
+                floor = stats.sign_flip_floor(vals.size)
+                cells.append({"area_a": pair[0], "area_b": pair[1], "band": band,
+                              "reference": ref, "epoch": epoch, "n_animals": int(vals.size),
+                              "mean_z": float(vals.mean()),
+                              "sem_z": float(vals.std(ddof=1) / np.sqrt(vals.size))
+                              if vals.size > 1 else np.nan,
+                              "p_raw": stats.sign_flip_test(vals), "p_floor": floor,
+                              "reachable": stats.can_reach(floor)})
+        if cells:
+            adj, rej = stats.fdr_bh(np.array([c["p_raw"] for c in cells]))
+            for c, a, k in zip(cells, adj, rej):
+                c["p_fdr"], c["survives_fdr"] = float(a), bool(k)
+        out += cells
+    return out

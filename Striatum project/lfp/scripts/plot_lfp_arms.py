@@ -33,7 +33,7 @@ WINDOWS = ["All"] + EPOCHS
 
 def _epoch_axis(ax):
     ax.set_xticks(range(len(EPOCHS)))
-    ax.set_xticklabels(["1–3", "4–10", "Inter", "Expert"], fontsize=7)
+    ax.set_xticklabels(["Naive", "Inter", "Expert"], fontsize=7)
 
 
 def load_stats(cohort_name: str = "task"):
@@ -128,7 +128,7 @@ def plot_speed(rows, stem="lfp_evolution_speed"):
     save_pair(fig, stem)
 
 
-def plot_decoding(rows, stem="lfp_decoding"):
+def plot_decoding(rows, stem="lfp_decoding", stats_rows=()):
     areas = [a for a in AREA_ORDER if any(r["area"] == a for r in rows)]
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.6),
                              gridspec_kw={"width_ratios": [1.15, 1]})
@@ -177,10 +177,11 @@ def plot_decoding(rows, stem="lfp_decoding"):
                  "points above the dashed line decode better than the null", fontsize=9)
     ax.legend(fontsize=7, loc="lower right")
 
-    fig.suptitle("Spatial decoding from LFP band power — reliable but small: the decoder "
-                 "beats its null in every striatal/ACC cell (BH-FDR q=0.05),\n"
-                 "yet median error improves only ~1–2.5 cm on a 250 cm corridor",
-                 fontsize=11)
+    n_sig = sum(r["survives_fdr"] == "True" for r in stats_rows)
+    verdict = (f"{n_sig}/{len(stats_rows)} area × band cells beat their null "
+               "(exact sign-flip across animals, BH q=0.05)" if stats_rows
+               else "no decoding stats table — run run_lfp_arms.py")
+    fig.suptitle(f"Spatial decoding from LFP band power — {verdict}", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     save_pair(fig, stem)
 
@@ -242,17 +243,11 @@ def plot_cca(rows, stem="lfp_cca"):
         sub = [r for r in rows if r["band"] == band]
         real = hierarchical(sub, ("area_a", "area_b"), "heldout_cc1")
         null = hierarchical(sub, ("area_a", "area_b"), "null_p95")
-        ceil_a = hierarchical(sub, ("area_a", "area_b"), "ceiling_a")
-        ceil_b = hierarchical(sub, ("area_a", "area_b"), "ceiling_b")
         x = np.arange(len(pairs))
         for i, p in enumerate(pairs):
             if p not in real:
                 continue
             lo = null.get(p, (np.nan,) * 3)[0]
-            hi = np.nanmean([ceil_a.get(p, (np.nan,) * 3)[0],
-                             ceil_b.get(p, (np.nan,) * 3)[0]])
-            ax.fill_between([i - 0.42, i + 0.42], lo, hi, color="0.85", zorder=0)
-            ax.plot([i - 0.42, i + 0.42], [hi, hi], color="0.35", lw=1.2)
             ax.plot([i - 0.42, i + 0.42], [lo, lo], color="0.35", lw=1.2, ls="--")
             mu, sem, n = real[p]
             ax.errorbar([i], [mu], yerr=[sem], marker="o", ms=6, capsize=3,
@@ -265,26 +260,26 @@ def plot_cca(rows, stem="lfp_cca"):
         ax.set_ylim(0, 1.02)
         if bi == 0:
             ax.set_ylabel("held-out top canonical correlation")
-    fig.suptitle("Cross-area coupling, bracketed by what it must beat\n"
-                 "orange = cross-area held-out CC1 · dashed = trial-permutation null (95th pct) · "
-                 "solid = within-area split-half ceiling\n"
-                 "a value inside the grey band is consistent with a shared field "
-                 "(one shank, 1.2–1.9 mm apart), not with area-specific coupling",
+    fig.suptitle("Cross-area co-fluctuation of band-power profiles\n"
+                 "orange = held-out CC1 (mean ± SEM over animals) · dashed = "
+                 "trial-permutation null (95th pct)\n"
+                 "above the null says the pairing of trials matters; it does not separate "
+                 "a shared field from communication (see the distance control)",
                  fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.90))
     save_pair(fig, stem)
 
 
-def plot_cca_distance(rows, stem="lfp_cca_vs_distance"):
+def plot_cca_distance(rows, stem="lfp_cca_vs_distance", stats_rows=()):
     """Does cross-area coupling fall off with distance along the shank?
 
-    The cleanest discriminator available without re-referencing: a shared
-    volume-conducted field decays with electrode separation, whereas
-    area-specific coupling has no reason to.
+    A shared volume-conducted field decays with electrode separation. The test
+    is the WITHIN-animal slope of CC1 on separation, tested across animals
+    (``lfp_arms_cca_distance_stats``); pooling area pairs from the same animal
+    as independent points is pseudoreplication.
     """
     fig, axes = plt.subplots(1, len(PLOT_BANDS), figsize=(3.3 * len(PLOT_BANDS), 3.9),
                              sharey=True, squeeze=False)
-    from scipy import stats as sps
     for bi, band in enumerate(PLOT_BANDS):
         ax = axes[0][bi]
         sub = [r for r in rows if r["band"] == band
@@ -292,15 +287,19 @@ def plot_cca_distance(rows, stem="lfp_cca_vs_distance"):
         x = np.array([r["separation_um"] for r in sub]) / 1000.0
         y = np.array([r["heldout_cc1"] for r in sub])
         pairs = np.array([f"{r['area_a']}-{r['area_b']}" for r in sub])
+        animals = np.array([f"{r['mouse_id']}/{r['probe']}" for r in sub])
+        for animal in np.unique(animals):
+            m = animals == animal
+            order = np.argsort(x[m])
+            ax.plot(x[m][order], y[m][order], color="0.75", lw=0.7, zorder=1)
         for pair in np.unique(pairs):
             m = pairs == pair
-            ax.scatter(x[m], y[m], s=16, alpha=0.75, label=pair)
-        if x.size > 3:
-            rho, pv = sps.spearmanr(x, y)
-            fit = np.polyfit(x, y, 1)
-            xs = np.linspace(x.min(), x.max(), 20)
-            ax.plot(xs, np.polyval(fit, xs), "k--", lw=1)
-            ax.text(0.96, 0.95, f"Spearman ρ = {rho:+.2f}\np = {pv:.1e}\nn = {x.size} pairs",
+            ax.scatter(x[m], y[m], s=16, alpha=0.75, label=pair, zorder=2)
+        st = next((r for r in stats_rows if r["band"] == band), None)
+        if st is not None:
+            ax.text(0.96, 0.95, f"within-animal slope {float(st['mean_delta']):+.2f} /mm\n"
+                    f"p = {float(st['p_raw']):.3f}, p_FDR = {float(st['p_fdr']):.3f}\n"
+                    f"n = {int(st['n_animals'])} animals",
                     transform=ax.transAxes, ha="right", va="top", fontsize=7)
         ax.set_xlabel("separation between area centres (mm)")
         ax.set_title(BAND_LABEL[band], fontsize=9)
@@ -309,8 +308,8 @@ def plot_cca_distance(rows, stem="lfp_cca_vs_distance"):
         if bi == len(PLOT_BANDS) - 1:
             ax.legend(fontsize=6, loc="lower left")
     fig.suptitle("Cross-area coupling falls off with distance along the shank\n"
-                 "each point is one animal-pair; the decay is the signature of a shared "
-                 "field, not of area-specific communication", fontsize=11)
+                 "grey lines join one animal's area pairs; the test is the within-animal "
+                 "slope, across animals (exact sign-flip, BH over bands)", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.86))
     save_pair(fig, stem)
 
@@ -564,12 +563,17 @@ def main() -> None:
     evo = load("evolution", c)
     if evo:
         st = load_stats(c)
+        plot_evolution(evo, "log_corridor", "log_dark", "log10 band power",
+                       f"lfp_evolution_log{tag}",
+                       f"LFP band power across learning, per area — {c.upper()} cohort "
+                       "(PRIMARY: log10 of mean power)\n"
+                       "Δ and p(FDR) are the Naive → Expert exact sign-flip test, "
+                       "BH-corrected over the area × band family; ✱ = survives",
+                       stats=st)
         plot_evolution(evo, "z_corridor", "z_dark", "z log power",
                        f"lfp_evolution_z{tag}",
-                       f"LFP band power across learning, per area — {c.upper()} cohort "
-                       "(z-scored log power)\n"
-                       "Δ and p(FDR) are the trials 4–10 → Expert paired test, "
-                       "BH-corrected over the area × band family; ✱ = survives",
+                       f"Sensitivity — {c.upper()} cohort: z-scored log power "
+                       "(divides by a session SD that differs between animals)",
                        stats=st)
         plot_evolution(evo, "z_corridor_speed_resid", "z_dark",
                        "z log power, speed removed",
@@ -581,11 +585,16 @@ def main() -> None:
                        f"The aperiodic guard — {c.upper()} cohort: band power as a FRACTION "
                        "of 1–150 Hz total", stats=st)
         plot_speed(evo, stem=f"lfp_evolution_speed{tag}")
+    rows = load("decoding", c)
+    if rows:
+        plot_decoding(rows, stem=f"lfp_decoding{tag}", stats_rows=load("decoding_stats", c))
+    rows = load("cca", c)
+    if rows:
+        plot_cca_distance(rows, stem=f"lfp_cca_vs_distance{tag}",
+                          stats_rows=load("cca_distance_stats", c))
     for name, fn, stem in (
-        ("decoding", plot_decoding, "lfp_decoding"),
         ("reliability", plot_reliability, "lfp_reliability"),
         ("cca", plot_cca, "lfp_cca"),
-        ("cca", plot_cca_distance, "lfp_cca_vs_distance"),
         ("moving_reliability", plot_moving_reliability, "lfp_reliability_moving"),
         ("moving_reliability", plot_moving_reliability_absolute,
          "lfp_reliability_moving_session"),

@@ -31,11 +31,10 @@ import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from scipy import stats  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import arms, config, figstyle  # noqa: E402
+from striatum_lfp import config, figstyle  # noqa: E402
 
 BANDS = ("theta", "beta", "low_gamma", "high_gamma", "total")
 COHORTS = (("task", "Task", "#1f4e79"), ("control", "Control 1", "#e69f00"))
@@ -52,7 +51,8 @@ def _load(name: str, cohort: str) -> list[dict]:
         rows = list(csv.DictReader(fh))
     for r in rows:
         for k, v in r.items():
-            if k in ("cohort", "probe", "band", "pair_class"):
+            if k in ("cohort", "probe", "band", "pair_class", "field", "reachable",
+                     "survives_fdr"):
                 continue
             try:
                 r[k] = float(v)
@@ -101,6 +101,7 @@ def main() -> None:
     for ci, (key, label, _) in enumerate(COHORTS):
         by_bin = _load("distance_control", key)
         matched = _load("distance_matched", key)
+        tested = {r["band"]: r for r in _load("distance_stats", key) if r["field"] == "d_raw"}
         if not by_bin:
             axes[0][ci].axis("off")
             axes[1][ci].axis("off")
@@ -119,62 +120,52 @@ def main() -> None:
             ax.fill_between(xs + 50, m - e, m + e, color=colour, alpha=0.20, lw=0)
         ax.set_xlabel("electrode separation along the shank (µm)")
         ax.set_ylabel("coupling, r of log band power")
-        ax.set_title(f"{label} — coupling falls with distance, and the area\n"
-                     f"boundary does not move the curve (total 1–150 Hz)", fontsize=11)
+        ax.set_title(f"{label} — coupling vs separation, within- and across-area pairs\n"
+                     f"(total 1–150 Hz, animal means ± SEM)", fontsize=11)
         ax.legend(fontsize=9, frameon=False)
         ax.axhline(0, color="0.6", lw=0.8, ls=":")
 
         # --- (b) exact-matched contrast per band -----------------------------
         ax = axes[1][ci]
-        xs, means, sems, ps, ns, floors = [], [], [], [], [], []
+        # The test itself is computed by run_lfp_distance_control.py
+        # (distance.contrast_stats); this panel only draws it. An unreachable
+        # test is labelled as such, not as "n.s.", and the 95 % CI is drawn
+        # because a null is only as informative as that interval is narrow.
+        xs = []
         for bi, band in enumerate(BANDS):
             vals = _per_animal_contrast(matched, band)
-            if len(vals) < 3:
+            st = tested.get(band)
+            if not vals or st is None:
                 continue
             v = np.array(list(vals.values()))
             xs.append(bi)
-            means.append(v.mean())
-            sems.append(v.std(ddof=1) / np.sqrt(v.size))
-            ns.append(v.size)
-            # A two-sided signed-rank test on n animals cannot return a p below
-            # 2 / 2**n, so at n = 5 the smallest attainable p is 0.0625 and the
-            # test CANNOT reject at 0.05 however large the effect. Marking such a
-            # band "n.s." would read as evidence of no effect when it is only
-            # evidence of no power, so the floor is carried and labelled.
-            ps.append(stats.wilcoxon(v).pvalue if v.size >= 6 else np.nan)
-            floors.append(2.0 / 2 ** v.size)
             ax.scatter(np.full(v.size, bi) + np.linspace(-0.12, 0.12, v.size),
                        v, s=16, color="0.55", zorder=2, alpha=0.8)
-        if xs:
-            _, sig = arms.fdr_bh(np.array(ps, dtype=float))
-            ax.errorbar(xs, means, yerr=sems, fmt="s", ms=8, lw=0, elinewidth=2,
-                        capsize=4, color="#1f4e79", zorder=3)
-            for k, bi in enumerate(xs):
-                if not np.isfinite(ps[k]):
-                    mark = "underpowered"
-                elif sig[k]:
-                    mark = "*"
-                else:
-                    mark = "n.s."
-                ax.text(bi, max(means[k] + sems[k], 0) + 0.012, mark, ha="center",
-                        fontsize=9 if mark == "*" else 6.5, color="0.25")
+            ax.errorbar([bi], [st["mean"]],
+                        yerr=[[st["mean"] - st["ci95_low"]], [st["ci95_high"] - st["mean"]]],
+                        fmt="s", ms=8, lw=0, elinewidth=2, capsize=4, color="#1f4e79",
+                        zorder=3)
+            mark = ("underpowered" if st["reachable"] != "True"
+                    else "*" if st["survives_fdr"] == "True" else "n.s.")
+            ax.text(bi, max(st["ci95_high"], 0) + 0.012, mark, ha="center",
+                    fontsize=9 if mark == "*" else 6.5, color="0.25")
             summary_lines.append(f"{label}:")
-            for k, bi in enumerate(xs):
-                if np.isfinite(ps[k]):
-                    verdict = (f"Wilcoxon p = {ps[k]:.3f}"
-                               f"{', survives BH-FDR' if sig[k] else ''}")
-                else:
-                    verdict = (f"UNDERPOWERED: n = {ns[k]}, the smallest attainable "
-                               f"two-sided p is {floors[k]:.3f}")
+            for bi in xs:
+                st = tested[BANDS[bi]]
+                verdict = (f"sign-flip p = {st['p_raw']:.3f}, p_FDR = {st['p_fdr']:.3f}"
+                           if st["reachable"] == "True" else
+                           f"UNDERPOWERED: n = {int(st['n_animals'])}, floor "
+                           f"{st['p_floor']:.3f}")
                 summary_lines.append(
-                    f"   {BANDS[bi]:11s} within − across = {means[k]:+.4f} ± {sems[k]:.4f} "
-                    f"(N = {ns[k]} mice, {verdict})")
+                    f"   {BANDS[bi]:11s} within − across = {st['mean']:+.4f}, 95% CI "
+                    f"[{st['ci95_low']:+.4f}, {st['ci95_high']:+.4f}] "
+                    f"(N = {int(st['n_animals'])} mice, {verdict})")
         ax.axhline(0, color="k", lw=1.0)
         ax.set_xticks(range(len(BANDS)))
         ax.set_xticklabels(["θ", "β", "γ low", "γ high", "total"], rotation=0)
         ax.set_ylabel("within − across, at IDENTICAL separation")
-        ax.set_title(f"{label} — with distance matched exactly, the boundary\n"
-                     f"makes no difference (each dot is one mouse)", fontsize=11)
+        ax.set_title(f"{label} — within − across at identical separation\n"
+                     f"(dots = mice; square = mean with 95% CI across mice)", fontsize=11)
 
     lo = min(a.get_ylim()[0] for a in axes[1] if a.has_data())
     hi = max(a.get_ylim()[1] for a in axes[1] if a.has_data())

@@ -235,3 +235,33 @@ def test_exact_matching_still_finds_a_real_area_term():
     res = distance.pairwise_coupling(cube, depths, areas)
     out = distance.exact_matched_contrast(res, min_pairs=5)
     assert out["d_raw"] > 0.05, f"a real area term must survive, got {out['d_raw']:+.3f}"
+
+
+# --- the across-animal test (moved out of the plot script, 2026-09-25) --------
+
+def _matched_rows(values_by_mouse, band="theta", probes=("striatum",)):
+    return [{"mouse_id": m, "probe": p, "band": band, "n_separations": 3, "d_raw": v}
+            for m, v in values_by_mouse.items() for p in probes]
+
+
+def test_contrast_stats_averages_probes_then_tests_across_animals():
+    rows = _matched_rows({m: 0.1 for m in range(6)}, probes=("striatum", "visual"))
+    out = distance.contrast_stats(rows, bands=("theta",))
+    (r,) = out
+    assert r["n_animals"] == 6                       # probes averaged, not counted twice
+    assert r["p_raw"] == pytest.approx(2 / 2**6)
+    assert r["reachable"]
+    assert r["ci95_low"] == pytest.approx(0.1) and r["ci95_high"] == pytest.approx(0.1)
+
+
+def test_contrast_stats_marks_an_unreachable_band():
+    rows = _matched_rows({m: 0.1 for m in range(4)})
+    (r,) = distance.contrast_stats(rows, bands=("theta",))
+    assert not r["reachable"] and r["p_floor"] == pytest.approx(0.125)
+
+
+def test_contrast_stats_skips_cells_without_matched_separations():
+    rows = _matched_rows({m: 0.1 for m in range(6)})
+    rows[0]["n_separations"] = 0
+    (r,) = distance.contrast_stats(rows, bands=("theta",))
+    assert r["n_animals"] == 5

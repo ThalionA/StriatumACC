@@ -3,8 +3,17 @@
 Comparing "significant in task" against "not significant in control" is not a
 comparison; with 5 control animals almost nothing will reach significance there,
 so that reasoning would turn low power into evidence of absence. What is asked
-here instead is whether the two groups *differ*: an unpaired Welch test on the
-per-animal quantity, BH-corrected over the area x band family declared per arm.
+here instead is whether the two groups *differ*: an exact two-sample permutation
+test on the per-animal quantity (``striatum_lfp.stats``), BH-corrected over the
+area x band family of each (arm, metric). Each row carries the test's floor and
+whether 0.05 was reachable at those group sizes.
+
+**Pre-registered primary test (2026-09-25, before the re-run):** evolution,
+``delta_log_corridor`` -- Expert minus Naive log10 band power, the log taken of
+the linear power averaged over the epoch's bins and trials. Log power is already
+within-session relative and needs no normaliser; the z-scored version divides by
+a session SD that differs between groups, and carried the earlier p_FDR 0.049
+DLS-theta result. Everything else in the table is a sensitivity check.
 
 Four contrasts:
 
@@ -13,7 +22,12 @@ Four contrasts:
 * **decoding** -- per-animal R2 above its own rotated-label null. Control 1 runs
   the same corridor, so position information should survive; a task/control gap
   would be about reward contingency, not about the corridor.
-* **moving reliability** -- per-animal reliability above its own trial-shuffle.
+* **reliability** -- per-animal split-half reliability, raw and with the linear
+  speed component removed first: if the task/control gap is behavioural (task
+  animals run the corridor more stereotypically), it shrinks after removal.
+* **moving reliability** -- per-animal Expert-epoch reliability, raw. Minus its
+  trial shuffle it measures drift, not single-trial reliability: a perfectly
+  reliable stationary profile scores ~0 after subtraction.
 * **cca** -- per-animal held-out CC1.
 
 Run from ``Striatum project/lfp``::
@@ -29,15 +43,14 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import arms, config  # noqa: E402
+from striatum_lfp import config, stats  # noqa: E402
 from striatum_lfp.results_io import load_arms  # noqa: E402
 
-MIN_PER_GROUP = 3
 NAIVE_EPOCH = "Naive"            # trials.EPOCHS[0]: good trials 1-10
+PRIMARY_EVOLUTION_METRIC = "log_corridor"
 
 
 def _mouse(row) -> int:
@@ -98,8 +111,8 @@ def per_animal_pairs(rows, value, minus=None):
     return out
 
 
-def contrast(task_map, ctrl_map, arm, metric):
-    """Welch task-vs-control per cell, then BH over the cells of this arm."""
+def contrast(task_map, ctrl_map, arm, metric, primary=False):
+    """Permutation task-vs-control per cell, then BH over this (arm, metric)."""
     cells = []
     for key in sorted(set(task_map) | set(ctrl_map)):
         t = np.array(list(task_map.get(key, {}).values()))
@@ -112,13 +125,14 @@ def contrast(task_map, ctrl_map, arm, metric):
             "control_mean": float(c.mean()) if c.size else np.nan,
             "control_sem": float(c.std(ddof=1) / np.sqrt(c.size)) if c.size > 1 else np.nan,
             "difference": float(t.mean() - c.mean()) if t.size and c.size else np.nan,
-            "p_raw": np.nan,
+            "p_raw": stats.permutation_test_two_sample(t, c),
+            "p_floor": stats.two_sample_floor(t.size, c.size),
+            "primary": primary,
         }
-        if t.size >= MIN_PER_GROUP and c.size >= MIN_PER_GROUP:
-            row["p_raw"] = float(stats.ttest_ind(t, c, equal_var=False).pvalue)
+        row["reachable"] = stats.can_reach(row["p_floor"])
         cells.append(row)
     p = np.array([r["p_raw"] for r in cells])
-    adjusted, reject = arms.fdr_bh(p, q=0.05)
+    adjusted, reject = stats.fdr_bh(p, q=0.05)
     for r, a, k in zip(cells, adjusted, reject):
         r["p_fdr"] = float(a) if np.isfinite(a) else np.nan
         r["differs"] = bool(k)
@@ -129,27 +143,31 @@ def contrast(task_map, ctrl_map, arm, metric):
 def main() -> None:
     out_rows = []
 
-    for metric in ("z_corridor", "z_corridor_speed_resid", "frac_of_total_corridor"):
+    for metric in ("log_corridor", "z_corridor", "z_corridor_speed_resid",
+                   "frac_of_total_corridor"):
         t = per_animal_evolution(load_arms("evolution", "task"), metric)
         c = per_animal_evolution(load_arms("evolution", "control"), metric)
-        out_rows += contrast(t, c, "evolution", f"delta_{metric}")
+        out_rows += contrast(t, c, "evolution", f"delta_{metric}",
+                             primary=metric == PRIMARY_EVOLUTION_METRIC)
 
-    all_win = {"window": "All"}
-    for arm, name, value, minus, key_fn in (
-        ("decoding", "decoding", "r2", "null_r2_median", per_animal_simple),
-        ("reliability", "reliability", "split_half_r", None, per_animal_simple),
-    ):
-        t = key_fn(load_arms(name, "task"), value, minus,
-                   where=lambda r: r["window"] == all_win["window"])
-        c = key_fn(load_arms(name, "control"), value, minus,
-                   where=lambda r: r["window"] == all_win["window"])
+    def all_window(r):
+        return r["window"] == "All"
+
+    for arm, value, minus in (("decoding", "r2", "null_r2_median"),
+                              ("reliability", "split_half_r", None),
+                              ("reliability", "split_half_r_speed_resid", None)):
+        t = per_animal_simple(load_arms(arm, "task"), value, minus, where=all_window)
+        c = per_animal_simple(load_arms(arm, "control"), value, minus, where=all_window)
         out_rows += contrast(t, c, arm, value if minus is None else f"{value}_minus_null")
 
-    t = per_animal_simple(load_arms("moving_reliability_epochs", "task"),
-                          "obs_minus_shuffle", where=lambda r: r["epoch"] == "Expert")
-    c = per_animal_simple(load_arms("moving_reliability_epochs", "control"),
-                          "obs_minus_shuffle", where=lambda r: r["epoch"] == "Expert")
-    out_rows += contrast(t, c, "moving_reliability", "obs_minus_shuffle_expert")
+    def expert(r):
+        return r["epoch"] == "Expert"
+
+    t = per_animal_simple(load_arms("moving_reliability_epochs", "task"), "reliability",
+                          where=expert)
+    c = per_animal_simple(load_arms("moving_reliability_epochs", "control"), "reliability",
+                          where=expert)
+    out_rows += contrast(t, c, "moving_reliability", "reliability_expert")
 
     # Behaviour: one value per animal, so a single "cell" per measure.
     for measure in ("speed_profile_split_half_r", "mean_speed_cm_s", "speed_bin_cv"):
@@ -174,9 +192,9 @@ def main() -> None:
     for arm in dict.fromkeys(r["arm"] for r in out_rows):
         sub = [r for r in out_rows if r["arm"] == arm]
         sig = [r for r in sub if r["differs"]]
-        tested = sum(np.isfinite(r["p_raw"]) for r in sub)
-        print(f"[contrast] {arm:<20} {len(sig)}/{tested} cells differ between groups "
-              f"(BH q=0.05)")
+        tested = sum(r["reachable"] for r in sub)
+        print(f"[contrast] {arm:<20} {len(sig)}/{len(sub)} cells differ between groups "
+              f"(BH q=0.05; {tested} could reach 0.05)")
         for r in sig:
             print(f"              {r['area']:<8}{r['band']:<11} task {r['task_mean']:+.4f} "
                   f"vs control {r['control_mean']:+.4f}  p={r['p_raw']:.4f} "

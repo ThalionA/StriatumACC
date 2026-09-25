@@ -9,11 +9,13 @@ Three questions, each with the guard that makes the answer mean something:
 * **Reliability** -- is a channel's spatial profile the same from trial to trial?
   Split-half over *interleaved* trials, so a slow drift across the session is not
   scored as unreliability, and Spearman-Brown corrected back to the full trial set.
-* **Cross-area CCA** -- is coupling between two areas more than a shared field?
-  DMS, DLS and ACC sit on one shank, 1.2-1.9 mm apart, so volume conduction alone
-  produces large canonical correlations. Every value is bracketed by two
-  references: a trial-permutation null below and the within-area split-half
-  ceiling above. A number between them is volume conduction, not communication.
+* **Cross-area CCA** -- how much do two areas' band-power profiles share beyond
+  what any pairing of trials would? Held-out CC1 against a trial-permutation
+  null. DMS, DLS and ACC sit on one shank, so a shared field produces large
+  values; this arm cannot separate field from communication. The separation-
+  matched distance control (``distance.py``) is the test for that. (A within-area
+  split-half "ceiling" was dropped on 2026-09-25: random channel halves split
+  same-row pairs, so it measured zero separation and sat at ~1 by construction.)
 """
 
 from __future__ import annotations
@@ -124,47 +126,40 @@ def heldout_cca_grouped(A: np.ndarray, B: np.ndarray, groups: np.ndarray, *,
     return float(abs(r)) if np.isfinite(r) else np.nan
 
 
-def trial_shuffle_cca_null(A: np.ndarray, B: np.ndarray, groups: np.ndarray, *,
+def paired_design(cube_a: np.ndarray, cube_b: np.ndarray, trials: np.ndarray | None = None):
+    """``(Xa, Xb, trial_index)`` with rows complete in BOTH areas.
+
+    Built from one stacked cube, so a (trial, bin) row is kept or dropped for
+    both areas together and row ``i`` of ``Xa`` and ``Xb`` is always the same
+    moment. Building the two design matrices separately and truncating to the
+    shorter one misaligns every row after the first bin missing in one area.
+    """
+    n_a = cube_a.shape[0]
+    X, _, groups = design_matrix(np.concatenate([cube_a, cube_b], axis=0), trials)
+    return X[:, :n_a], X[:, n_a:], groups
+
+
+def trial_shuffle_cca_null(cube_a: np.ndarray, cube_b: np.ndarray,
+                           trials: np.ndarray | None = None, *,
                            n_shuffles: int = 25, k: int = 5, seed: int = 0) -> np.ndarray:
     """Null distribution: pair ``A``'s trials with a permutation of ``B``'s.
 
     Permuting whole trials -- rather than shuffling rows i.i.d. -- keeps each
     block's own temporal and spatial autocorrelation intact, so the null asks
     "is this pairing special?" instead of the far easier "is there any structure
-    at all?". An i.i.d. shuffle destroys the 1/f and is trivially beaten.
+    at all?". The permutation is applied to B's trial axis of the CUBE and the
+    paired design matrix rebuilt, so bin ``j`` of A's trial is always paired with
+    bin ``j`` of B's (shuffled) trial, whatever bins are missing.
     """
     rng = np.random.default_rng(seed)
-    unique = np.unique(groups)
+    sel = np.arange(cube_a.shape[2]) if trials is None else np.asarray(trials, int)
     out = np.full(n_shuffles, np.nan)
     for s in range(n_shuffles):
-        mapping = dict(zip(unique, rng.permutation(unique)))
-        order = np.concatenate([np.flatnonzero(groups == mapping[g]) for g in unique])
-        n = min(order.size, A.shape[0])
-        out[s] = heldout_cca_grouped(A[:n], B[order[:n]], groups[:n], k=k, seed=s)
+        b = cube_b.copy()
+        b[:, :, sel] = cube_b[:, :, rng.permutation(sel)]
+        Xa, Xb, g = paired_design(cube_a, b, sel)
+        out[s] = heldout_cca_grouped(Xa, Xb, g, k=k, seed=s)
     return out
-
-
-def within_area_ceiling(A: np.ndarray, groups: np.ndarray, *, k: int = 5,
-                        seed: int = 0, n_repeats: int = 5) -> float:
-    """Split-half CCA *within* one area -- the volume-conduction ceiling.
-
-    Two random halves of the same area's channels are as physically coupled as
-    two sets of electrodes in one field can be. A cross-area value at or above
-    this is explained by the shared field; only a value clearly below it (and
-    above the shuffle null) is candidate area-specific structure.
-    """
-    A = np.asarray(A, float)
-    rng = np.random.default_rng(seed)
-    n_ch = A.shape[1]
-    if n_ch < 4:
-        return np.nan
-    scores = []
-    for rep in range(n_repeats):
-        perm = rng.permutation(n_ch)
-        half = n_ch // 2
-        scores.append(heldout_cca_grouped(A[:, perm[:half]], A[:, perm[half:]],
-                                          groups, k=k, seed=rep))
-    return float(np.nanmedian(scores))
 
 
 def ridge_cv_decode(X: np.ndarray, y: np.ndarray, groups: np.ndarray,
@@ -235,28 +230,6 @@ def residualise_on(cube: np.ndarray, covariate: np.ndarray) -> np.ndarray:
         resid[ok] = v[ok] - (slope * cov[ok] + intercept)
         out[c] = resid.reshape(cube.shape[1:])
     return out
-
-
-def fdr_bh(pvalues: np.ndarray, q: float = 0.05):
-    """Benjamini-Hochberg adjusted p-values and the reject mask at level ``q``.
-
-    The project's standard correction (``fdr_correct.m``); a family here is one
-    area x band grid, declared before the run.
-    """
-    p = np.asarray(pvalues, dtype=float)
-    ok = np.isfinite(p)
-    adjusted = np.full(p.shape, np.nan)
-    if not ok.any():
-        return adjusted, np.zeros(p.shape, bool)
-    vals = p[ok]
-    order = np.argsort(vals)
-    m = vals.size
-    ranked = vals[order] * m / np.arange(1, m + 1)
-    ranked = np.minimum.accumulate(ranked[::-1])[::-1]
-    adj = np.empty(m)
-    adj[order] = np.clip(ranked, 0, 1)
-    adjusted[ok] = adj
-    return adjusted, np.nan_to_num(adjusted, nan=1.0) <= q
 
 
 # --- The project's own moving-window reliability -----------------------------

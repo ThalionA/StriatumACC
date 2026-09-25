@@ -8,8 +8,9 @@
    split by trial, against a trial-shuffled target null.
 3. **Trial-to-trial reliability** -- split-half (interleaved, Spearman-Brown)
    and mean pairwise correlation of each channel's spatial profile.
-4. **Cross-area CCA** -- held-out top canonical correlation, bracketed by a
-   trial-permutation null and the within-area volume-conduction ceiling.
+4. **Cross-area CCA** -- held-out top canonical correlation against a
+   trial-permutation null (shared field and communication are not separable
+   here; see the distance control).
 
 Run from ``Striatum project/lfp``::
 
@@ -36,7 +37,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, arms, config, trials  # noqa: E402
+from striatum_lfp import analysis, arms, config, stats, trials  # noqa: E402
 from striatum_lfp.analysis import log_power  # noqa: E402
 
 # Length of the unaligned early-session window (see `windows` in run_one).
@@ -117,10 +118,14 @@ def analyse_one(item) -> dict[str, list[dict]]:
                         "z_dark": float(np.nanmedian(np.nanmean(zd[:, :, tr], axis=(1, 2)))),
                         "z_corridor_speed_resid": float(np.nanmedian(
                             np.nanmean(zc_resid[:, :, tr], axis=(1, 2)))),
+                        # log of the MEAN linear power, not the mean of per-bin
+                        # logs: a short bin's log is biased down by an amount
+                        # that depends on its duration, i.e. on running speed
+                        # (-0.21 log10 at 110 ms vs -0.17 at 200 ms for theta).
                         "log_corridor": float(np.nanmedian(
-                            np.nanmean(log_power(cor_lin)[:, :, tr], axis=(1, 2)))),
+                            log_power(np.nanmean(cor_lin[:, :, tr], axis=(1, 2))))),
                         "log_dark": float(np.nanmedian(
-                            np.nanmean(log_power(dark_lin)[:, :, tr], axis=(1, 2)))),
+                            log_power(np.nanmean(dark_lin[:, :, tr], axis=(1, 2))))),
                         "frac_of_total_corridor": float(np.nanmedian(
                             np.nanmean(ratio_cor[:, :, tr], axis=(1, 2)))),
                         "frac_of_total_dark": float(np.nanmedian(
@@ -194,6 +199,10 @@ def analyse_one(item) -> dict[str, list[dict]]:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
                     half = arms.split_half_reliability(sub)
+                    # Same statistic after removing each channel's linear speed
+                    # component: if a group gap in reliability is behavioural
+                    # (stereotyped running), it should shrink here.
+                    half_resid = arms.split_half_reliability(zc_resid[:, :, tr])
                     pair = arms.batch_triu_corr_mean(sub)
                 # A reliable SPATIAL profile is not automatically position coding:
                 # if band power tracks running speed, and the animal is reliably
@@ -214,6 +223,7 @@ def analyse_one(item) -> dict[str, list[dict]]:
                     "split_half_r": float(np.nanmedian(half)),
                     "split_half_r_p25": float(np.nanpercentile(half, 25)),
                     "split_half_r_p75": float(np.nanpercentile(half, 75)),
+                    "split_half_r_speed_resid": float(np.nanmedian(half_resid)),
                     "mean_pairwise_r": float(np.nanmedian(pair)),   # batch_triu_corr_mean
                 })
 
@@ -262,14 +272,14 @@ def analyse_one(item) -> dict[str, list[dict]]:
     # --- 4. cross-area CCA ---------------------------------------------------
     for band in band_names:
         for a, b in itertools.combinations(sorted(areas), 2):
-            Xa, _, ga = arms.design_matrix(cubes[(band, a)][:, :, usable])
-            Xb, _, gb = arms.design_matrix(cubes[(band, b)][:, :, usable])
-            n = min(Xa.shape[0], Xb.shape[0])
-            if n < 100 or not np.array_equal(ga[:n], gb[:n]):
+            cube_a, cube_b = cubes[(band, a)], cubes[(band, b)]
+            Xa, Xb, g = arms.paired_design(cube_a, cube_b, usable)
+            n = Xa.shape[0]
+            if n < 100:
                 continue
-            Xa, Xb, g = Xa[:n], Xb[:n], ga[:n]
             real = arms.heldout_cca_grouped(Xa, Xb, g)
-            null = arms.trial_shuffle_cca_null(Xa, Xb, g, n_shuffles=N_CCA_SHUFFLES)
+            null = arms.trial_shuffle_cca_null(cube_a, cube_b, usable,
+                                               n_shuffles=N_CCA_SHUFFLES)
             rows["cca"].append({
                 **base, "band": band, "area_a": a, "area_b": b,
                 "n_ch_a": Xa.shape[1], "n_ch_b": Xb.shape[1], "n_samples": n,
@@ -280,8 +290,6 @@ def analyse_one(item) -> dict[str, list[dict]]:
                 "heldout_cc1": real,
                 "null_median": float(np.nanmedian(null)),
                 "null_p95": float(np.nanpercentile(null, 95)),
-                "ceiling_a": arms.within_area_ceiling(Xa, g),
-                "ceiling_b": arms.within_area_ceiling(Xb, g),
             })
 
     print(f"[arms] {cohort_name[:4]:<4} {mouse}/{probe:9s} lp={lp} areas={sorted(areas)} "
@@ -292,57 +300,131 @@ def analyse_one(item) -> dict[str, list[dict]]:
     return rows
 
 
+EVOLUTION_METRICS = ("log_corridor", "z_corridor", "z_corridor_speed_resid",
+                     "frac_of_total_corridor")
+
+
+def _write(rows: list[dict], name: str) -> None:
+    out = config.RESULTS_DIR / name
+    with out.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+
+
+def _test_cells(cells: list[dict]) -> list[dict]:
+    """Exact sign-flip per cell (animals as n), then BH over the cells given."""
+    for c in cells:
+        c["p_raw"] = stats.sign_flip_test(c.pop("values"))
+        c["p_floor"] = stats.sign_flip_floor(c["n_animals"])
+        c["reachable"] = stats.can_reach(c["p_floor"])
+    adjusted, reject = stats.fdr_bh(np.array([c["p_raw"] for c in cells]), q=0.05)
+    for c, a, r in zip(cells, adjusted, reject):
+        c["p_fdr"] = float(a)
+        c["survives_fdr"] = bool(r)
+        c["family_size"] = len(cells)
+    return cells
+
+
 def write_evolution_stats(rows: list[dict], cohort_name: str = "task") -> None:
-    """Paired naive-to-expert test per area x band, BH-corrected over that family.
+    """Paired Naive-to-Expert test per area x band, BH-corrected within each metric.
 
-    The family is declared here and nowhere else: area x band, one test each,
-    animals as n. Everything else in the evolution CSV is a sensitivity check
-    and carries no stars. Each metric is corrected within its own family, since
-    the raw z-power and the speed-residualised version answer different questions.
+    The family is declared here and nowhere else: area x band (``total``
+    included), one exact sign-flip test each, animals as n. ``log_corridor`` is
+    the primary metric; the others are sensitivity checks.
     """
-    from scipy import stats
-
     out_rows = []
-    for metric, naive_epoch in (("z_corridor", "Naive"),
-                                ("z_corridor_speed_resid", "Naive"),
-                                ("frac_of_total_corridor", "Naive")):
+    for metric in EVOLUTION_METRICS:
         cells = []
         for area in config.AREAS:
-            for band in [b for b in bandpower_bands(rows) if b != "total"]:
+            for band in bandpower_bands(rows):
                 naive, expert = {}, {}
                 for r in rows:
-                    if r["area"] != area or r["band"] != band:
+                    if r["area"] != area or r["band"] != band or not np.isfinite(r[metric]):
                         continue
-                    if r["epoch"] == naive_epoch and np.isfinite(r[metric]):
+                    if r["epoch"] == "Naive":
                         naive[int(r["mouse_id"])] = r[metric]
-                    if r["epoch"] == "Expert" and np.isfinite(r[metric]):
+                    elif r["epoch"] == "Expert":
                         expert[int(r["mouse_id"])] = r[metric]
                 common = sorted(set(naive) & set(expert))
-                if len(common) < 3:
+                if not common:
                     continue
                 delta = np.array([expert[m] - naive[m] for m in common])
-                t, p = stats.ttest_1samp(delta, 0.0)
-                cells.append({"metric": metric, "area": area, "band": band,
-                              "n_animals": len(common), "mean_delta": float(delta.mean()),
-                              "sem_delta": float(delta.std(ddof=1) / np.sqrt(len(common))),
-                              "t": float(t), "p_raw": float(p)})
-        if not cells:
-            continue
-        adjusted, reject = arms.fdr_bh(np.array([c["p_raw"] for c in cells]), q=0.05)
-        for c, a, r in zip(cells, adjusted, reject):
-            c["cohort"] = cohort_name
-            c["p_fdr"] = float(a)
-            c["survives_fdr"] = bool(r)
-            c["family_size"] = len(cells)
-        out_rows += cells
+                cells.append({"cohort": cohort_name, "metric": metric, "area": area,
+                              "band": band, "n_animals": len(common),
+                              "mean_delta": float(delta.mean()),
+                              "sem_delta": float(delta.std(ddof=1) / np.sqrt(len(common)))
+                              if len(common) > 1 else np.nan,
+                              "values": delta})
+        if cells:
+            out_rows += _test_cells(cells)
+    _write(out_rows, f"lfp_arms_evolution_stats_{cohort_name}.csv")
+    n_sig = sum(r["survives_fdr"] for r in out_rows if r["metric"] == EVOLUTION_METRICS[0])
+    print(f"[arms] evolution: {n_sig} {EVOLUTION_METRICS[0]} cells survive BH-FDR at q=0.05")
 
-    out = config.RESULTS_DIR / f"lfp_arms_evolution_stats_{cohort_name}.csv"
-    with out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(out_rows[0].keys()))
-        w.writeheader()
-        w.writerows(out_rows)
-    n_sig = sum(r["survives_fdr"] for r in out_rows)
-    print(f"[arms] wrote {out.name}: {n_sig}/{len(out_rows)} cells survive BH-FDR at q=0.05")
+
+def write_decoding_stats(rows: list[dict], cohort_name: str = "task") -> None:
+    """Does band power decode position beyond the rotated-label null?
+
+    Per animal, held-out R2 minus the median of its own null, on the "All"
+    window; exact sign-flip across animals; BH over area x band. This is the
+    test the "beats its null in every cell" figure title used to state without
+    anything computing it.
+    """
+    cells = []
+    for area in config.AREAS:
+        for band in bandpower_bands(rows):
+            sel = [r for r in rows if r["area"] == area and r["band"] == band
+                   and r["window"] == "All"]
+            vals = np.array([r["r2"] - r["null_r2_median"] for r in sel], float)
+            vals = vals[np.isfinite(vals)]
+            if not vals.size:
+                continue
+            cells.append({"cohort": cohort_name, "metric": "r2_minus_null", "area": area,
+                          "band": band, "n_animals": int(vals.size),
+                          "mean_delta": float(vals.mean()),
+                          "sem_delta": float(vals.std(ddof=1) / np.sqrt(vals.size))
+                          if vals.size > 1 else np.nan,
+                          "values": vals})
+    if not cells:
+        return
+    out_rows = _test_cells(cells)
+    _write(out_rows, f"lfp_arms_decoding_stats_{cohort_name}.csv")
+    print(f"[arms] decoding: {sum(r['survives_fdr'] for r in out_rows)}/{len(out_rows)} "
+          f"area x band cells beat their null (BH q=0.05)")
+
+
+def write_cca_distance_stats(rows: list[dict], cohort_name: str = "task") -> None:
+    """Does CC1 fall with separation WITHIN an animal? Slope per probe, then animal.
+
+    Pooling every area pair of every animal into one Spearman treats three
+    pairs of one probe as independent and lets separation and pair identity
+    stand in for each other. Here each probe gives one least-squares slope of
+    CC1 on separation (mm) over its area pairs, an animal's probes are averaged,
+    and the slopes are tested across animals (exact sign-flip, BH over bands).
+    """
+    cells = []
+    for band in bandpower_bands(rows):
+        slopes: dict[int, list[float]] = {}
+        for (mouse, probe) in {(int(r["mouse_id"]), r["probe"]) for r in rows}:
+            sel = [r for r in rows if r["band"] == band and int(r["mouse_id"]) == mouse
+                   and r["probe"] == probe and np.isfinite(r["heldout_cc1"])]
+            sep = np.array([r["separation_um"] for r in sel], float) / 1000.0
+            if sep.size < 3 or np.unique(sep).size < 2:
+                continue
+            cc = np.array([r["heldout_cc1"] for r in sel], float)
+            slopes.setdefault(mouse, []).append(float(np.polyfit(sep, cc, 1)[0]))
+        vals = np.array([np.mean(v) for v in slopes.values()])
+        if not vals.size:
+            continue
+        cells.append({"cohort": cohort_name, "metric": "cc1_slope_per_mm", "area": "all",
+                      "band": band, "n_animals": int(vals.size),
+                      "mean_delta": float(vals.mean()),
+                      "sem_delta": float(vals.std(ddof=1) / np.sqrt(vals.size))
+                      if vals.size > 1 else np.nan,
+                      "values": vals})
+    if cells:
+        _write(_test_cells(cells), f"lfp_arms_cca_distance_stats_{cohort_name}.csv")
 
 
 def bandpower_bands(rows: list[dict]) -> list[str]:
@@ -370,18 +452,16 @@ def main() -> None:
     print(f"[arms] all files in {(time.time() - t0) / 60:.1f} min")
 
     write_evolution_stats([r for res in results for r in res["evolution"]], args.cohort)
+    write_decoding_stats([r for res in results for r in res["decoding"]], args.cohort)
+    write_cca_distance_stats([r for res in results for r in res["cca"]], args.cohort)
 
     for key in ("evolution", "decoding", "reliability", "cca", "moving_reliability",
                 "moving_reliability_epochs", "behaviour"):
         rows = [r for res in results for r in res[key]]
         if not rows:
             continue
-        out = config.RESULTS_DIR / f"lfp_arms_{key}_{args.cohort}.csv"
-        with out.open("w", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-            w.writeheader()
-            w.writerows(rows)
-        print(f"[arms] wrote {out.name} ({len(rows)} rows)")
+        _write(rows, f"lfp_arms_{key}_{args.cohort}.csv")
+        print(f"[arms] wrote lfp_arms_{key}_{args.cohort}.csv ({len(rows)} rows)")
 
 
 if __name__ == "__main__":

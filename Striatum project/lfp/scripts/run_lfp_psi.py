@@ -145,6 +145,18 @@ def main() -> None:
         w.writerows(rows)
     print(f"[psi] wrote {out.name} ({len(rows)} rows)")
 
+    direction = psi.direction_stats(rows, bands=tuple(BANDS))
+    stats_out = config.RESULTS_DIR / f"lfp_psi_stats_{args.cohort}.csv"
+    with stats_out.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(direction[0].keys()))
+        w.writeheader()
+        w.writerows(direction)
+    for ref in ("monopolar", "bipolar"):
+        sub = [r for r in direction if r["reference"] == ref]
+        print(f"[psi] {ref:10s} {sum(r['survives_fdr'] for r in sub)}/{len(sub)} pair x band "
+              f"cells show a consistent direction across animals (exact sign-flip, BH; "
+              f"{sum(r['reachable'] for r in sub)} could reach 0.05)")
+
     for ref in ("monopolar", "bipolar"):
         sel = [r for r in rows if r["reference"] == ref and r["epoch"] == "All"
                and np.isfinite(r["z"])]

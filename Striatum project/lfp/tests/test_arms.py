@@ -118,24 +118,52 @@ def test_grouped_cca_returns_nan_when_too_few_groups():
     assert np.isnan(arms.heldout_cca_grouped(A, B, np.zeros(10, int)))
 
 
-def test_trial_shuffle_null_destroys_the_coupling():
+def _cube_pair(rng, n_trials=40, n_bins=20, n_ch=4, trial_latent=1.0, profile=0.0):
+    """Two areas' (channels, bins, trials) cubes sharing a trial-specific latent
+    and/or a position-locked profile common to every trial."""
+    shape = (n_bins, n_trials)
+    shared = trial_latent * rng.normal(size=shape) + profile * np.sin(
+        np.linspace(0, 3 * np.pi, n_bins))[:, None]
+    a = shared[None] + rng.normal(size=(n_ch,) + shape) * 0.3
+    b = shared[None] + rng.normal(size=(n_ch,) + shape) * 0.3
+    return a, b
+
+
+def test_trial_shuffle_null_destroys_trial_specific_coupling():
     rng = np.random.default_rng(7)
-    groups = np.repeat(np.arange(40), 10)
-    latent = rng.normal(size=400)
-    A = latent[:, None] + rng.normal(size=(400, 4)) * 0.3
-    B = latent[:, None] + rng.normal(size=(400, 4)) * 0.3
-    real = arms.heldout_cca_grouped(A, B, groups)
-    null = np.median(arms.trial_shuffle_cca_null(A, B, groups, n_shuffles=8))
+    a, b = _cube_pair(rng)
+    Xa, Xb, g = arms.paired_design(a, b)
+    real = arms.heldout_cca_grouped(Xa, Xb, g)
+    null = np.median(arms.trial_shuffle_cca_null(a, b, n_shuffles=8))
     assert real > 0.8
     assert null < real / 2
 
 
-def test_within_area_ceiling_is_high_for_a_coherent_block():
-    rng = np.random.default_rng(8)
-    groups = np.repeat(np.arange(40), 10)
-    latent = rng.normal(size=400)
-    A = latent[:, None] + rng.normal(size=(400, 8)) * 0.2
-    assert arms.within_area_ceiling(A, groups) > 0.85
+def test_trial_shuffle_null_keeps_a_position_locked_profile_despite_missing_bins():
+    """A profile every trial shares survives trial shuffling -- that is the point
+    of the null. Before 2026-09-25 the null permuted concatenated rows, so one
+    missing bin in a third of the trials shifted every later B row against A and
+    the null collapsed (0.97 -> 0.14), making ordinary structure look special."""
+    rng = np.random.default_rng(9)
+    a, b = _cube_pair(rng, trial_latent=0.0, profile=3.0)
+    for t in range(0, 40, 3):
+        a[:, rng.integers(20), t] = np.nan
+    Xa, Xb, g = arms.paired_design(a, b)
+    real = arms.heldout_cca_grouped(Xa, Xb, g)
+    null = np.median(arms.trial_shuffle_cca_null(a, b, n_shuffles=8))
+    assert real > 0.9
+    assert null > real - 0.05
+
+
+def test_paired_design_keeps_only_rows_complete_in_both_areas():
+    a = np.ones((2, 5, 3))
+    b = np.ones((3, 5, 3))
+    a[0, 1, 0] = np.nan
+    b[2, 4, 2] = np.nan
+    Xa, Xb, g = arms.paired_design(a, b)
+    assert Xa.shape == (13, 2) and Xb.shape == (13, 3)
+    assert np.isfinite(Xa).all() and np.isfinite(Xb).all()
+    assert g.tolist().count(0) == 4 and g.tolist().count(2) == 4
 
 
 # --- decoding null -----------------------------------------------------------
@@ -214,41 +242,6 @@ def test_residualise_passes_through_a_constant_covariate():
     cube = np.arange(12, dtype=float).reshape(1, 3, 4)
     out = arms.residualise_on(cube, np.ones((3, 4)))
     np.testing.assert_allclose(out, cube)
-
-
-# --- BH-FDR ------------------------------------------------------------------
-
-@pytest.mark.parametrize("p,expected,rejected", [
-    # Values verified against statsmodels.stats.multitest.multipletests(method="fdr_bh").
-    ([0.001, 0.008, 0.039, 0.041, 0.042],
-     [0.005, 0.02, 0.042, 0.042, 0.042], [True] * 5),
-    ([0.01, 0.2, 0.03, 0.9, 0.04],
-     [0.05, 0.25, 0.0666667, 0.9, 0.0666667], [True, False, False, False, False]),
-    ([0.001, 0.9], [0.002, 0.9], [True, False]),
-])
-def test_fdr_bh_matches_the_reference_implementation(p, expected, rejected):
-    adj, rej = arms.fdr_bh(np.array(p), q=0.05)
-    np.testing.assert_allclose(adj, expected, atol=1e-6)
-    assert rej.tolist() == rejected
-
-
-def test_fdr_bh_adjusted_p_are_monotone_in_the_raw_p():
-    """The step-up correction must never let a larger raw p adjust to a smaller one."""
-    rng = np.random.default_rng(0)
-    p = np.sort(rng.uniform(size=50))
-    adj, _ = arms.fdr_bh(p)
-    assert np.all(np.diff(adj) >= -1e-12)
-
-
-def test_fdr_bh_rejects_nothing_when_all_p_are_large():
-    _, rej = arms.fdr_bh(np.array([0.4, 0.5, 0.9]))
-    assert not rej.any()
-
-
-def test_fdr_bh_ignores_nan_entries():
-    adj, rej = arms.fdr_bh(np.array([0.001, np.nan, 0.9]))
-    assert np.isnan(adj[1]) and not rej[1]
-    assert rej[0]
 
 
 # --- batch_triu_corr_mean port (batch_triu_corr_mean.m) ---------------------

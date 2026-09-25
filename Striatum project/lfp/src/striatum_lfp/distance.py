@@ -220,3 +220,45 @@ def exact_matched_contrast(res: PairCoupling, *, min_pairs: int = 10) -> dict:
         "frac_separations_positive": float(np.mean(np.array(diffs_raw) > 0)),
     })
     return out
+
+
+def contrast_stats(matched: list[dict], *, bands, field: str = "d_raw") -> list[dict]:
+    """Within - across at identical separation, tested across animals, per band.
+
+    An animal's probes are averaged first (the animal is the unit); cells with no
+    matched separation are skipped. Exact sign-flip per band, BH over bands, and
+    a t-based 95 % CI across animals -- a null here is only as informative as
+    that interval is narrow, so the interval travels with the p.
+    """
+    from scipy.stats import t as t_dist
+
+    from . import stats
+
+    rows = []
+    for band in bands:
+        by_mouse: dict[int, list[float]] = {}
+        for r in matched:
+            v = r.get(field, np.nan)
+            if r["band"] != band or not r.get("n_separations", 0) or not np.isfinite(v):
+                continue
+            by_mouse.setdefault(int(r["mouse_id"]), []).append(float(v))
+        vals = np.array([np.mean(v) for v in by_mouse.values()])
+        if not vals.size:
+            continue
+        n = vals.size
+        sem = float(vals.std(ddof=1) / np.sqrt(n)) if n > 1 else np.nan
+        half = float(t_dist.ppf(0.975, n - 1) * sem) if n > 1 else np.nan
+        floor = stats.sign_flip_floor(n)
+        rows.append({"band": band, "field": field, "n_animals": n,
+                     "mean": float(vals.mean()), "sem": sem,
+                     "ci95_low": float(vals.mean()) - half if n > 1 and sem > 0
+                     else float(vals.mean()),
+                     "ci95_high": float(vals.mean()) + half if n > 1 and sem > 0
+                     else float(vals.mean()),
+                     "p_raw": stats.sign_flip_test(vals), "p_floor": floor,
+                     "reachable": stats.can_reach(floor)})
+    if rows:
+        adj, rej = stats.fdr_bh(np.array([r["p_raw"] for r in rows]))
+        for r, a, k in zip(rows, adj, rej):
+            r["p_fdr"], r["survives_fdr"] = float(a), bool(k)
+    return rows
