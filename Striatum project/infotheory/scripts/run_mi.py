@@ -57,6 +57,7 @@ N_FEATURE_BINS = 2   # median split, matching MutualInformationStriatum_v2's mi_
 POOL_WIN = 5        # time bins pooled per window (50 ms at 10 ms bins)
 POOL_SHIFT = 5      # non-overlapping, so neighbouring windows are independent
 N_SHUFFLES = 50
+BLOCK_TRIALS = 5    # within-block label shuffles: slow drift stays in the null
 MIN_TRIALS = 8      # a 10-trial epoch gives 5 per bin at 2 bins
 
 
@@ -110,11 +111,17 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
             if np.unique(fv).size < N_FEATURE_BINS:
                 continue
             n_tr = use.size
-            codes = est.equipopulated_bins(fv, N_FEATURE_BINS)
+            # A split at a real value change: an equipopulated split breaks
+            # ties by trial order ('success' is 98 % tied), which is how the
+            # retracted 2026-09-18 success result was made. Same fix as the
+            # LFP arm; this arm had kept the old binning.
+            codes = est.value_boundary_split(fv)
+            if codes is None:
+                continue
             variants = np.empty((n_tr, 1 + N_SHUFFLES), dtype=int)
             variants[:, 0] = codes
             for sh in range(N_SHUFFLES):
-                variants[:, sh + 1] = rng.permutation(codes)
+                variants[:, sh + 1] = est.within_block_permutation(codes, BLOCK_TRIALS, rng)
             rep = np.tile(variants, (POOL_WIN, 1))
 
             # (units, windows, 1 + shuffles)

@@ -383,3 +383,22 @@ def value_boundary_split(x: np.ndarray, *, min_frac: float = 0.2):
     if min(lo, x.size - lo) < min_frac * x.size:
         return None
     return (x > cut).astype(int)
+
+
+def within_block_permutation(codes: np.ndarray, block: int, rng) -> np.ndarray:
+    """Permute labels only inside consecutive blocks of ``block`` trials.
+
+    The null for trial-level information when power and behaviour both drift
+    over a session. A global permutation destroys the slow trend in the labels
+    but not in the power, so a shared trend with no trial-by-trial coupling
+    reads as information (synthetic, 2026-09-25: 95-101 % "surviving speed"
+    from drift alone). Shuffling within short blocks keeps the trend in every
+    null variant, so only structure finer than ``block`` trials survives the
+    subtraction. The cost is power: two 5-trial blocks leave little to permute.
+    """
+    codes = np.asarray(codes)
+    out = codes.copy()
+    for start in range(0, codes.size, block):
+        seg = slice(start, start + block)
+        out[seg] = rng.permutation(codes[seg])
+    return out

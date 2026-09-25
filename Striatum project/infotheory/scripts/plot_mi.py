@@ -23,6 +23,7 @@ permutation over time windows, not against a single window's null.
 from __future__ import annotations
 
 import csv
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -31,7 +32,9 @@ import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from scipy import stats  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
+from striatum_lfp import stats  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 FIGURES = Path(__file__).resolve().parents[1] / "figures"
@@ -40,6 +43,13 @@ AREA_COLOUR = {"DMS": "#0072b2", "DLS": "#77ac30", "ACC": "#d95319",
                "V1": "#7e2f8e", "CA1": "#cc1a33", "DG": "#33b3b3"}
 COHORTS = (("task", "Task", "#1f4e79"), ("control", "Control 1", "#e69f00"))
 MIN_MICE = 3
+
+
+def _p_across_animals(d) -> float:
+    """Exact sign-flip p, or nan when n animals cannot reach 0.05 at all."""
+    d = np.asarray(d, float)
+    return stats.sign_flip_test(d) if stats.can_reach(stats.sign_flip_floor(d.size)) \
+        else np.nan
 
 
 def load(name: str, cohort: str) -> list[dict]:
@@ -125,8 +135,13 @@ def main() -> None:
             shared = sorted(set(n) & set(ex))
             d = np.array([ex[k] - n[k] for k in shared])
             if d.size < MIN_MICE:
-                m.append(np.nan); e.append(np.nan); ns.append(0); continue
-            m.append(d.mean()); e.append(d.std(ddof=1) / np.sqrt(d.size)); ns.append(d.size)
+                m.append(np.nan)
+                e.append(np.nan)
+                ns.append(0)
+                continue
+            m.append(d.mean())
+            e.append(d.std(ddof=1) / np.sqrt(d.size))
+            ns.append(d.size)
         off = -0.15 if key == "task" else 0.15
         axb.errorbar(x + off, m, yerr=e, fmt="o", ms=7, capsize=4, lw=0,
                      elinewidth=2, color=colour, label=f"{label} (N up to {max(ns)} mice)")
@@ -154,9 +169,12 @@ def main() -> None:
             shared = sorted(set(n) & set(ex))
             d = np.array([ex[k] - n[k] for k in shared])
             if d.size < MIN_MICE:
-                m.append(np.nan); e.append(np.nan); continue
-            m.append(d.mean()); e.append(d.std(ddof=1) / np.sqrt(d.size))
-            p = stats.wilcoxon(d).pvalue if d.size >= 6 else np.nan
+                m.append(np.nan)
+                e.append(np.nan)
+                continue
+            m.append(d.mean())
+            e.append(d.std(ddof=1) / np.sqrt(d.size))
+            p = _p_across_animals(d)
             mark = ("*" if np.isfinite(p) and p < 0.05
                     else ("n.s." if np.isfinite(p) else f"n={d.size}"))
             marks.append((ai + (-0.15 if key == "task" else 0.15),
@@ -173,7 +191,7 @@ def main() -> None:
     axc.set_xticks(xa)
     axc.set_xticklabels(AREAS)
     axc.set_ylabel("Expert − Naive\nshuffle-subtracted MI (bits)")
-    axc.set_title("(c) The same contrast by area. Wilcoxon against zero where N ≥ 6 mice; "
+    axc.set_title("(c) The same contrast by area. exact sign-flip against zero where N ≥ 6 mice; "
                   "below that the test cannot reach p < 0.05 and the N is printed instead.",
                   fontsize=11)
     axc.legend(fontsize=9, frameon=False)
@@ -199,7 +217,7 @@ def main() -> None:
             print(f"   {f:30s} too few mice ({len(shared)})")
             continue
         d = np.array([ex[k] - n[k] for k in shared])
-        pv = stats.wilcoxon(d).pvalue if d.size >= 6 else np.nan
+        pv = _p_across_animals(d)
         verdict = f"p = {pv:.3f}" if np.isfinite(pv) else f"UNDERPOWERED (n={d.size})"
         print(f"   {f:30s} {d.mean():+.5f} +/- "
               f"{d.std(ddof=1) / np.sqrt(d.size):.5f} bits (N={d.size} mice, {verdict})")

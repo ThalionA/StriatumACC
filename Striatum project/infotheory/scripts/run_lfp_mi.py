@@ -68,6 +68,10 @@ N_POWER_BINS = 3
 N_FEATURE_BINS = 2      # two bins; a ten-trial epoch cannot support more
 N_SPEED_BINS = 2
 N_SHUFFLES = 50
+#: Labels are shuffled only within blocks of this many consecutive trials, so a
+#: slow drift shared by power and behaviour stays in the null (estimators.
+#: within_block_permutation). A global shuffle read drift as information.
+BLOCK_TRIALS = 5
 MIN_TRIALS = 8
 WIDE_TRIALS = 25        # minimum half-size for the wide contrast; see epoch construction
 MIN_CHANNELS = 4
@@ -99,12 +103,21 @@ def area_power(block: np.ndarray, mask: np.ndarray) -> np.ndarray:
 
 
 def variants_for(codes: np.ndarray, rng) -> np.ndarray:
-    """Observed labels in column 0, ``N_SHUFFLES`` trial permutations after it."""
+    """Observed labels in column 0, ``N_SHUFFLES`` within-block permutations after it.
+
+    ``codes`` must be in trial order: the blocks are consecutive trials.
+    """
     out = np.empty((codes.size, 1 + N_SHUFFLES), int)
     out[:, 0] = codes
     for s in range(N_SHUFFLES):
-        out[:, s + 1] = rng.permutation(codes)
+        out[:, s + 1] = est.within_block_permutation(codes, BLOCK_TRIALS, rng)
     return out
+
+
+def speed_codes(speed_values: np.ndarray):
+    """Two-level speed code at a real value change (speed is built from integer-ms
+    bin durations, so a median split would break ties by trial order)."""
+    return est.value_boundary_split(speed_values)
 
 
 def pooled_codes(power, speed, trials, bins, variants):
@@ -114,8 +127,11 @@ def pooled_codes(power, speed, trials, bins, variants):
         ok = np.isfinite(power[b, trials]) & np.isfinite(speed[b, trials])
         if ok.sum() < MIN_TRIALS:
             continue
+        z = speed_codes(speed[b, trials][ok])
+        if z is None:
+            continue
         xs.append(est.equipopulated_bins(power[b, trials][ok], N_POWER_BINS))
-        zs.append(est.equipopulated_bins(speed[b, trials][ok], N_SPEED_BINS))
+        zs.append(z)
         vs.append(variants[ok])
     if not xs:
         return None
@@ -192,7 +208,9 @@ def run_one(path: Path, cohort: str, seed: int, dp_clip: bool = True) -> tuple[l
                     if ok.sum() < MIN_TRIALS:
                         continue
                     pc = est.equipopulated_bins(power[b, trials][ok], N_POWER_BINS)
-                    sc = est.equipopulated_bins(speed[b, trials][ok], N_SPEED_BINS)
+                    sc = speed_codes(speed[b, trials][ok])
+                    if sc is None:
+                        continue
                     m = est.mi_codes_vs_variants(pc, variants_for(sc, rng),
                                                  N_POWER_BINS, N_SPEED_BINS)
                     vals.append(m[0] - m[1:].mean())

@@ -417,3 +417,37 @@ def test_value_boundary_split_matches_the_median_on_continuous_data():
 
 def test_value_boundary_split_refuses_a_constant_feature():
     assert est.value_boundary_split(np.full(50, 3.0)) is None
+
+
+# --- the drift-safe null (2026-09-25) ----------------------------------------
+
+def test_within_block_permutation_only_moves_labels_inside_their_block():
+    rng = np.random.default_rng(0)
+    codes = np.arange(23)
+    out = est.within_block_permutation(codes, block=5, rng=rng)
+    for start in range(0, 23, 5):
+        assert sorted(out[start:start + 5]) == list(codes[start:start + 5])
+    assert not np.array_equal(out, codes)
+
+
+def test_block_null_removes_information_manufactured_by_a_shared_trend():
+    """Power and a feature that both drift across trials, with no trial-by-trial
+    coupling: a global shuffle breaks the trend in the labels only, so the
+    shuffle-subtracted MI comes out positive. Shuffling within 5-trial blocks
+    keeps the trend in the null too, and the excess goes to ~0."""
+    n = 60
+    trend = np.linspace(-1, 1, n)
+    excess_global, excess_block = [], []
+    for seed in range(40):
+        rng = np.random.default_rng(seed)
+        power = est.equipopulated_bins(trend + 0.8 * rng.standard_normal(n), 3)
+        feature = est.equipopulated_bins(trend + 0.8 * rng.standard_normal(n), 2)
+        glob = np.column_stack([feature] + [rng.permutation(feature) for _ in range(50)])
+        blk = np.column_stack([feature] + [est.within_block_permutation(feature, 5, rng)
+                                           for _ in range(50)])
+        m_g = est.mi_codes_vs_variants(power, glob, 3, 2)
+        m_b = est.mi_codes_vs_variants(power, blk, 3, 2)
+        excess_global.append(m_g[0] - m_g[1:].mean())
+        excess_block.append(m_b[0] - m_b[1:].mean())
+    assert np.mean(excess_global) > 0.05
+    assert abs(np.mean(excess_block)) < 0.3 * np.mean(excess_global)
