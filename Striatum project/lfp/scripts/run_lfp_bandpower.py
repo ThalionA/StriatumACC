@@ -28,7 +28,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import bandpower, cohort, config, geometry  # noqa: E402
+from striatum_lfp import bandpower, cohort, config, geometry, results_io  # noqa: E402
 from striatum_lfp.analysis import read_behaviour  # noqa: E402
 from striatum_lfp.reader import DATASET  # noqa: E402
 
@@ -248,8 +248,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=5)
     parser.add_argument("--only", type=str, default="")
-    parser.add_argument("--cohort", type=str, default="task",
-                        choices=sorted(config.COHORTS))
+    config.add_cohort_argument(parser)
     args = parser.parse_args()
     ch = config.get_cohort(args.cohort)
 
@@ -278,11 +277,7 @@ def main() -> None:
     for r in rows:
         merged[(str(r["mouse_id"]), r["probe"])] = {k: str(v) for k, v in r.items()}
     ordered = sorted(merged.values(), key=lambda r: (int(r["mouse_id"]), r["probe"]))
-    with out.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(ordered)
-    print(f"[bandpower] wrote {out.name}")
+    results_io.write_rows(ordered, out, tag="bandpower")
 
 
 if __name__ == "__main__":

@@ -31,7 +31,6 @@ sits in memory. Writes `results/lfp_psi_<cohort>.csv`, one row per
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from itertools import combinations
 from pathlib import Path
@@ -40,7 +39,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import area_signals, config, psi, trials  # noqa: E402
+from striatum_lfp import area_signals, config, psi, results_io, trials  # noqa: E402
 
 #: 2.048 s at 1 kHz -> 0.49 Hz bins, so theta (4-8 Hz) still holds ~9 of them.
 NPERSEG = 2048
@@ -111,7 +110,7 @@ def run_one(cache: Path, cohort_name: str) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cohort", default="task", choices=sorted(config.COHORTS))
+    config.add_cohort_argument(ap)
     ap.add_argument("--only", default="", help="comma-separated mouse ids")
     args = ap.parse_args()
 
@@ -134,23 +133,11 @@ def main() -> None:
         print("[psi] nothing written")
         return
     out = config.RESULTS_DIR / f"lfp_psi_{args.cohort}.csv"
-    fields: list[str] = []
-    for r in rows:
-        for k in r:
-            if k not in fields:
-                fields.append(k)
-    with out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"[psi] wrote {out.name} ({len(rows)} rows)")
+    results_io.write_rows(rows, out, tag="psi")
 
     direction = psi.direction_stats(rows, bands=tuple(BANDS))
     stats_out = config.RESULTS_DIR / f"lfp_psi_stats_{args.cohort}.csv"
-    with stats_out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(direction[0].keys()))
-        w.writeheader()
-        w.writerows(direction)
+    results_io.write_rows(direction, stats_out, tag="psi")
     for ref in ("monopolar", "bipolar"):
         sub = [r for r in direction if r["reference"] == ref]
         print(f"[psi] {ref:10s} {sum(r['survives_fdr'] for r in sub)}/{len(sub)} pair x band "

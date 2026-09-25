@@ -46,7 +46,6 @@ reported beside the between-area one.
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from itertools import combinations, permutations
 from pathlib import Path
@@ -56,13 +55,20 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import area_signals, config, coupling, filtering, trials  # noqa: E402
+from striatum_lfp import results_io  # noqa: E402
 
 THETA = (4.0, 8.0)
 AMP_BANDS = {"low_gamma": (30.0, 80.0), "high_gamma": (80.0, 150.0)}
 SAME_BANDS = {"theta": THETA, **AMP_BANDS}
 EPOCHS = ("All", *trials.EPOCHS)
 #: One theta cycle is ~150-250 ms; a modulation index wants many of them.
-MIN_SAMPLES = 4000
+#: Every usable trial of at least a second is read: the epoch measures
+#: concatenate trials, so a fast (short) trial must not drop out of its window.
+MIN_READ_SAMPLES = 1000
+#: Per-trial PAC uses exactly the first 4 s of the corridor, and only trials that
+#: long: the Tort index is biased by sample size, so unequal lengths (which
+#: shrink as the animal speeds up) would read as a coupling change.
+PER_TRIAL_SAMPLES = 4000
 N_SURROGATES = 100
 REFS = ("monopolar", "bipolar")
 
@@ -163,7 +169,7 @@ def run_one(cache: Path, cohort_name: str):
     mouse, probe = int(z["mouse_id"]), str(z["probe"])
     ch = config.get_cohort(cohort_name)
     chans, per_trial, elapsed = area_signals.read_trial_signals(
-        z, ch, min_samples=MIN_SAMPLES)
+        z, ch, min_samples=MIN_READ_SAMPLES)
     if len(chans) < 2 or not per_trial:
         print(f"[coup] {mouse}/{probe}: fewer than two usable areas or no long trial, skipped",
               flush=True)
@@ -177,7 +183,10 @@ def run_one(cache: Path, cohort_name: str):
 
     trial_rows = []
     for t in sorted(per_trial):
-        feats = {(a, "bipolar"): _filtered(per_trial[t][(a, "bipolar")], sos_cache)
+        if per_trial[t][(next(iter(chans)), "bipolar")].size < PER_TRIAL_SAMPLES:
+            continue
+        feats = {(a, "bipolar"): _filtered(per_trial[t][(a, "bipolar")][:PER_TRIAL_SAMPLES],
+                                           sos_cache)
                  for a in chans}
         trial_rows += _trial_rows(feats, chans, {**tag, "trial": t + 1})
 
@@ -209,24 +218,12 @@ def run_one(cache: Path, cohort_name: str):
 
 
 def write(rows, path: Path) -> None:
-    if not rows:
-        print(f"[coup] nothing to write to {path.name}")
-        return
-    fields: list[str] = []
-    for r in rows:
-        for k in r:
-            if k not in fields:
-                fields.append(k)
-    with path.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"[coup] wrote {path.name} ({len(rows)} rows)")
+    results_io.write_rows(rows, path, tag="coup")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cohort", default="task", choices=sorted(config.COHORTS))
+    config.add_cohort_argument(ap)
     ap.add_argument("--only", default="")
     args = ap.parse_args()
 

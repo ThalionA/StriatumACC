@@ -38,11 +38,17 @@ BAND_LABEL: dict[str, str] = {
 PLOT_BANDS: tuple[str, ...] = ("theta", "beta", "low_gamma", "high_gamma")
 
 
-def save_pair(fig, stem: str) -> None:
-    """Save ``stem.svg`` + ``stem.png`` into ``figures/``, PNG capped on its long side."""
-    config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    fig.savefig(config.FIGURES_DIR / f"{stem}.svg")
-    fig.savefig(config.FIGURES_DIR / f"{stem}.png",
-                dpi=min(150, MAX_PNG_PX / max(fig.get_size_inches())))
+def save_pair(fig, stem: str, directory=None) -> None:
+    """Save ``stem.svg`` + ``stem.png`` (PNG capped on its long side).
+
+    Into ``lfp/figures/`` unless ``directory`` is given (the sibling packages
+    pass their own).
+    """
+    from pathlib import Path
+
+    out = Path(directory) if directory is not None else config.FIGURES_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out / f"{stem}.svg")
+    fig.savefig(out / f"{stem}.png", dpi=min(150, MAX_PNG_PX / max(fig.get_size_inches())))
     plt.close(fig)
     print(f"[plot] {stem}.svg + .png", flush=True)

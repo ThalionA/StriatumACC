@@ -25,7 +25,6 @@ Every window -- "All", "First 20" and the three epochs -- comes from
 from __future__ import annotations
 
 import argparse
-import csv
 import itertools
 import multiprocessing as mp
 import sys
@@ -37,7 +36,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, arms, config, stats, trials  # noqa: E402
+from striatum_lfp import analysis, arms, config, results_io, stats, trials  # noqa: E402
 from striatum_lfp.analysis import log_power  # noqa: E402
 
 # Length of the unaligned early-session window (see `windows` in run_one).
@@ -332,11 +331,7 @@ EVOLUTION_METRICS = ("log_corridor", "z_corridor", "z_corridor_speed_resid",
 
 
 def _write(rows: list[dict], name: str) -> None:
-    out = config.RESULTS_DIR / name
-    with out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
+    results_io.write_rows(rows, config.RESULTS_DIR / name)
 
 
 def _test_cells(cells: list[dict]) -> list[dict]:
@@ -369,9 +364,9 @@ def write_evolution_stats(rows: list[dict], cohort_name: str = "task") -> None:
                 for r in rows:
                     if r["area"] != area or r["band"] != band or not np.isfinite(r[metric]):
                         continue
-                    if r["epoch"] == "Naive":
+                    if r["epoch"] == trials.EPOCHS[0]:
                         naive[int(r["mouse_id"])] = r[metric]
-                    elif r["epoch"] == "Expert":
+                    elif r["epoch"] == trials.EPOCHS[-1]:
                         expert[int(r["mouse_id"])] = r[metric]
                 common = sorted(set(naive) & set(expert))
                 if not common:
@@ -466,8 +461,7 @@ def bandpower_bands(rows: list[dict]) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=6)
-    parser.add_argument("--cohort", type=str, default="task",
-                        choices=sorted(config.COHORTS))
+    config.add_cohort_argument(parser)
     args = parser.parse_args()
     in_dir = config.RESULTS_DIR / f"lfp_band_trials_{args.cohort}"
     items = [(str(p), args.cohort) for p in sorted(in_dir.glob("*.npz"))]
@@ -488,7 +482,6 @@ def main() -> None:
         if not rows:
             continue
         _write(rows, f"lfp_arms_{key}_{args.cohort}.csv")
-        print(f"[arms] wrote lfp_arms_{key}_{args.cohort}.csv ({len(rows)} rows)")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,6 @@ Nothing under ``RawData/`` is written.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import multiprocessing as mp
 import sys
@@ -26,7 +25,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import cohort, config, geometry, inventory  # noqa: E402
+from striatum_lfp import cohort, config, geometry, inventory, results_io  # noqa: E402
 from striatum_lfp.analysis import read_behaviour  # noqa: E402
 
 FS = config.FS
@@ -170,8 +169,7 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=6)
     parser.add_argument("--only", type=str, default="",
                         help="comma-separated mouse ids to restrict to")
-    parser.add_argument("--cohort", type=str, default="task",
-                        choices=sorted(config.COHORTS))
+    config.add_cohort_argument(parser)
     args = parser.parse_args()
     ch = config.get_cohort(args.cohort)
 
@@ -192,11 +190,7 @@ def main() -> None:
     print(f"[inventory] all files in {(time.time() - t0) / 60:.1f} min")
 
     rows = [r["row"] for r in results]
-    fields = list(rows[0].keys())
-    with (config.RESULTS_DIR / f"lfp_inventory_{args.cohort}.csv").open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    results_io.write_rows(rows, config.RESULTS_DIR / f"lfp_inventory_{args.cohort}.csv")
     (config.RESULTS_DIR / f"lfp_inventory_{args.cohort}.json").write_text(
         json.dumps(rows, indent=2, default=str))
 

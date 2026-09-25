@@ -315,8 +315,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cohort", type=str, default="task",
-                        choices=sorted(config.COHORTS))
+    config.add_cohort_argument(parser)
     args = parser.parse_args()
     ch = config.get_cohort(args.cohort)
     tag = f"_{args.cohort}"

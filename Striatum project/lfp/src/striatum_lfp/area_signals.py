@@ -41,8 +41,9 @@ from . import bandpower, config, geometry, psi, trials
 from .cohort import discover_lfp_files
 from .reader import DATASET
 
-#: An area with fewer channels than this cannot give a bipolar derivation.
-MIN_CHANNELS = 4
+#: The project-wide floor for an area (``config.Config.min_sites``); the arms,
+#: coupling, PSI and the LFP information arm all use this one number.
+MIN_CHANNELS = config.DEFAULT.min_sites
 #: Samples read on each side of a trial so the notch's transient stays outside it.
 NOTCH_PAD = 1_000
 

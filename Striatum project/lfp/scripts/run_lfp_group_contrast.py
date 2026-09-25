@@ -37,7 +37,6 @@ Run from ``Striatum project/lfp``::
 
 from __future__ import annotations
 
-import csv
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -46,10 +45,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import config, stats  # noqa: E402
+from striatum_lfp import config, results_io, stats, trials  # noqa: E402
 from striatum_lfp.results_io import load_arms  # noqa: E402
 
-NAIVE_EPOCH = "Naive"            # trials.EPOCHS[0]: good trials 1-10
+NAIVE_EPOCH, EXPERT_EPOCH = trials.EPOCHS[0], trials.EPOCHS[-1]
 PRIMARY_EVOLUTION_METRIC = "log_corridor"
 
 
@@ -72,7 +71,7 @@ def per_animal_evolution(rows, metric):
             continue
         if r["epoch"] == NAIVE_EPOCH:
             naive[key][_mouse(r)] = v
-        elif r["epoch"] == "Expert":
+        elif r["epoch"] == EXPERT_EPOCH:
             expert[key][_mouse(r)] = v
     out = {}
     for key in set(naive) & set(expert):
@@ -161,7 +160,7 @@ def main() -> None:
         out_rows += contrast(t, c, arm, value if minus is None else f"{value}_minus_null")
 
     def expert(r):
-        return r["epoch"] == "Expert"
+        return r["epoch"] == EXPERT_EPOCH
 
     t = per_animal_simple(load_arms("moving_reliability_epochs", "task"), "reliability",
                           where=expert)
@@ -184,10 +183,7 @@ def main() -> None:
     out_rows += contrast(t, c, "cca", "heldout_cc1")
 
     out = config.RESULTS_DIR / "lfp_group_contrast.csv"
-    with out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(out_rows[0].keys()))
-        w.writeheader()
-        w.writerows(out_rows)
+    results_io.write_rows(out_rows, out)
 
     for arm in dict.fromkeys(r["arm"] for r in out_rows):
         sub = [r for r in out_rows if r["arm"] == arm]

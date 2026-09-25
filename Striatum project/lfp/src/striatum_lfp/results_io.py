@@ -47,10 +47,25 @@ def load_arms(name: str, cohort_name: str = "task") -> list[dict]:
     return rows
 
 
-def load_both(name: str) -> dict[str, list[dict]]:
-    """``{cohort_name: rows}`` for every cohort whose table exists."""
-    return {c: rows for c in config.COHORTS
-            if (rows := load_arms(name, c))}
+def write_rows(rows: list[dict], path, tag: str = "") -> None:
+    """Write ``rows`` to ``path`` as CSV, columns = union of keys, first seen first.
+
+    Rows may differ in their keys (a cell that could not be computed omits a
+    column); missing values are written empty. No rows, no file.
+    """
+    from pathlib import Path
+
+    path = Path(path)
+    prefix = f"[{tag}] " if tag else ""
+    if not rows:
+        print(f"{prefix}nothing to write to {path.name}")
+        return
+    fields = list(dict.fromkeys(k for r in rows for k in r))
+    with path.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)
+    print(f"{prefix}wrote {path.name} ({len(rows)} rows)")
 
 
 def hierarchical(rows, key_fields, value_field):

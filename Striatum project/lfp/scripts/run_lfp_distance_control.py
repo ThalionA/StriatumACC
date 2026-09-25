@@ -23,7 +23,6 @@ they really were matched.
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 import time
 from itertools import combinations
@@ -34,6 +33,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from striatum_lfp import config, distance, trials  # noqa: E402
+from striatum_lfp import results_io  # noqa: E402
 
 SEP_BIN_UM = 100.0
 #: A class needs at least this many pairs in the matched range to be reported.
@@ -122,25 +122,13 @@ def run_one(path: Path, cohort_name: str) -> tuple[list[dict], list[dict]]:
     return by_bin, matched
 
 
-def write(rows: list[dict], path: Path) -> None:
-    if not rows:
-        print(f"[dist] nothing to write to {path.name}")
-        return
-    fields: list[str] = []
-    for r in rows:
-        for k in r:
-            if k not in fields:
-                fields.append(k)
-    with path.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"[dist] wrote {path.name} ({len(rows)} rows)")
+def write(rows, path: Path) -> None:
+    results_io.write_rows(rows, path, tag="dist")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cohort", default="task", choices=sorted(config.COHORTS))
+    config.add_cohort_argument(ap)
     args = ap.parse_args()
 
     in_dir = config.RESULTS_DIR / f"lfp_band_trials_{args.cohort}"

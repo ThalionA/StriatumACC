@@ -102,6 +102,11 @@ CONTROL = Cohort(
 COHORTS: dict[str, Cohort] = {c.name: c for c in (TASK, CONTROL)}
 
 
+def add_cohort_argument(parser) -> None:
+    """``--cohort task|control`` (default task), the same on every driver."""
+    parser.add_argument("--cohort", type=str, default="task", choices=sorted(COHORTS))
+
+
 def get_cohort(name: str) -> Cohort:
     """Look up a cohort by name, failing loudly on a typo."""
     if name not in COHORTS:

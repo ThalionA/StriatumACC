@@ -39,7 +39,6 @@ Two tables:
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 import time
 from pathlib import Path
@@ -50,7 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 
 from striatum_info import estimators as est  # noqa: E402
+from striatum_lfp import config as lfp_config  # noqa: E402
 from striatum_lfp import trials as lfp_trials  # noqa: E402
+from striatum_lfp import results_io  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 N_FEATURE_BINS = 2   # median split, matching MutualInformationStriatum_v2's mi_behav_bins
@@ -196,20 +197,12 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
 
 
 def write(rows, path: Path) -> None:
-    if not rows:
-        print(f"[mi] nothing to write to {path.name}")
-        return
-    fields = list(rows[0].keys())
-    with path.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"[mi] wrote {path.name} ({len(rows)} rows)")
+    results_io.write_rows(rows, path, tag="mi")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cohort", default="task", choices=("task", "control"))
+    lfp_config.add_cohort_argument(ap)
     args = ap.parse_args()
     files = sorted(RESULTS.glob(f"trials_{args.cohort}_*.npz"))
     if not files:

@@ -26,7 +26,6 @@ Run from ``Striatum project/lfp``::
 
 from __future__ import annotations
 
-import csv
 import sys
 from pathlib import Path
 
@@ -35,7 +34,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import config, trials  # noqa: E402
+from striatum_lfp import config, results_io, trials  # noqa: E402
 
 # The index into preprocessed_data is the animal's POSITION in its organiser's
 # list, not its mouse id (OrganiseStriatumDataIncV1.m:9 /
@@ -56,8 +55,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cohort", type=str, default="task",
-                        choices=sorted(config.COHORTS))
+    config.add_cohort_argument(parser)
     args = parser.parse_args()
     ch = config.get_cohort(args.cohort)
     out_dir = config.RESULTS_DIR / f"lfp_band_trials_{args.cohort}"
@@ -128,10 +126,7 @@ def main() -> None:
                   f"{flag}", flush=True)
 
     out = config.RESULTS_DIR / f"lfp_bandpower_validation_{args.cohort}.csv"
-    with out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
+    results_io.write_rows(rows, out)
     ok = sum(r["span_frac_within_1ms"] > 0.99 and r["lfp_good_not_matlab_good"] == 0
              for r in rows)
     print(f"\n{ok}/{len(rows)} files: no good LFP trial MATLAB dropped, and >99 % of bin "

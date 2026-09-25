@@ -44,7 +44,6 @@ All five bands are reported, each with a measured ``band_status`` -- see
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 import time
 from dataclasses import replace
@@ -58,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 from striatum_info import estimators as est  # noqa: E402
 from striatum_lfp import analysis, config as lfp_config  # noqa: E402
 from striatum_lfp import trials as lfp_trials  # noqa: E402
+from striatum_lfp import results_io  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 LFP_RESULTS = Path(__file__).resolve().parents[2] / "lfp" / "results"
@@ -74,7 +74,7 @@ N_SHUFFLES = 50
 BLOCK_TRIALS = 5
 MIN_TRIALS = 8
 WIDE_TRIALS = 25        # minimum half-size for the wide contrast; see epoch construction
-MIN_CHANNELS = 4
+MIN_CHANNELS = lfp_config.DEFAULT.min_sites   # the project-wide area floor
 # Band status, MEASURED rather than inherited (2026-09-18):
 #
 # * Mains is notched at 50/100/150 Hz unconditionally when the cubes are built
@@ -266,19 +266,12 @@ def run_one(path: Path, cohort: str, seed: int, dp_clip: bool = True) -> tuple[l
 
 
 def write(rows, path: Path) -> None:
-    if not rows:
-        print(f"[lfpmi] nothing to write to {path.name}")
-        return
-    with path.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
-    print(f"[lfpmi] wrote {path.name} ({len(rows)} rows)")
+    results_io.write_rows(rows, path, tag="lfpmi")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cohort", default="task", choices=("task", "control"))
+    lfp_config.add_cohort_argument(ap)
     # For the audit figure only. Without the clip, "late" trials are largely past
     # the disengagement point (9 of 13 task animals, entirely), so the contrast
     # measures whether the animal is still doing the task. Never for inference.

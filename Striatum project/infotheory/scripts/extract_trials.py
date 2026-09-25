@@ -152,7 +152,7 @@ def run_animal(h, pd, i: int, mouse_label: str, matlab_good: np.ndarray) -> dict
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cohort", default="task", choices=("task", "control"))
+    lfp_config.add_cohort_argument(ap)
     args = ap.parse_args()
 
     ch = lfp_config.get_cohort(args.cohort)

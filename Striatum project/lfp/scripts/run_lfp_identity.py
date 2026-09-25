@@ -19,7 +19,6 @@ Writes ``results/lfp_identity_matrix.csv`` and ``results/lfp_identity.json``.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import multiprocessing as mp
 import sys
@@ -31,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import cohort, config, inventory  # noqa: E402
+from striatum_lfp import cohort, config, inventory, results_io  # noqa: E402
 
 FS = config.FS
 BIN_MS = 100
@@ -93,8 +92,7 @@ def _env_job(args):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jobs", type=int, default=6)
-    parser.add_argument("--cohort", type=str, default="task",
-                        choices=sorted(config.COHORTS))
+    config.add_cohort_argument(parser)
     args = parser.parse_args()
     ch = config.get_cohort(args.cohort)
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -211,10 +209,7 @@ def main() -> None:
         verdicts.append(record)
 
     out = config.RESULTS_DIR / f"lfp_identity_matrix_{args.cohort}.csv"
-    with out.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
+    results_io.write_rows(rows, out)
     (config.RESULTS_DIR / f"lfp_identity_{args.cohort}.json").write_text(
         json.dumps(verdicts, indent=2, default=str)
     )

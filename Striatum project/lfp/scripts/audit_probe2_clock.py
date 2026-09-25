@@ -22,7 +22,6 @@ Reads short slices only. Run from ``Striatum project/lfp``::
 
 from __future__ import annotations
 
-import csv
 import sys
 from pathlib import Path
 
@@ -36,7 +35,7 @@ from scipy.ndimage import uniform_filter1d  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from striatum_lfp import analysis, bandpower, cohort, config, filtering  # noqa: E402
+from striatum_lfp import analysis, bandpower, cohort, config, filtering, results_io  # noqa: E402
 from striatum_lfp.figstyle import save_pair  # noqa: E402
 from striatum_lfp.reader import DATASET  # noqa: E402
 
@@ -139,12 +138,7 @@ def main() -> None:
                       f"{[round(float(o)) for o in off_at]}", flush=True)
 
     out = config.RESULTS_DIR / "lfp_probe2_clock_audit.csv"
-    keys = sorted({k for r in rows for k in r})
-    with out.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=keys)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"[clock] wrote {out.name}")
+    results_io.write_rows(rows, out, tag="clock")
 
     t = np.arange(-PRE_MS, POST_MS)
     fig, axes = plt.subplots(1, len(ANIMALS), figsize=(3.2 * len(ANIMALS), 3.0), sharex=True)

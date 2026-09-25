@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 from striatum_lfp import stats  # noqa: E402
+from striatum_lfp.figstyle import save_pair  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 FIGURES = Path(__file__).resolve().parents[1] / "figures"
@@ -231,12 +232,7 @@ def main() -> None:
                  "theta (4–8 Hz) and beta (15–30 Hz) only; log power ranked WITHIN spatial "
                  "bin; shuffle-subtracted; mean over windows, never peak.\nALL trials clipped at the disengagement point (change_point_mean); the wide contrast is the two halves of what remains. p uncorrected.",
                  fontsize=12)
-    FIGURES.mkdir(exist_ok=True)
-    fig.savefig(FIGURES / "lfp_mi_overview.svg")
-    fig.savefig(FIGURES / "lfp_mi_overview.png",
-                dpi=min(150, 1600 / max(fig.get_size_inches())))
-    plt.close(fig)
-    print("[plot] lfp_mi_overview.svg + .png")
+    save_pair(fig, "lfp_mi_overview", FIGURES)
 
 
 if __name__ == "__main__":

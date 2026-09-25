@@ -35,12 +35,11 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lfp" / "src"))
 from striatum_lfp import stats  # noqa: E402
+from striatum_lfp.figstyle import AREA_COLOUR, save_pair  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 FIGURES = Path(__file__).resolve().parents[1] / "figures"
 AREAS = ("DMS", "DLS", "ACC", "V1", "CA1", "DG")
-AREA_COLOUR = {"DMS": "#0072b2", "DLS": "#77ac30", "ACC": "#d95319",
-               "V1": "#7e2f8e", "CA1": "#cc1a33", "DG": "#33b3b3"}
 COHORTS = (("task", "Task", "#1f4e79"), ("control", "Control 1", "#e69f00"))
 MIN_MICE = 3
 
@@ -205,13 +204,9 @@ def main() -> None:
 
     fig.suptitle("Single-unit information about behaviour, mirroring Lemke et al. (2024)\n"
                  "Aligned to reward-zone entry; spikes binarised at 10 ms; features split at "
-                 "the median; shuffle-subtracted. Ten-trial learning epochs; p-values "
+                 "a real value change; within-block shuffle-subtracted. Ten-trial learning epochs; p-values "
                  "uncorrected across features.", fontsize=13)
-    FIGURES.mkdir(exist_ok=True)
-    fig.savefig(FIGURES / "mi_overview.svg")
-    fig.savefig(FIGURES / "mi_overview.png", dpi=min(150, 1600 / max(fig.get_size_inches())))
-    plt.close(fig)
-    print("[plot] mi_overview.svg + .png")
+    save_pair(fig, "mi_overview", FIGURES)
 
     # Uncorrected across features, by request. Ten features were tried, so the
     # smallest p here is not a 5% claim -- read the effect sizes, not the stars.
