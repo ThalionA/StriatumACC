@@ -70,7 +70,13 @@ def load(name: str, cohort: str) -> list[dict]:
 
 
 def per_animal(rows, *, value: str = "mean_mi_corrected", **where) -> dict[int, float]:
-    """{mouse: median over its units}, for one cell of the design.
+    """{mouse: MEAN over its ACTIVE units}, for one cell of the design.
+
+    Active = fired at least one spike in the analysed windows (``n_spikes``;
+    tables written before that column existed fall back to dropping exactly-zero
+    rows, which only a silent unit produces). A silent unit's information is
+    zero by construction; with a third of unit rows silent, the old median over
+    all units was exactly 0 in 13-15 of 16 animals and the test ran on 1-3.
 
     Defaults to the MEAN over time windows, not the peak. The peak is the max of
     30 noisy windows, so it is biased upward by an amount that grows as the
@@ -83,9 +89,10 @@ def per_animal(rows, *, value: str = "mean_mi_corrected", **where) -> dict[int, 
         if any(r.get(k) != v for k, v in where.items()):
             continue
         val = r.get(value, np.nan)
-        if np.isfinite(val):
+        active = r["n_spikes"] > 0 if "n_spikes" in r else val != 0
+        if np.isfinite(val) and active:
             by[int(r["mouse_id"])].append(val)
-    return {m: float(np.median(v)) for m, v in by.items() if v}
+    return {m: float(np.mean(v)) for m, v in by.items() if v}
 
 
 def main() -> None:

@@ -153,6 +153,11 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
             # unbiased on the same data (-0.0001 vs +0.0000), so every
             # across-epoch comparison uses it.
             obs_mean = corrected.mean(axis=1)
+            # Spikes each unit fired inside the analysed windows of these
+            # trials. A silent unit has zero information by construction, and
+            # 34 % of unit rows were exactly 0 -- enough to pin a per-animal
+            # MEDIAN at 0 in 13-15 of 16 animals. Aggregation uses active units.
+            n_spikes = spikes[:, starts[0]:starts[-1] + POOL_WIN, :][:, :, use].sum(axis=(1, 2))
             leave_one_out = ((mi[:, :, 1:].sum(axis=2)[:, :, None] - mi[:, :, 1:])
                              / (N_SHUFFLES - 1))
             null_peak = (mi[:, :, 1:] - leave_one_out).max(axis=1)   # (units, shuffles)
@@ -177,7 +182,8 @@ def run_animal(path: Path, cohort: str, rng_seed: int) -> tuple[list, list]:
                 unit_rows.append({
                     "cohort": cohort, "mouse_id": mouse, "epoch": epoch,
                     "n_trials": int(n_tr), "feature": fname, "area": areas[u],
-                    "unit": u, "mean_mi_corrected": float(obs_mean[u]),
+                    "unit": u, "n_spikes": int(n_spikes[u]),
+                    "mean_mi_corrected": float(obs_mean[u]),
                     "peak_mi_corrected": float(obs_peak[u]),
                     "peak_time_ms": float(peak_ms[u]), "peak_p": float(peak_p[u]),
                 })
