@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-09-25).** This audit describes the four size-keyed July exports,
+> which were replaced by Zihao's 2026-08-11 re-export and are no longer on disk. The
+> code that produced it was deleted (tag `lfp-july-archive`). Provenance only.
+
 # LFP voltage-export sanity audit
 
 **Status:** integrity characterised; physiological signal identity and exact VR

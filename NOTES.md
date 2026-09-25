@@ -70,8 +70,8 @@ it. A null elsewhere now means something.
 **Band power carries behavioural information beyond speed -- this survives DP
 clipping.** All ten features, engaged period only, task cohort: 62-96% of the raw
 information survives conditioning on running speed, **9 of 10 at p <= 0.011**
-(`path_length_au` p = 0.083), N=15-16. Strongest: `success` +0.0084, `first_lick_
-position` +0.0040, `n_licks` +0.0038. This is the solid result of the arm.
+(`path_length_au` p = 0.083), N=15-16. Strongest: `success` +0.0084 *[RETRACTED 2026-09-18: tie-split on trial order]*, `first_lick_
+position` +0.0040, `n_licks` +0.0038. This is the solid result of the arm. *[UNDER REVIEW 2026-09-25: the global label shuffle reads shared drift as information, and a 2-level speed split leaves speed behind — see Striatum project/lfp/NOTES.md top entry]*
 
 **Nothing changes with learning.** Two halves of the engaged period, every area,
 all p > 0.35. The ten-trial epochs cannot address it either -- their contrast

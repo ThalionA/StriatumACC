@@ -1,99 +1,94 @@
-# striatum_lfp — voltage-export audit and provisional LFP pipeline
+# striatum_lfp — LFP band power as the analogue of unit firing rate
 
-Audits the 384-channel Neuropixels voltage exports for both the task and
-Control 1 cohorts, and analyses band power as the analogue of unit firing rate. Provenance and 1 ms grid alignment were resolved on
-2026-08-11; the full 17-file cohort was inventoried and every filename verified
-against spiking on 2026-08-27. What is still gated is listed under Current gate.
+Band power per trial × 5 cm spatial bin from the 384-channel Neuropixels voltage
+exports, on the unit pipeline's 1 ms grid, for the task cohort and yoked Control 1,
+and the analyses built on it. The running log is `NOTES.md` (newest first); the
+July audit of the superseded export is in `NOTES_archive.md`.
 
-## Data: verified facts (measured 2026-08-27 over the full cohort)
-- **Two cohorts.** Every driver takes `--cohort task|control`; outputs are
-  suffixed. `config.Cohort` holds what differs: mouse list, depth CSVs, the
-  probe-2 raw suffix (task `_V1_raw.mat`, control `_v1_raw.mat`), and the fact
-  that yoked controls inherit the task cohort's average learning point (41), so
-  their epochs are matched time windows rather than learning windows.
-- **Control 1: 8 usable exports** in `RawDataControl/LFP/` — 5 striatum (407,
-  513, 515, 817, 1205) and 3 visual (513, 515, 817). 408 has an export but is not
-  in the organiser's list and is dropped automatically. Control 2 has no voltage.
-  8/8 reproduce the MATLAB bin map to 0.0 ms; 7/8 identity-confirmed in all three
-  windows (817/striatum is 2/3 and weak — only 48 sorted units make its MUA
-  reference sparse). 407's export stops 26 min before its session does.
-- **21 named exports** in `RawData/LFP/`: 16 striatum probes (409, 418, 523, 614,
-  624, 703, 727, 730, 731, 822, 823, 1105, 1106, 1201, 1206, 1212) and 5 visual
-  probes (1105, 1106, 1201, 1206, 1212, suffixed `_v1`) — the task striatum cohort is
-  complete (409/418/703 arrived 2026-08-28). The file→mouse map comes from the filename now, not from file size —
-  `lfp_mapping.txt` is superseded. Note 727's file has no underscore before
-  `voltage`; use `cohort.parse_lfp_filename`, do not re-derive the pattern.
-- Every file is `data_to_save` = (8,400,000 × 384) float32 (1212: 11,400,000 rows), gzip, chunks (42, 384),
-  no non-finite values, no dead channels. `channels_to_save` = 1..384 and
-  `depth_to_save` = 0–3820 µm reproduces `geometry.channel_depths` exactly, so the
-  2-channels-per-20 µm geometry behind the area mapping is measured, not assumed.
-- **Every filename has been verified against spiking** (`scripts/run_lfp_identity.py`):
-  each file's 30–90 Hz envelope beats every other animal's MUA in 3 (18 files) or
-  2 of 3 (418, 823, 1105 striatum) independent windows. No duplicate content fingerprints.
-- 1212 was re-exported at full length on 2026-08-30/31 (11.4 M samples on both
-  probes, VR ending at 10,879 s inside the grid); the earlier 41 min truncation is
-  gone and all 154 trials are in the tables.
-- **Two gain regimes.** Median channel RMS 6.3e-6–1.3e-5 (July batch) vs
-  1.6e-4–3.2e-4 (August batch). Never compare absolute power across animals; every
-  outcome must be within-session relative. Values remain "stored voltage units":
-  gain, physical units and the anti-alias filter are still undocumented.
-- **Mains must be notched on every file.** 50 Hz / shoulder ratio reaches 1348×
-  (1105 visual), 1097× (1105 striatum), 450× (1106 visual), 161× (1212 striatum),
-  with odd harmonics to 350 Hz in 1105. Six files are below 3×. Notch unconditionally.
-- Terminal zero padding exists only in the July batch (onset 7863–8135 s). No
-  mid-session dropouts anywhere.
-- Referencing is per-session: common-*median* residual is 0.030–0.084 throughout,
-  but the common-*mean* residual runs 0.12–0.18 (July) up to 2.42 (822).
-- Area coverage: DMS 16 animals, ACC 15, DLS 12, V1 5, CA1 3, DG 3. CA1/DG still
-  cannot support a cohort claim.
+> **Status (2026-09-25).** The pipeline was reviewed and rebuilt on branch
+> `lfp-simplify`; every earlier result is **under review** until the re-run on
+> the fixed code lands (see the `NOTES.md` top entry for what changed and why).
 
-## Current gate
+## One command
 
-The July gate (no position binning, decoding or CCA until provenance is resolved)
-was **lifted on 2026-08-11**: the re-export is real LFP on the project's 1 ms grid,
-verified physiologically. What remains gated is narrower and specific:
-
-- Absolute-power and cross-animal amplitude comparisons — blocked by the two gain
-  regimes and the undocumented units.
-- Any band overlapping 50 Hz or its harmonics before notching.
-- Cross-area coupling claims without both a trial-permutation null *and* the
-  within-area split-half volume-conduction ceiling: DMS/DLS/ACC sit on one shank.
-- CA1 and DG cohort claims — n = 3 per cohort.
-- Any "task animals differ from controls" claim on the LFP *spatial profile* or its
-  position decoding
-  without the behavioural check: task animals run the corridor far more
-  stereotypically (speed-profile split-half r 0.98 vs 0.68) and faster (36 vs
-  21 cm/s), and the LFP profile tracks speed. Run the `behaviour` arm first.
-
-## Layout
-`src/striatum_lfp/` — configuration, cohort discovery and file-identity
-statistics (`cohort.py`), geometry, out-of-core reading, per-file inventory
-(`inventory.py`), trial/spatial/dark binning of band power (`bandpower.py`),
-the shared epoch and learning-point layer (`analysis.py`), the decoding /
-reliability / CCA primitives (`arms.py`), shared figure conventions
-(`figstyle.py`), integrity/sanity helpers, provisional feature extraction, and
-quarantined learning helpers. `scripts/` contains reproducible audit drivers; `tests/` contains
-synthetic-ground-truth pytest checks. The old single-window `qc.py` thresholds
-are retained only as tested numerical primitives and are not an analysis gate.
-
-## Running the pipeline
 ```
 cd "Striatum project/lfp" && ./scripts/run_lfp_pipeline.sh
 ```
-One command for the whole chain, in dependency order: inventory → identity →
-band power → validate → arms → task-vs-control contrast → figures. `--cohort
-task|control` limits it to one cohort (the contrast still needs both tables on
-disk and skips itself if one is missing), `--from <step>` resumes without
-repeating the expensive band-power step, `--only 409,418` limits band power to
-named animals, and `--list` prints the steps an invocation would run. Every run
-is logged to `results/pipeline_<timestamp>.log`. A failing step aborts the chain
-rather than letting the next one read a half-written table.
+
+Steps, in dependency order (`--list` prints them, `--from <step>` resumes,
+`--cohort task|control` limits to one cohort, `--only 409,418` limits band power):
+
+| step | what | reads |
+|---|---|---|
+| inventory | per-file audit: size, 1/f slope, mains, adjacency | voltage |
+| identity | each file's notched 30-90 Hz envelope vs every animal's MUA | voltage |
+| bandpower | band power per trial × bin (theta, beta, low/high gamma, total), mains-notched | voltage |
+| validate | cube trials vs MATLAB's good mask; bin spans vs MATLAB `durations` | caches + MATLAB |
+| arms | evolution, decoding, reliability, moving reliability, CCA, behaviour, and their across-animal tests | caches |
+| distance | within- vs across-area coupling at identical separation, per boundary | caches |
+| psi | phase-slope index (direction), monopolar and vertical bipolar | voltage |
+| coupling | theta-gamma PAC and envelope coupling, with a re-paired-trial null | voltage |
+| mi | `../infotheory`: trial caches, spike MI, LFP MI | MATLAB + caches |
+| contrast | task vs control per cell, exact permutation, BH within arm × metric | both cohorts |
+| plots | every figure, reading tables only | tables |
+
+A failing step stops the chain (`pipefail`); every run logs to
+`results/pipeline_<timestamp>.log`. The MATLAB products it reads are rebuilt by
+`../processed_data/regen_chain.sh`.
+
+## Three shared layers — use them, do not re-derive
+
+- **Trials — `trials.SessionTrials`.** MATLAB's own good-trial mask, the learning
+  point on the good numbering, the disengagement point as a raw trial number
+  (NaN = no clip, as MATLAB does), and one three-epoch scheme: Naive = good trials
+  1-10, Intermediate = the ten before LP, Expert = the ten from LP, all before DP.
+  A window that crosses DP or leaves the recording is dropped, never shortened.
+  Every driver in `lfp/` and `infotheory/` gets its trials here; a test fails if
+  one builds its own windows.
+- **Signal — `geometry`, `bandpower`, `area_signals`.** Depths in the unit
+  (Kilosort) convention, 20-3840 µm; channel 191 (the probe reference) is never
+  tissue; mains notched on every read; bipolar = vertical pairs one row apart
+  (c, c+2), deep minus shallow, on raw voltage.
+- **Statistics — `stats`.** The animal is the unit. Exact sign-flip (paired) and
+  two-sample permutation tests with their floors; a cell that cannot reach 0.05 at
+  its n is marked, not reported as null. BH-FDR within a declared family. Tests
+  live in run scripts and `src/`; plotting scripts only read tables.
+
+Pre-registered primary test for "does learning change band power differently in
+task animals than in yoked controls": `delta_log_corridor` (Expert − Naive log10
+of mean linear power), exact permutation, BH over area × band.
+
+## Data facts (measured)
+
+- **Cohorts.** Task: 16 striatum probes (409, 418, 523, 614, 624, 703, 727, 730,
+  731, 822, 823, 1105, 1106, 1201, 1206, 1212) and 5 visual (1105, 1106, 1201,
+  1206, 1212). Control 1: 5 striatum (407, 513, 515, 817, 1205) and 3 visual (513,
+  515, 817); 408's export is outside the organiser's list; Control 2 has no voltage.
+  Files are found by name (`cohort.parse_lfp_filename`).
+- **Grid.** Every export is on its probe's own 1 ms spike-bin grid (live test).
+  Probe-2 LFP sits at lag 0 ± 3 ms against probe-2 MUA while the control bundles'
+  VR clocks drift 6-159 ms apart (`scripts/audit_probe2_clock.py`).
+- **Truncations.** 407's export stops 26 min early (169 of 209 trials covered);
+  1212 was re-exported at full length.
+- **Referencing.** The exports are already common-median referenced at source.
+- **Units.** Two gain regimes (~1000×) and undocumented physical units: every
+  outcome is within-session relative. Never compare absolute power across animals.
+- **Mains.** 50 Hz up to 1348× the shoulder (1105); notched everywhere.
+- **Coverage.** DMS 16, ACC 15, DLS 12, V1 5, CA1 3, DG 3 animals. CA1/DG cannot
+  support a cohort claim (n = 3 per cohort; a sign-flip floor of 0.25).
+
+## What this probe cannot answer
+
+- Area-specific communication from band-power co-fluctuation: DMS/DLS/ACC share a
+  shank, and only the DMS-DLS boundary has pairs at identical separation.
+- A cortico-striatal boundary effect by exact distance matching (ACC is too far).
+- Position coding separate from running speed, unless it survives the
+  within-trial speed slope.
 
 ## Running tests
+
 ```
 cd "Striatum project/lfp" && /opt/anaconda3/bin/python -m pytest -q
 ```
-`conftest.py` puts `src/` on the path. The interpreter is explicit because the
-current shell may resolve `python3` to a Homebrew installation without pytest.
-
-See `NOTES.md` for the running log and the full data contract.
+`conftest.py` puts `src/` on the path; the explicit interpreter avoids a Homebrew
+`python3` without pytest. Lint: `ruff check src scripts tests`.

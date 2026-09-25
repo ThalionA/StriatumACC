@@ -1,6 +1,26 @@
 # striatum_info — running log (newest first)
 
-## 2026-09-17 — MI arm of the Lemke/Panzeri mirror: no learning change survives correction
+## 2026-09-25 — Soundness fixes; every result below is superseded until the re-run
+
+Agent-written, from an independent review (see `../lfp/NOTES.md` top entry).
+Branch `lfp-simplify`. Changed:
+- **Null:** labels are shuffled within 5-trial blocks
+  (`estimators.within_block_permutation`). The global shuffle read a slow
+  drift shared by power and behaviour as information (synthetic: 95-101 %
+  "surviving speed" from drift alone) -- the signature of the LFP headline.
+- **Speed conditioning** on a 2-level split leaves speed behind; the trial's mean
+  velocity conditioned the same way is drawn as the floor a feature must clear.
+- **Trial index:** the trial cache is on the raw index. 1212's behaviour had been
+  paired with the next trial's spikes after raw trial 102 (52-53 trials).
+- **Spike arm:** `value_boundary_split` (it still had the tie-by-trial-order split
+  behind the retracted `success` result); per-animal value = mean over ACTIVE
+  units (the median over all units was exactly 0 in 13-15/16 animals and the old
+  Wilcoxon silently dropped the zeros, testing 1-3 animals).
+- **Tests:** exact sign-flip with floors (`striatum_lfp.stats`); halves compared
+  over features present in both; one trial layer (`striatum_lfp.trials`) for
+  epochs and DP everywhere; 1212 (NaN DP) is unclipped, as MATLAB does.
+
+## 2026-09-17 — MI arm of the Lemke/Panzeri mirror: no learning change survives correction *[SUPERSEDED 2026-09-25: peak/thirds-era numbers, global null, tie-split binning]*
 
 Design settled with Theo: **align to reward-zone entry**, and compute **every**
 behavioural feature rather than choosing one (in the paper, which feature is best
