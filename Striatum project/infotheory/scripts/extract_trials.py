@@ -84,6 +84,10 @@ def run_animal(h, pd, i: int, mouse_label: str, matlab_good: np.ndarray) -> dict
                          f"good {good_raw.size} vs trialData {n_good}, lick errors {zle.size}")
     good_number = np.full(n_trials, -1)
     good_number[good_raw] = np.arange(n_good)
+    # Lick errors: good-indexed in products written after 2026-09-25 (they carry
+    # `good_trials`); before that MATLAB computed them from the unfiltered
+    # corridorData, i.e. the first n_trials RAW trials.
+    lick_on_good_index = "good_trials" in pd
     feats, spikes, entries, valid = [], [], [], []
     n_units = None
     for t in range(n_trials):
@@ -99,7 +103,9 @@ def run_animal(h, pd, i: int, mouse_label: str, matlab_good: np.ndarray) -> dict
         tim = _cell(h, td["trial_times_zeroed"][k, 0]).ravel()
         licks = _cell(h, td["trial_licks"][k, 0]).ravel()
         f = T.behavioural_features(
-            world, pos, tim, licks, lick_error_z=float(zle[k]),
+            world, pos, tim, licks,
+            lick_error_z=float(zle[k]) if lick_on_good_index
+            else (float(zle[t]) if t < zle.size else np.nan),
             success=float(success[t]) if success is not None and t < success.size else np.nan)
         feats.append([f[k2] for k2 in T.FEATURE_NAMES])
 

@@ -94,7 +94,7 @@ for imouse = 1:num_mice
     v1_filename = ['./RawDataControl/' num2str(curr_mouse) '_v1_raw.mat'];
     has_probe_b = isfile(v1_filename);
     if has_probe_b
-        V1Dat = load(v1_filename, 'binned_spikes', 'goodcluster2');
+        V1Dat = load(v1_filename, 'binned_spikes', 'goodcluster2', 'VR_times_synched');
     end
 
     % --- 3. Load Neuron Types (Probe 1) ---
@@ -185,13 +185,12 @@ for imouse = 1:num_mice
 
     % Slice Probe 2 and merge
     if has_probe_b
-        v1_end_frame = min(size(V1Dat.binned_spikes, 2), npx_end_frame);
-        if v1_end_frame < npx_end_frame
-            final_spikes_p2 = zeros(sum(units_to_keep_p2), npx_end_frame - npx_start_frame + 1);
-            final_spikes_p2(:, 1:(v1_end_frame - npx_start_frame + 1)) = V1Dat.binned_spikes(units_to_keep_p2, npx_start_frame:v1_end_frame);
-        else
-            final_spikes_p2 = V1Dat.binned_spikes(units_to_keep_p2, npx_start_frame:npx_end_frame);
-        end
+        % Probe 2 on probe 1's clock via the VR frames both bundles time-stamp.
+        % Slicing it with probe 1's indices assumed one clock; the control
+        % bundles drift apart by up to 159 ms (probe2_on_probe1_clock.m).
+        final_spikes_p2 = probe2_on_probe1_clock( ...
+            V1Dat.binned_spikes(units_to_keep_p2, :), RawDat.VR_times_synched, ...
+            V1Dat.VR_times_synched, npx_start_frame:npx_end_frame);
         final_areas_p2 = unit_areas_p2(units_to_keep_p2);
         n_cols_nt = size(final_nt_p1, 2);
         final_nt_p2 = nan(sum(units_to_keep_p2), n_cols_nt);

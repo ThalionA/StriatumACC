@@ -12,9 +12,12 @@ neighbours' behaviour before this module existed:
   filter (``ProcessStriatumTask.m:94``). ``trialData``, ``zscored_lick_errors`` and
   therefore the learning point are numbered this way. The mask is read back from
   ``corridorData.trial_reward``, so it is MATLAB's rule, not a re-derivation.
-  (MATLAB's own unit arrays are NOT: ``spatial_binned_fr_all`` is the first
-  ``n_trials`` RAW trials -- binned before the filter -- so for 1212 they sit one
-  trial off the behaviour after raw trial 102. Its epochs all fall before it.)
+  (Products written before 2026-09-25 are mixed: MATLAB filtered only
+  ``trialData``, so lick errors -- and the learning point -- and the spatial unit
+  arrays were the first ``n_trials`` RAW trials. That differs from the good
+  numbering only after 1212's raw trial 102 and at 409's last trial; every
+  learning point and epoch window falls before either, so the windows here are
+  the same under both. ``ProcessStriatum*.m`` now filter everything.)
 * **Covered trials** -- raw trials the voltage export actually spans (407's stops
   26 min early; the cubes store at most 200 trials).
 
@@ -94,7 +97,13 @@ class SessionTrials:
 
 
 def matlab_good_masks(cohort=None, preproc_mat=None) -> dict[int, np.ndarray]:
-    """``{mouse: bool per raw trial}`` -- ``~cellfun(@isempty, trial_reward)``."""
+    """``{mouse: bool per raw trial}`` -- MATLAB's ``goodTrials``.
+
+    Products written after 2026-09-25 save it as ``preprocessed_data.good_trials``
+    (``corridorData`` is then itself filtered to good trials). Older products are
+    read as ``~cellfun(@isempty, corridorData.trial_reward)``, the rule that
+    produced it.
+    """
     import h5py
 
     ch = cohort or config.TASK
@@ -102,6 +111,9 @@ def matlab_good_masks(cohort=None, preproc_mat=None) -> dict[int, np.ndarray]:
     with h5py.File(preproc_mat or ch.preproc_mat, "r") as handle:
         P = handle["preprocessed_data"]
         for i, mouse in enumerate(ch.mouse_ids):
+            if "good_trials" in P:
+                out[mouse] = np.asarray(handle[P["good_trials"][i, 0]]).ravel().astype(bool)
+                continue
             refs = np.asarray(handle[P["corridorData"][i, 0]]["trial_reward"]).ravel()
             out[mouse] = np.array([not _is_empty(handle[r]) for r in refs], bool)
     return out

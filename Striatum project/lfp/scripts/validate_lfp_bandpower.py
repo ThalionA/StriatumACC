@@ -9,9 +9,10 @@ like ``spatial_binned_fr_all``. Two checks are independent of this pipeline:
 2. **Bin spans.** ``spatial_binned_data.durations`` records, for every good
    (trial, bin), ``(bin_times(end) - bin_times(1)) / 1000``. The same span is
    recomputed here from the VR frames (``corridor_bin_stop_ms - _start_ms``) and
-   compared on MATLAB-good trials. ``spatial_binned_data`` is on the RAW trial
-   index (156 columns for 1212, whose ``n_trials`` is 155): ``ProcessStriatumTask.m``
-   bins ``corridorData`` before its good-trial filter.
+   compared on MATLAB-good trials. In products written before 2026-09-25
+   ``spatial_binned_data`` is on the RAW trial index (156 columns for 1212, whose
+   ``n_trials`` is 155) because ``ProcessStriatumTask.m`` binned ``corridorData``
+   before its good-trial filter; newer products are good-indexed. Both handled.
 
 What neither can see is a constant offset between the VR clock and the voltage
 samples: both sides share it. The pre-2026-09-25 "0.0 ms" compared this
@@ -79,14 +80,21 @@ def main() -> None:
             lfp_only_trials = int((good & ~mask).sum())
             matlab_only_trials = int((mask & ~good).sum())
 
-            # 2. bin spans. `durations` is raw-indexed (see the module docstring);
-            # compare on the trials MATLAB calls good.
-            k = int(min(durations.shape[1], n_stored))
-            raw_cols = np.flatnonzero(masks[mouse][:k])
+            # 2. bin spans, on the trials MATLAB calls good. `durations` is
+            # raw-indexed in products written before 2026-09-25 and good-indexed
+            # after (ProcessStriatum*.m now filter corridorData too).
+            full = masks[mouse]
+            if durations.shape[1] == full.size:
+                mat_cols = np.flatnonzero(full[:n_stored])
+                raw_cols = mat_cols
+            else:
+                good_raw = np.flatnonzero(full)[:durations.shape[1]]
+                keep = good_raw < n_stored
+                raw_cols, mat_cols = good_raw[keep], np.flatnonzero(keep)
             start_ms = z["corridor_bin_start_ms"][:, raw_cols].astype(float)
             stop_ms = z["corridor_bin_stop_ms"][:, raw_cols].astype(float)
             span_py = np.where(start_ms >= 0, stop_ms - start_ms, np.nan)
-            span_matlab = durations[:, raw_cols] * 1000.0
+            span_matlab = durations[:, mat_cols] * 1000.0
             both = (np.isfinite(span_py) & np.isfinite(span_matlab) & (span_matlab > 0)
                     & good[raw_cols][None, :])
             diff = np.abs(span_py - span_matlab)[both]

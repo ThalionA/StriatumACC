@@ -93,6 +93,15 @@ else
         % Robust check for empty rewards
         trials_to_exclude = cellfun(@isempty, corridorData.trial_reward);
         goodTrials = ~trials_to_exclude;
+        % Filter the corridor/dark split too, so EVERY per-trial product --
+        % lick errors and so the learning point, spatial and dark binning --
+        % shares trialData's good-trial numbering. Until 2026-09-25 only
+        % trialData was filtered: 1212's lick errors and unit arrays were the
+        % first n_trials RAW trials, one trial off its behaviour after raw
+        % trial 102. The raw mask is saved as preprocessed_data.good_trials.
+        filterFields = @(st) structfun(@(x) x(goodTrials), st, 'UniformOutput', false);
+        corridorData = filterFields(corridorData);
+        darkData = filterFields(darkData);
         
         % Apply filtering manually to ensure structure consistency
         fNames = fieldnames(trialData);
@@ -320,6 +329,7 @@ else
         preprocessed_data(ianimal).npx_times_trials = npx_times_trials;
         
         preprocessed_data(ianimal).trial_metrics = trial_metrics;
+        preprocessed_data(ianimal).good_trials = goodTrials;   % raw-length; trial_metrics stays raw
         preprocessed_data(ianimal).change_point_mean = change_point_mean;
         
         preprocessed_data(ianimal).trial_average_fr_dms = trial_average_fr_dms;
@@ -787,7 +797,9 @@ hold off;
 
 for ianimal = 1:n_animals
     n_trials = size(preprocessed_data(ianimal).zscored_lick_errors, 2);
-    trial_lick_numbers = preprocessed_data(ianimal).trial_metrics.trial_lick_no(1:n_trials);
+    % trial_metrics is raw-indexed; the other per-trial fields are good-indexed.
+    lick_no_good = preprocessed_data(ianimal).trial_metrics.trial_lick_no(preprocessed_data(ianimal).good_trials);
+    trial_lick_numbers = lick_no_good(1:n_trials);
 
     zscored_lick_errors = preprocessed_data(ianimal).zscored_lick_errors(1:n_trials);
 
