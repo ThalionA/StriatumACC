@@ -19,6 +19,30 @@
   use `print -r -- "..."`. And a chain that echoes `exit $?` without stopping
   hides failures -- `ProcessStriatumTask.m`'s tail used an undefined `task_data`
   for months.
+- Top-camera video (`video output/Top (02G55471207)`) is **triggered once per
+  VR frame**: frame i of the concatenated parts = row i of the VR log (counts
+  are identical; verified at r = 0.98 in 1206). The filename start times are the
+  moments the camera was ARMED, often ~11 min early, and the header's 68 fps is
+  meaningless. Timestamp frames with the VR `time` column (and hence NP via
+  `VR_times_synched`). Never fit a behavioural clock. 1212 is the exception to
+  check: 346,286 frames vs 345,684 rows across its two VR files.
+- **Partialling before cross-validated CCA leaks.** `striatum_cca.partial.partial_out_tensor`
+  fits the confound regression on ALL of an epoch's (trial, bin) samples, then
+  `core.cca_cv` holds out trials. The residualising projection mixes training
+  rows into test rows. Synthetic, no true coupling: 16 random confounds raise
+  held-out CC1 from 0.024 to 0.046. The bias fades as the true CC grows. It
+  affected `prepare_pair_partial` (the committed partial CCA) and
+  `prepare_pair_confounded`. **Fixed 2026-09-26:** held-out quantities now
+  partial inside the folds (`core.cca_cv zx=`, via `pipeline.held_out_cca`).
+  Never feed in-sample partialled `scores_*` to `cca_cv`. Cross-fitting is
+  not a fix; it measured worse.
+- OpenCV 4.10 `cv2.phaseCorrelate(a, b, window)` multiplies `a` and `b` by the
+  window IN PLACE. A frame loop that reuses the previous array windows it twice
+  and biases every shift. Pass fresh copies (`video/src/striatum_video/motion.py`).
+- VR log filenames pad neither date nor time: `Test01_2024116_196.csv` =
+  2024-11-6 19:06. The date is ambiguous (2024121 = 1 Dec or 21 Jan), so take it
+  from the recording.
+
 - LFP `data_to_save` units and source band are undocumented: never use an
   absolute amplitude threshold to decide whether signal exists; audit exact
   zeros, finite values and scale-free temporal/spectral structure separately.
