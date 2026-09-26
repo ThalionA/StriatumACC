@@ -1111,13 +1111,15 @@ avg_lick_corrs = cell(1, n_animals);
 avg_occupancy_corrs = cell(1, n_animals);
 
 for ianimal = 1:n_animals
-    n_trials = task_data(ianimal).n_trials;
+    % Was `task_data`, never defined in this script: the section has always
+    % errored, unseen while regen_chain.sh ignored exit codes (found 2026-09-26).
+    n_trials = preprocessed_data(ianimal).n_trials;
     % n_trials = 50;
 
     % lick_data = preprocessed_data(ianimal).spatial_binned_data.licks(1:n_trials, :);
     % occupancy_data = preprocessed_data(ianimal).spatial_binned_data.durations(1:n_trials, :);
-    lick_data = task_data(ianimal).spatial_binned_data.licks(1:n_trials, :);
-    occupancy_data = task_data(ianimal).spatial_binned_data.durations(1:n_trials, :);
+    lick_data = preprocessed_data(ianimal).spatial_binned_data.licks(1:n_trials, :);
+    occupancy_data = preprocessed_data(ianimal).spatial_binned_data.durations(1:n_trials, :);
 
     window_size = 10;
     half_window = floor(window_size / 2);
