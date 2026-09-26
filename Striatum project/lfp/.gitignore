@@ -44,3 +44,5 @@ results/lfp_arms_moving_reliability_control.csv
 !results/lfp_arms_cca_distance_stats_*.csv
 !results/lfp_psi_stats_*.csv
 !results/lfp_distance_stats_*.csv
+# console captures duplicate the pipeline_*.log files
+results/*.out

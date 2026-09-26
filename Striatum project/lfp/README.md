@@ -5,9 +5,21 @@ exports, on the unit pipeline's 1 ms grid, for the task cohort and yoked Control
 and the analyses built on it. The running log is `NOTES.md` (newest first); the
 July audit of the superseded export is in `NOTES_archive.md`.
 
-> **Status (2026-09-25).** The pipeline was reviewed and rebuilt on branch
-> `lfp-simplify`; every earlier result is **under review** until the re-run on
-> the fixed code lands (see the `NOTES.md` top entry for what changed and why).
+> **Status (2026-09-26).** Reviewed, rebuilt and re-run end to end on branch
+> `lfp-simplify` (MATLAB products regenerated first). Current results are the
+> `NOTES.md` top entry; results from before 2026-09-25 are superseded.
+
+## Where things stand (2026-09-26)
+
+| question | answer on the fixed pipeline |
+|---|---|
+| Does learning change band power differently in task animals than in yoked controls? (pre-registered) | No cell differs (0/30; DLS theta p_FDR 0.58). Controls are n = 4-5. |
+| Does band power change Naive → Expert within task animals? | DLS theta falls (−0.060 log10, p_FDR 0.029) — also in the dark ITI; DMS beta rises (+0.029, 0.018). |
+| Can position be decoded from band power? | Yes, in all 15 striatal/ACC cells, but R² above null is 0.01-0.08. |
+| Is the spatial profile more reliable in task animals? | Yes, 15/30 cells, 13/30 after removing speed; task animals also run far more stereotypically. |
+| Is there theta-gamma coupling? | Yes: 66-78 % of cells vs a 2-6 % calibrated null (descriptive). |
+| Is there a consistent direction between areas (PSI)? | No: 0/24 bipolar cells consistent across animals. |
+| Does band power carry behavioural information beyond speed? | No: 8/9 features at or below the speed-confound floor. |
 
 ## One command
 

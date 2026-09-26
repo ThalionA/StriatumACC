@@ -76,7 +76,7 @@ run() {
   print "=== $* @ $(date '+%H:%M:%S') ==="
   "$@"
   local rc=$?
-  print "--- exit $rc @ $(date '+%H:%M:%S') ---"
+  print -r -- "--- exit $rc @ $(date '+%H:%M:%S') ---"
   if [[ $rc -ne 0 ]]; then
     print "ABORT: '$*' failed; later steps would read a half-written table."
     exit $rc
@@ -101,7 +101,10 @@ run() {
         fi
         ;;
       plots)
-        for c in $COHORTS; do run $PY scripts/plot_lfp_arms.py --cohort $c; done
+        for c in $COHORTS; do
+          run $PY scripts/plot_lfp_inventory.py --cohort $c
+          run $PY scripts/plot_lfp_arms.py --cohort $c
+        done
         if [[ -f results/lfp_group_contrast.csv ]]; then
           run $PY scripts/plot_lfp_task_vs_control.py
           run $PY scripts/plot_lfp_combined.py

@@ -1,5 +1,39 @@
 # Predictions (newest first)
 
+## 2026-09-25 (b) — the full LFP re-run on the fixed pipeline (branch lfp-simplify)
+
+Registered before `regen_chain.sh` + `run_lfp_pipeline.sh`. Everything is now
+DP-clipped, Naive = good trials 1-10, exact permutation tests with floors.
+
+- **P1 (pre-registered primary):** DLS theta, task vs control, Δlog10 power
+  Naive→Expert: p_FDR > 0.05. ~80% (it needed the 4-10 baseline and no DP rule).
+- **P2:** decoding beats its null (sign-flip, BH) in most striatal/ACC area×band
+  cells of the task cohort: ≥ 9/15. ~70%.
+- **P3:** task > control split-half reliability persists after the within-trial
+  speed slope is removed, in fewer cells than raw. ~55% (single-animal evidence
+  argued against "purely behavioural").
+- **P4:** PSI with vertical bipolar pairs shows no consistent direction across
+  animals in any bipolar pair×band cell (BH). ~60%.
+- **P5:** PAC observed significant-cell rate exceeds its re-paired-trial null
+  rate in every measure×reference group. ~80%.
+- **P6:** no Naive→Expert change survives BH in the primary log-power evolution
+  stats for the task cohort. ~65%.
+- **Falsifier for the whole fix:** validation shows an LFP-good trial MATLAB
+  dropped, or <99 % of bin spans within 1 ms, in any file.
+- **Outcome (2026-09-26): 5 of 6 held; P6 FALSIFIED; falsifier did not fire.**
+  Validation 29/29. P1 held: DLS theta Δlog task −0.060 vs control +0.012,
+  p = 0.051, p_FDR = 0.58; 0/30 primary cells. P2 held: 15/15 striatal/ACC
+  decoding cells beat the null. P3 held: reliability task > control 15/30 raw,
+  13/30 after the within-trial speed slope. P4 held: 0/24 bipolar direction cells
+  (monopolar 1/24). P5 held: PAC 66-78 % observed vs 2-6 % calibrated null in every
+  group. **P6 wrong:** two within-task cells survive (DLS theta −0.060, p_FDR 0.029;
+  DMS beta +0.029, p_FDR 0.018). What I missed: I anchored on the group contrast
+  failing and carried that to the within-task test, which has 11-16 animals and a
+  real floor; the DLS theta decline is there within task animals -- it is the
+  CONTROL comparison that is unpowered (n ≤ 5, 0/30 reachable). Lesson: "doesn't
+  differ from control" and "doesn't change" are different predictions; register
+  them separately.
+
 ## 2026-09-25 — which clock the control probe-2 (visual) bundles are on
 
 The control V1 bundles' `VR_times_synched` differ from probe 1's by 6-48 ms (513)

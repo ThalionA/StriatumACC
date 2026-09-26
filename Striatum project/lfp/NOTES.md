@@ -1,5 +1,71 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-26 — The re-run on the fixed pipeline: what survives
+
+Agent-written. MATLAB products regenerated (`regen_chain.sh`, all steps exit 0;
+old products in `processed_data/_archive_2026-09-25/`), then the whole LFP
+pipeline, both cohorts. Predictions registered beforehand: `PREDICTIONS.md`
+2026-09-25 (b). Everything below is DP-clipped, Naive = good trials 1-10, exact
+permutation tests with floors, BH within the declared family.
+
+**Validation (the falsifier) passed.** 29/29 files: no LFP-good trial MATLAB
+dropped, >99 % of bin spans within 1 ms of MATLAB's `durations`; the only
+trial-count gap is 407's short export (31 trials). Identity with the notched
+envelope: 20/21 task files confirmed in all three windows (was 18/21; 418 and 1105
+striatum now pass), 823 striatum 2/3; control 7/8, 817 striatum 2/3.
+
+**Task vs yoked control (`lfp_group_contrast.csv`).**
+- *Pre-registered primary* (Δlog10 power, Naive→Expert): **0/30 cells differ**
+  (20 reachable; smallest p_FDR 0.58). DLS theta: task −0.060 vs control +0.012,
+  p = 0.051, p_FDR = 0.58 (n 11 vs 4 after DP). **The 2026-08-28 DLS-theta
+  dissociation does not survive.** All evolution metrics: 0/120.
+- Decoding 0/30, moving reliability 0/30, CCA 0/30.
+- Split-half reliability of the spatial profile: task > control in **15/30** cells,
+  and **13/30 after removing each channel's within-trial speed slope** — the gap is
+  not explained by the linear speed component. Behaviour: speed-profile split-half
+  r 0.97 vs 0.54 (p_FDR < 0.001); mean speed 33 vs 22 cm/s is no longer
+  significant after DP clipping (p = 0.086).
+
+**Within the task cohort.**
+- Evolution (primary): **DLS theta −0.060 (p_FDR 0.029, n 11)** and DMS beta +0.029
+  (p_FDR 0.018, n 15). In the figure the DLS theta fall is present in the dark ITI
+  as well as the corridor, so it is not corridor-specific; whether it is learning
+  cannot be said — the control cohort (n ≤ 5) cannot reach 0.05 on any
+  within-group test (0/30 reachable), and the group contrast is null.
+- Decoding beats its rotated-label null in **15/15 striatal and ACC cells**; V1/CA1/DG
+  (n ≤ 5) are unreachable. Effect sizes are small (R² above null 0.01-0.08).
+- CC1 falls with separation **within animals** (theta −0.17/mm p_FDR 0.012; high
+  gamma −0.16, 0.023; total −0.18, 0.010; beta/low gamma p_FDR 0.07).
+
+**Coupling and direction.**
+- PAC vs its calibrated null (same trials, amplitude re-paired): task bipolar
+  within-area 77 % vs 6 %, between 69 % vs 4 %; control 78 % vs 2 %, 66 % vs 2 %.
+  Cells = animal × area × band: descriptive, not an across-animal test.
+- PSI with vertical bipolar pairs: 33 % of task animal-cells |z| > 2, but **0/24**
+  pair × band cells with a consistent direction across animals (12 reachable);
+  monopolar 1/24. Monopolar and bipolar now disagree (r = −0.25, 45 % sign
+  agreement). Controls: nothing reachable.
+- Distance control, DLS-DMS boundary (n 12): within − across +0.04 to +0.08, all
+  CIs include 0 (e.g. low gamma [−0.04, +0.19]) — an area term of ~0.1-0.2 cannot
+  be excluded. ACC-DMS: n 4, unreachable.
+
+**Information (../infotheory).** LFP: shuffle-subtracted I(power; feature) is
+0.0004-0.0026 bits and, conditioned on speed, sits at or below the speed floor
+for 8/9 features; time-to-reward-zone clears it (p = 0.042 uncorrected, an ad hoc
+per-animal check, 1 of 9) — **"band power carries behavioural information beyond
+speed" does not survive.** Spike MI, Expert − Naive: nothing survives correction
+(smallest p 0.018 uncorrected, first-lick position).
+
+**LFP vs units, moving reliability (same mice, areas and epochs;
+`lfp_reliability_moving_vs_units_task`):** in DMS/DLS/ACC the LFP's raw
+reliability is 0.01-0.07 against units 0.19-0.29 -- below even the units' own
+trial shuffle (0.10-0.15). In V1 the LFP (0.03-0.08) sits near the units' shuffle,
+and in CA1 LFP theta (0.08-0.12) matches the units (0.10-0.13); CA1 is n = 3.
+
+Housekeeping: 48 figures no current script produces → `figures/_archive_pre_2026-09-25/`;
+July npz → `results/_archive_july/`. `ProcessStriatumTask.m` had an undefined
+`task_data` in its tail (hidden while the chain ignored exit codes) — fixed.
+
 ## 2026-09-25 — Soundness review before simplifying: most headline claims are at risk
 
 Agent-written review (four independent reviewers on 2d1fc3f, key items re-measured

@@ -47,7 +47,27 @@ def load_stats(cohort_name: str = "task"):
                 for r in csv.DictReader(fh)}
 
 
+def _relative_to_naive(rows, fields):
+    """Each animal's value minus its own Naive value, per (area, band, probe).
+
+    Absolute log power differs ~1000x between the two export gain regimes, so
+    averaging it across animals buries the within-animal change -- the quantity
+    the Naive -> Expert test is actually run on -- under between-animal spread.
+    """
+    naive = {(r["mouse_id"], r["probe"], r["area"], r["band"]): r
+             for r in rows if r["epoch"] == EPOCHS[0]}
+    out = []
+    for r in rows:
+        ref = naive.get((r["mouse_id"], r["probe"], r["area"], r["band"]))
+        if ref is None:
+            continue
+        out.append({**r, **{f: r[f] - ref[f] for f in fields}})
+    return out
+
+
 def plot_evolution(rows, value_c, value_d, ylabel, stem, suptitle, stats=None):
+    if value_c.startswith("log_"):
+        rows = _relative_to_naive(rows, (value_c, value_d))
     areas = [a for a in AREA_ORDER if any(r["area"] == a for r in rows)]
     fig, axes = plt.subplots(len(PLOT_BANDS), len(areas),
                              figsize=(2.5 * len(areas), 2.3 * len(PLOT_BANDS)),
@@ -562,7 +582,7 @@ def main() -> None:
     evo = load("evolution", c)
     if evo:
         st = load_stats(c)
-        plot_evolution(evo, "log_corridor", "log_dark", "log10 band power",
+        plot_evolution(evo, "log_corridor", "log_dark", "Δ log10 power vs Naive",
                        f"lfp_evolution_log{tag}",
                        f"LFP band power across learning, per area — {c.upper()} cohort "
                        "(PRIMARY: log10 of mean power)\n"

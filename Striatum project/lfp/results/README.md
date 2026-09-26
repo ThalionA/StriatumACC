@@ -1,19 +1,23 @@
-# Result status
+# Results
 
-Defensible integrity summaries:
+Written by `scripts/run_lfp_pipeline.sh`. Tables listed in `../.gitignore` as
+whitelisted are committed (they carry every number in `NOTES.md`); caches
+(`lfp_band_trials_*`, `lfp_arms_moving_depth_*`, `lfp_psd_*`) and per-trial tables
+are regenerable and not.
 
-- `sanity_summary.csv`
-- `sanity_timing_summary.csv`
-- `signal_identity_summary.csv`
-- `sanity_figure_examples_and_psd.npz` (exact raw examples and PSD curves plotted)
-- `signal_identity_figure_data.npz` (exact spectra, diagnostics and correlations plotted)
-- `sanity_windows_<mouse>.csv` / `sanity_audit_<mouse>.npz` (figure source data)
-
-`_quarantined_unaligned_learning/learning_evolution_summary.csv` is preserved
-only as an audit trail because exact voltage-to-VR timing, source-band
-provenance and 1212 probe identity remain unresolved, and its 30–80 Hz values
-are contaminated by the persistent ~74 Hz peak.
-
-`signal_identity_summary.csv` includes per-peak common-median-reference changes
-and an explicit area-mapping status. A negative dB change means the peak was
-reduced by common-median referencing.
+- `lfp_inventory_*`, `lfp_identity_*` — per-file audit; filename vs spiking.
+- `lfp_band_trials_<cohort>/<mouse>_<probe>.npz` — band power per channel × bin ×
+  raw trial, the input to everything downstream (not committed).
+- `lfp_bandpower_summary_*`, `lfp_bandpower_validation_*` — extraction summary;
+  trials vs MATLAB's good mask and bin spans vs MATLAB `durations`.
+- `lfp_arms_<arm>_<cohort>.csv` — evolution, decoding, reliability, moving
+  reliability (+ `_epochs`), CCA, behaviour; `*_stats_*` are the across-animal
+  tests (exact sign-flip, BH), with each test's floor and reachability.
+- `lfp_group_contrast.csv` — task vs control per cell, exact permutation, BH within
+  arm × metric; `primary` marks the pre-registered test.
+- `lfp_distance_*` — separation-matched within/across coupling, per boundary;
+  `lfp_psi_*` — phase-slope index and its direction test; `lfp_coupling_*` — PAC
+  and envelope coupling with the re-paired-trial null (`p_trial_repaired_null`).
+- `lfp_probe2_clock_audit.csv` — the probe-2 clock measurement.
+- `pipeline_*.log` / `*.out` — run logs. `_archive_july/` — outputs of deleted July
+  code, provenance only.

@@ -203,7 +203,7 @@ def evolution_figure(stem="lfp_evolution_z_task_vs_control") -> None:
             if ai == 0:
                 ax.set_ylabel(BAND_ROW[band], fontsize=8)
             if bi == len(BANDS) - 1:
-                ax.set_xticklabels(["1-3", "4-10", "Inter", "Expert"],
+                ax.set_xticklabels(["Naive", "Inter", "Expert"],
                                    rotation=30, ha="right", fontsize=7)
     _share_y([a for row in axes for a in row])
     axes[0][0].legend(fontsize=8, frameon=False, loc="upper left")
