@@ -1,5 +1,16 @@
 # StriatumACC — Project Audit & Priority List
 
+## 2026-09-26 — LFP pipeline reviewed, rebuilt and re-run (branch `lfp-simplify`)
+
+Details, numbers and what changed: `Striatum project/lfp/NOTES.md` (two top
+entries) and its README table. In short: the DLS-theta task-vs-control
+dissociation and "LFP carries behavioural information beyond speed" do not
+survive the fixed pipeline; position decoding (small), spatial-profile
+reliability task > control (survives removing speed) and theta-gamma PAC do.
+Two MATLAB fixes landed with it (control probe-2 clock; one trial numbering in
+`ProcessStriatum*.m`) and the products were regenerated
+(`processed_data/_archive_2026-09-25/` holds the previous ones).
+
 ## 2026-09-17 — Theta-gamma coupling: real and widespread, unchanged by learning
 
 **PAC is real here, and the test is calibrated on REAL data.** The existing unit

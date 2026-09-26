@@ -1,5 +1,24 @@
 # StriatumACC gotchas
 
+- **MATLAB products before 2026-09-25 mix two trial numberings.** `ProcessStriatum*.m`
+  filtered only `trialData` by `goodTrials`; lick errors (so the learning point)
+  and the spatial/dark unit arrays were the first `n_trials` RAW trials. Differs
+  only for 1212 (raw 102) and 409 (last trial). Fixed; products now carry
+  `preprocessed_data.good_trials`. In Python, get trials only through
+  `striatum_lfp.trials` (it reads either generation).
+- **Control probe-2 bundles run on their own clock.** `<m>_v1_raw.mat`
+  `VR_times_synched` drifts 6-48 ms (513) and 116-159 ms (817) from probe 1's;
+  task bundles are identical. Map probe-2 data with `probe2_on_probe1_clock.m`,
+  never slice it with probe 1's frame indices.
+- **LFP exports are already common-median referenced; channel 191 is the
+  Neuropixels reference site** (SD ~14x a normal channel). Depth-sorted
+  neighbours c, c+1 share a row (0 um vertical): a bipolar pair is c, c+2.
+- Unit depths (`goodcluster2(:,2)`) are Kilosort ycoords, 20-3840 um; the export's
+  `depth_to_save` is 0-3820. Area CSVs are in the unit convention.
+- zsh `print "--- ..."` reads the leading dashes as options and prints nothing:
+  use `print -r -- "..."`. And a chain that echoes `exit $?` without stopping
+  hides failures -- `ProcessStriatumTask.m`'s tail used an undefined `task_data`
+  for months.
 - LFP `data_to_save` units and source band are undocumented: never use an
   absolute amplitude threshold to decide whether signal exists; audit exact
   zeros, finite values and scale-free temporal/spectral structure separately.
