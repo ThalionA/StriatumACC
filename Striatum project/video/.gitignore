@@ -1,0 +1,6 @@
+# Regenerable outputs (scripts/run_*.py, plot_*.py); results/ also holds the
+# cached VR logs (vr_cache/) and ~1 GB of per-frame features. Never commit data.
+results/
+figures/
+__pycache__/
+.pytest_cache/
