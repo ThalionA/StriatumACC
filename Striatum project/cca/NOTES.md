@@ -769,3 +769,82 @@ config alone is `run_temporal_runstate.py` (no flags). Not yet done: a saved
 velocity-sanity figure under `figures/`, and plotting/aggregation of Arm A
 results (the existing `plot_stage2`/`aggregate` consume the spatial
 `EpochAnalysis`, not `TemporalEpochAnalysis`).
+
+## 2026-09-26 — round 18: partialling moved INSIDE the CV folds (leak fix)
+
+**Bug.** `partial.partial_out_tensor` regressed the confound (other areas' PC
+scores) out of each epoch's residual neuron tensors over ALL samples, before
+`core.cca_cv` held out trials. The residualising projection mixes training rows
+into test rows, so held-out CC was inflated. On independent synthetic areas
+(10 trials × 50 bins, k=20, 16 confounds) the held-out CC1 rose by
++0.013 ± 0.002. The bias grows with the number of confounds and fades as the
+true CC grows. `partial_cca_cv` (`run_partial.py`) had the same in-sample
+step. Found while regressing video/VR movement out of the CCA (`../video/`).
+Cross-fitting (residualising each fold on the others) was measured and is
+WORSE (+0.013 on the null at k=6). Only fold-wise partialling is unbiased.
+
+**Fix.**
+- `core.cca_cv(px, py, cfg, zx=, zy=)` fits the confound regression on each
+  fold's training trials only. `zy` exists for lagged pairs.
+- `PreparedPair` gains `cv_scores_x/y` (UNpartialled residuals on the same
+  in-sample-partialled PCA basis) and `confound`.
+- `analysis.analyse_pair`, `lagged.lag_curve(confound=)` and
+  `surrogate.build_null(confound=)` use them. The null shuffles Y and its copy
+  of the confound together.
+- `partial_cca_cv` is now fold-wise.
+- `prepare_pair_partial` and the new `prepare_pair_confounded` (for supplied
+  confounds such as movement) share `_prepare_confounded`.
+- One accessor for every held-out quantity: `pipeline.epoch_inputs` /
+  `held_out_cca`.
+- Plain CCA and Stage 3 (in-sample, descriptive) are unchanged.
+- Tests: 156 pass (+10: `test_foldwise_partial.py` + pipeline tests). One of
+  them pins the old leak.
+
+**Re-run.**
+- Stage 2 partial, FS-excl and FS-incl, and `run_partial.py --fresh`.
+- Old pickles and the old `figures/` are archived in
+  `results/_archive/*prefoldwise_2026-09-26*`.
+- Regenerated: `plot_stage2`, `plot_partial`, `directionality_table`,
+  `plot_ifi_fs`, `epoch_anova --variant partial`.
+
+**What changed.** Like-for-like on identical prepared pairs, held-out partial
+CC1 falls by a median 0.0096 (FS-excl; 64% of epochs fall; −0.012 in the
+low-CC half) and 0.0043 (FS-incl). The FS-incl pickle from 2026-05-24 is not a
+like-for-like baseline: it predates the August config changes.
+- Significant dimensions fall from 686 to 616.
+- DLS–ACC animals with significant dimensions fall from 5 to 4.
+- **Held:** striatal-triangle and V1–ACC partial CC > 0 in every epoch
+  (animal t-test, p ≤ 0.027), and no per-animal rm-ANOVA epoch effect in any
+  pair.
+- **Changed:**
+  - V1–DMS expert CC > 0 is lost (animal p 0.031 → 0.080).
+  - V1–DMS intermediate IFI ≠ 0 is lost (0.014 → 0.104).
+  - V1–ACC naive IFI ≠ 0 is new (0.34 → 0.0027).
+  - The V1–ACC IFI per-dimension epoch ANOVA crosses to 0.044. It is
+    pseudoreplicated and uncorrected; the per-animal test is 0.41.
+  - Several IFI means change sign (e.g. DMS–DLS intermediate −0.004 → +0.025).
+- **The directionality (IFI) results are fragile to this fix. The CC results
+  are not.**
+
+**Open.** Stage 3 split-half principal angles (`subspace.split_half_angles`)
+fit each half on scores partialled using BOTH halves. The same mixing could
+make the halves look alike. Not yet checked.
+
+**Round 18 addendum: a residual effect remains, unexplained.** The full fixed
+pipeline is unbiased on synthetic animals: 16 random confounds at the null give
++0.0045 ± 0.0063 (n.s.), and at weak coupling (CC ~0.27) they give −0.012.
+But on the REAL spatial epochs of the four video animals (54 animal-pair-epochs,
+k ≈ 20 of ~50 units, NaN bins), regressing out:
+- pure Gaussian noise (16 dims) still RAISES held-out CC1 by a median +0.011
+  (rises in 69%);
+- circularly shifted movement raises it by +0.018;
+- the shifted movement's trial means only LOWERS it by −0.021.
+The rise is the same on the plain PCA basis (+0.020 vs +0.018), so it is not
+the basis. Hypotheses, unchecked:
+1. a real-data geometry effect (k < units, missing bins, weak and
+   heteroscedastic coupling) that the synthetic animals do not reproduce;
+2. fold-count or rank effects in `cca_cv` when partialled folds lose dims.
+**Consequence:** a plain vs partial comparison is only fair against a
+same-dimensionality noise control. The committed partial CC may still sit
+slightly high. Next: a synthetic animal matched to the real sizes (units, k,
+NaN pattern, CC ~0.1), and fold-level diagnostics.

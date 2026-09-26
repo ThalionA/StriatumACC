@@ -316,6 +316,11 @@ class CVResult:
     samples_per_pc: float
 
 
+def _trial_rows(trials: np.ndarray, n_bins: int) -> np.ndarray:
+    """Row indices of ``trials`` in a (trial, bin)-flattened array."""
+    return (np.asarray(trials)[:, None] * n_bins + np.arange(n_bins)[None, :]).ravel()
+
+
 def trial_folds(n_trials: int, n_folds: int, seed: int) -> list[np.ndarray]:
     """Partition trial indices into ``n_folds`` interleaved, balanced folds."""
     rng = np.random.default_rng(seed)
@@ -323,7 +328,17 @@ def trial_folds(n_trials: int, n_folds: int, seed: int) -> list[np.ndarray]:
     return [perm[i::n_folds] for i in range(n_folds)]
 
 
-def cca_cv(px: np.ndarray, py: np.ndarray, cfg) -> CVResult:
+def _fold_residuals(train: np.ndarray, test: np.ndarray, z_train: np.ndarray,
+                    z_test: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Residualise flattened ``train``/``test`` on a confound whose regression
+    is fitted on the TRAINING rows only (finite rows); missing rows stay NaN."""
+    ok = _finite_rows(train, z_train)
+    coef, *_ = np.linalg.lstsq(z_train[ok], train[ok], rcond=None)
+    return train - z_train @ coef, test - z_test @ coef
+
+
+def cca_cv(px: np.ndarray, py: np.ndarray, cfg,
+           zx: np.ndarray | None = None, zy: np.ndarray | None = None) -> CVResult:
     """Fit CCA with 5-fold whole-trial cross-validation.
 
     Folds hold out whole trials (not random samples) so that within-trial
@@ -333,9 +348,25 @@ def cca_cv(px: np.ndarray, py: np.ndarray, cfg) -> CVResult:
     ----------
     px, py : ndarray, shape (n_trials, n_bins, k)
         PCA-reduced scores for the two areas.
+    zx, zy : ndarray, shape (n_trials, n_bins, q), optional
+        Confounds to partial out of X and Y (``zy`` defaults to ``zx``; they
+        differ only when X and Y are lagged against each other). The
+        regression is fitted on each fold's TRAINING trials and applied to its
+        test trials: partialling before the folds lets the test trials shape
+        the residualising projection and inflates held-out CC (measured +0.013
+        on independent areas at k=20, 16 confounds; tests/test_foldwise_partial.py).
+        The full-data fit (``in_sample_r``, ``full``) is partialled in-sample.
     """
     n_tr, n_bin, kx = px.shape
     ky = py.shape[2]
+    if zx is not None and zy is None:
+        zy = zx
+    fx, fy = _flatten(px), _flatten(py)
+    if zx is not None:
+        fzx, fzy = _flatten(zx), _flatten(zy)
+        full_x, _ = _fold_residuals(fx, fx, fzx, fzx)
+        full_y, _ = _fold_residuals(fy, fy, fzy, fzy)
+        px, py = full_x.reshape(px.shape), full_y.reshape(py.shape)  # in-sample, for `full` only
 
     full = cca_fit(_flatten(px), _flatten(py))
     d = full.r.shape[0]
@@ -347,8 +378,16 @@ def cca_cv(px: np.ndarray, py: np.ndarray, cfg) -> CVResult:
         if train_tr.size < 2 or test_tr.size < 1:
             continue
         try:
-            model = cca_fit(_flatten(px[train_tr]), _flatten(py[train_tr]))
-            r_test = cca_score(_flatten(px[test_tr]), _flatten(py[test_tr]), model)
+            if zx is None:
+                x_tr, x_te = _flatten(px[train_tr]), _flatten(px[test_tr])
+                y_tr, y_te = _flatten(py[train_tr]), _flatten(py[test_tr])
+            else:
+                rows_tr = _trial_rows(train_tr, n_bin)
+                rows_te = _trial_rows(test_tr, n_bin)
+                x_tr, x_te = _fold_residuals(fx[rows_tr], fx[rows_te], fzx[rows_tr], fzx[rows_te])
+                y_tr, y_te = _fold_residuals(fy[rows_tr], fy[rows_te], fzy[rows_tr], fzy[rows_te])
+            model = cca_fit(x_tr, y_tr)
+            r_test = cca_score(x_te, y_te, model)
         except ValueError:
             continue                       # too few finite samples in this fold
         # A fold may have fewer canonical dims than the full fit (rank loss);

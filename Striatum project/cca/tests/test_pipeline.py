@@ -207,3 +207,94 @@ def test_zscore_normalisation_spans_whole_engaged_period():
     fit_expert = pipeline.fit_pair(expert_only, "DMS", "ACC", LEARNER, zcfg)
     assert not np.allclose(fit_base.epochs["naive"].held_out_r,
                            fit_expert.epochs["naive"].held_out_r, atol=1e-6)
+
+
+def _animal_driven_by(movement_is_the_latent: bool, seed: int = 0):
+    """Two areas sharing 3 latents. The 'movement' confound is either those
+    very latents (communication = shared movement drive) or an independent
+    signal of the same shape."""
+    rng = np.random.default_rng(seed)
+    n_trials, n_bins, n_lat = 120, config.N_BINS, 3
+    latents = rng.standard_normal((n_trials, n_bins, n_lat))
+    units = {"DMS": 25, "ACC": 25}
+    n_units = sum(units.values())
+    activity = np.repeat(rng.standard_normal((1, n_bins, n_units)) * 2.0, n_trials, axis=0)
+    masks = {a: np.zeros(n_units, dtype=bool) for a in config.AREAS}
+    start = 0
+    for area, count in units.items():
+        activity[:, :, start:start + count] += latents @ rng.standard_normal((n_lat, count))
+        masks[area][start:start + count] = True
+        start += count
+    activity += 0.3 * rng.standard_normal(activity.shape)
+    animal = dataio.Animal(animal_id=1, spatial_fr=activity, neurontypes=np.full((n_units, 5), 5.0),
+                           area_masks=masks, change_point=np.nan,
+                           zscored_lick_errors=np.zeros(n_trials), n_trials=n_trials)
+    movement = latents if movement_is_the_latent else rng.standard_normal(latents.shape)
+    return animal, movement
+
+
+def _held_out_cc1(prepared):
+    """Held-out CC1 per epoch the way analysis.analyse_pair computes it: for a
+    confounded preparation, unpartialled scores + the confound partialled
+    inside the folds."""
+    return [pipeline.held_out_cca(prepared, e, CFG).held_out_r[0] for e in config.EPOCH_NAMES]
+
+
+def test_prepare_pair_confounded_removes_coupling_carried_by_the_confound():
+    animal, movement = _animal_driven_by(movement_is_the_latent=True)
+    plain = _held_out_cc1(pipeline.prepare_pair(animal, "DMS", "ACC", LEARNER, CFG))
+    conf = _held_out_cc1(pipeline.prepare_pair_confounded(animal, "DMS", "ACC", LEARNER, movement, CFG))
+    assert min(plain) > 0.6
+    assert max(conf) < 0.3
+
+
+def test_prepare_pair_confounded_keeps_coupling_independent_of_the_confound():
+    animal, movement = _animal_driven_by(movement_is_the_latent=False)
+    plain = _held_out_cc1(pipeline.prepare_pair(animal, "DMS", "ACC", LEARNER, CFG))
+    conf = _held_out_cc1(pipeline.prepare_pair_confounded(animal, "DMS", "ACC", LEARNER, movement, CFG))
+    np.testing.assert_allclose(conf, plain, atol=0.05)
+
+
+def test_prepare_pair_confounded_accepts_a_temporal_ragged_confound():
+    animal, movement = _animal_driven_by(movement_is_the_latent=True)
+    cfg_t = dataclasses.replace(CFG, bin_mode="temporal")
+    lengths = np.random.default_rng(3).integers(30, 50, size=animal.n_trials)
+    trials_x = [animal.spatial_fr[t, :n] for t, n in enumerate(lengths)]
+    conf_list = [movement[t, :n] for t, n in enumerate(lengths)]
+    original = dataio.area_tensor
+    try:
+        dataio.area_tensor = lambda a, area, cfg: (
+            [tr[:, a.area_masks[area]] for tr in trials_x], np.flatnonzero(a.area_masks[area]))
+        prepared = pipeline.prepare_pair_confounded(animal, "DMS", "ACC", LEARNER, conf_list, cfg_t)
+    finally:
+        dataio.area_tensor = original
+    assert isinstance(prepared, pipeline.PreparedPair)
+    assert max(_held_out_cc1(prepared)) < 0.3
+
+
+def test_partial_preparation_carries_unpartialled_scores_and_confound():
+    animal = synthetic_animal({"DMS": 25, "ACC": 25, "DLS": 25}, shared_strength=1.0, noise=0.3)
+    part = pipeline.prepare_pair_partial(animal, "DMS", "ACC", LEARNER, CFG)
+    plain = pipeline.prepare_pair(animal, "DMS", "ACC", LEARNER, CFG)
+    assert plain.confound is None
+    for e in config.EPOCH_NAMES:
+        assert part.cv_scores_x[e].shape == part.scores_x[e].shape
+        assert part.confound[e].shape[:2] == part.scores_x[e].shape[:2]
+        # in-sample partialled scores = unpartialled scores partialled in-sample
+        z = part.confound[e].reshape(-1, part.confound[e].shape[-1])
+        cv = part.cv_scores_x[e].reshape(-1, part.k)
+        coef, *_ = np.linalg.lstsq(z, cv, rcond=None)
+        np.testing.assert_allclose((cv - z @ coef).reshape(part.scores_x[e].shape),
+                                   part.scores_x[e], atol=1e-8)
+
+
+def test_analyse_pair_uses_foldwise_partialling_for_partial_variants():
+    from striatum_cca import analysis
+    animal = synthetic_animal({"DMS": 25, "ACC": 25, "DLS": 25}, shared_strength=1.0, noise=0.3)
+    part = pipeline.prepare_pair_partial(animal, "DMS", "ACC", LEARNER,
+                                         dataclasses.replace(CFG, n_shuffles=5))
+    res = analysis.analyse_pair(part, dataclasses.replace(CFG, n_shuffles=5))
+    for e in config.EPOCH_NAMES:
+        expected = core.cca_cv(part.cv_scores_x[e], part.cv_scores_y[e], CFG,
+                               zx=part.confound[e]).held_out_r
+        np.testing.assert_allclose(res.epochs[e].held_out_cc, expected)

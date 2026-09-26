@@ -73,12 +73,18 @@ def build_null(
     real_held_out_cc: np.ndarray,
     cfg,
     alpha: float = 0.05,
+    confound: np.ndarray | None = None,
 ) -> NullResult:
     """Per-dimension held-out-CC significance for one (animal, pair, epoch).
 
     Each surrogate permutes the trial correspondence and recomputes the
     5-fold cross-validated CCA; the real held-out CC of dimension *j* is
     compared to the shuffle distribution of held-out CC for dimension *j*.
+
+    With ``confound`` (partial CCA), each surrogate shuffles Y TOGETHER with
+    its copy of the confound (one transform on the stacked array), and the
+    confound is partialled inside the folds: X on the original, Y on the
+    shuffled copy -- mirroring the real fit.
     """
     rng = np.random.default_rng(cfg.surrogate_seed)
     real = np.atleast_1d(np.asarray(real_held_out_cc, dtype=float))
@@ -86,11 +92,14 @@ def build_null(
 
     null = np.full((cfg.n_shuffles, d), np.nan)
     for s in range(cfg.n_shuffles):
+        stacked = scores_y if confound is None else np.concatenate([scores_y, confound], axis=-1)
         if cfg.null_type == "circshift":
-            shuffled_y = circshift_bins(scores_y, rng, cfg.circshift_min_bins)
+            shuffled = circshift_bins(stacked, rng, cfg.circshift_min_bins)
         else:
-            shuffled_y = permute_trials(scores_y, rng)
-        held_out = core.cca_cv(scores_x, shuffled_y, cfg).held_out_r
+            shuffled = permute_trials(stacked, rng)
+        ky = scores_y.shape[-1]
+        shuffled_y, zy = shuffled[..., :ky], (None if confound is None else shuffled[..., ky:])
+        held_out = core.cca_cv(scores_x, shuffled_y, cfg, zx=confound, zy=zy).held_out_r
         m = min(d, held_out.shape[0])
         null[s, :m] = held_out[:m]
 
