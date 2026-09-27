@@ -45,6 +45,14 @@ class PreparedPair:
     scores_y: dict[str, np.ndarray]
     pca_x: dict[str, core.PCAState]        # epoch -> PCA basis for X
     pca_y: dict[str, core.PCAState]
+    # Partial / confounded variants only. ``scores_*`` above are partialled
+    # IN-SAMPLE (fine for the descriptive Stage 3); every HELD-OUT quantity must
+    # instead use the UNpartialled residuals on the same basis (``cv_scores_*``)
+    # with ``confound`` partialled inside the folds (core.cca_cv zx=) --
+    # partialling before the folds inflates held-out CC.
+    cv_scores_x: dict[str, np.ndarray] | None = None
+    cv_scores_y: dict[str, np.ndarray] | None = None
+    confound: dict[str, np.ndarray] | None = None
 
 
 @dataclass
@@ -225,9 +233,41 @@ def prepare_pair_partial(
         return SkippedPair(animal.animal_id, area_x, area_y,
                            "no other area to partial out")
 
+    z_by_epoch = {e: np.concatenate([c[e] for c in confounds], axis=-1)
+                  for e in config.EPOCH_NAMES}
+    return _prepare_confounded(animal, area_x, area_y, entry, cfg,
+                               res_x, res_y, idx_x, idx_y, z_by_epoch)
+
+
+def epoch_inputs(prepared: PreparedPair, epoch: str):
+    """``(scores_x, scores_y, confound)`` for every HELD-OUT computation on one
+    epoch: plain pairs give their scores and no confound; partial / confounded
+    pairs give the UNpartialled scores and the confound, to be partialled
+    inside the cross-validation folds (core.cca_cv zx=)."""
+    if prepared.confound is None:
+        return prepared.scores_x[epoch], prepared.scores_y[epoch], None
+    return prepared.cv_scores_x[epoch], prepared.cv_scores_y[epoch], prepared.confound[epoch]
+
+
+def held_out_cca(prepared: PreparedPair, epoch: str, cfg=config.DEFAULT) -> core.CVResult:
+    """Cross-validated CCA of one epoch, fold-wise partialled when confounded."""
+    sx, sy, z = epoch_inputs(prepared, epoch)
+    return core.cca_cv(sx, sy, cfg, zx=z)
+
+
+def _prepare_confounded(animal, area_x, area_y, entry, cfg,
+                        res_x, res_y, idx_x, idx_y, z_by_epoch) -> PreparedPair:
+    """Shared tail of the partial / confounded preparations.
+
+    k and the per-epoch PCA basis come from the in-sample partialled residual
+    neuron tensors (as before), which also give ``scores_*`` for Stage 3. For
+    held-out work the UNpartialled residuals are projected on that same basis
+    (``cv_scores_*``) and ``z_by_epoch`` is kept, to be partialled inside the
+    cross-validation folds.
+    """
     res_xp, res_yp = {}, {}
     for epoch in config.EPOCH_NAMES:
-        z = np.concatenate([c[epoch] for c in confounds], axis=-1)
+        z = z_by_epoch[epoch]
         res_xp[epoch] = partial.partial_out_tensor(res_x[epoch], z)
         res_yp[epoch] = partial.partial_out_tensor(res_y[epoch], z)
 
@@ -240,8 +280,7 @@ def prepare_pair_partial(
     k = core.choose_k(n_units_x, n_units_y, n_valid, cfg, max_rank=min_rank,
                       variance_k=_variance_k([res_xp, res_yp], cfg))
 
-    scores_x: dict[str, np.ndarray] = {}
-    scores_y: dict[str, np.ndarray] = {}
+    scores_x, scores_y, cv_x, cv_y = {}, {}, {}, {}
     pca_x: dict[str, core.PCAState] = {}
     pca_y: dict[str, core.PCAState] = {}
     for epoch in config.EPOCH_NAMES:
@@ -251,6 +290,8 @@ def prepare_pair_partial(
         pca_y[epoch] = py
         scores_x[epoch] = core.pca_transform(res_xp[epoch], px)
         scores_y[epoch] = core.pca_transform(res_yp[epoch], py)
+        cv_x[epoch] = core.pca_transform(res_x[epoch], px)
+        cv_y[epoch] = core.pca_transform(res_y[epoch], py)
 
     return PreparedPair(
         animal_id=animal.animal_id,
@@ -267,6 +308,9 @@ def prepare_pair_partial(
         scores_y=scores_y,
         pca_x=pca_x,
         pca_y=pca_y,
+        cv_scores_x=cv_x,
+        cv_scores_y=cv_y,
+        confound=dict(z_by_epoch),
     )
 
 
@@ -388,3 +432,39 @@ def _variance_k(area_residuals, cfg) -> int | None:
             [r.reshape(-1, r.shape[-1]) for r in res.values()])
         ks.append(core.k_for_variance(pooled, cfg.k_variance))
     return min(ks)
+
+
+def prepare_pair_confounded(
+    animal: dataio.Animal,
+    area_x: str,
+    area_y: str,
+    entry: dataio.CohortEntry,
+    confound,
+    cfg=config.DEFAULT,
+) -> PreparedPair | SkippedPair:
+    """Like :func:`prepare_pair_partial`, but the confound is SUPPLIED rather
+    than built from other areas -- e.g. movement covariates (video/VR).
+
+    ``confound`` has the area data's layout: for spatial binning a
+    ``(n_trials, n_bins, n_confound)`` tensor over the same trials as
+    :func:`dataio.area_tensor`; for temporal binning a ragged per-trial list of
+    ``(n_time_bins, n_confound)`` arrays with the same per-trial lengths. It is
+    sliced per epoch and centred exactly like the neuron tensors
+    (:func:`_residual`), then regressed out of X's and Y's residualised neuron
+    tensors before the per-epoch PCA, as in partial CCA. Rows where the
+    confound is missing become missing and are dropped at fit time.
+    """
+    rx = _residual_tensors(animal, area_x, entry, cfg)
+    ry = _residual_tensors(animal, area_y, entry, cfg)
+    if rx is None or ry is None:
+        return SkippedPair(animal.animal_id, area_x, area_y,
+                           "X or Y unusable for confounded preparation")
+    res_x, idx_x = rx
+    res_y, idx_y = ry
+    n_use = len(dataio.area_tensor(animal, area_x, cfg)[0])
+    windows = dataio.epoch_windows(entry.lp, n_use, cfg)
+
+    z_by_epoch = {epoch: _residual(_slice_epoch(confound, e_idx), cfg)
+                  for epoch, e_idx in windows.items()}
+    return _prepare_confounded(animal, area_x, area_y, entry, cfg,
+                               res_x, res_y, idx_x, idx_y, z_by_epoch)

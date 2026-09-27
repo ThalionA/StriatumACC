@@ -46,14 +46,9 @@ def partial_cca_cv(
 ):
     """5-fold cross-validated CCA of X and Y after partialling out Z.
 
-    Z is regressed out of both X and Y over the flattened (trial, bin) samples;
-    the residuals are reshaped back to (n_trials, n_bins, k) and passed to the
-    standard whole-trial cross-validated CCA.
+    Z is regressed out of X and Y INSIDE each fold (fitted on the training
+    trials only; core.cca_cv zx=). Partialling over all samples first let the
+    test trials shape the residualising projection and inflated held-out CC
+    (tests/test_foldwise_partial.py).
     """
-    n_tr, n_bins, _ = scores_x.shape
-    fx = scores_x.reshape(n_tr * n_bins, -1)
-    fy = scores_y.reshape(n_tr * n_bins, -1)
-    fz = scores_z.reshape(n_tr * n_bins, -1)
-    res_x = partial_out(fx, fz).reshape(n_tr, n_bins, -1)
-    res_y = partial_out(fy, fz).reshape(n_tr, n_bins, -1)
-    return core.cca_cv(res_x, res_y, cfg)
+    return core.cca_cv(scores_x, scores_y, cfg, zx=scores_z)

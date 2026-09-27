@@ -11,6 +11,105 @@ Two MATLAB fixes landed with it (control probe-2 clock; one trial numbering in
 `ProcessStriatum*.m`) and the products were regenerated
 (`processed_data/_archive_2026-09-25/` holds the previous ones).
 
+## 2026-09-25 — Top-camera video: frame-locked to VR, binned on the neural grid
+
+**The top camera is triggered once per VR frame.** Frame i of the concatenated
+video parts is VR row i, which is also `VR_times_synched(i)`. So the video is
+on the Neuropixels clock with no fitting. In 1105, 1106, 1201 and 1206 the
+frame counts equal the VR row counts exactly, and `RawData/<id>_raw.mat`
+`VR_data` is the VR CSV row for row.
+- The lock is checked per 1/12 of each session: wheel-texture displacement vs
+  VR displacement gives r ≥ 0.93 at zero shift everywhere.
+- There is a gradual sub-frame slide (≤ ~30 ms) late in the sessions, and no
+  dropped frames. The 21–49 duplicate frames per session are H.264 static-scene
+  repeats.
+- **1212 is not locked** (346,286 frames vs 345,684 rows over two VR files),
+  and is excluded.
+
+Wrong turns first. I spent three rounds fitting a behavioural clock (motion
+energy cross-correlation, phase-correlation speed, onset matching) before
+comparing the frame counts that were already on screen. Every fitted lag was
+noise. The falsified priors and the lesson are in `PREDICTIONS.md`, and the
+agent mistake is in the ledger.
+
+**What exists (`Striatum project/video/`, see its README):**
+- Per-frame motion energy for the wheel, mouth and whisker ROIs, plus the
+  wheel texture shift.
+- `results/<id>_binned.npz`: raw trial × 5 cm bin, plus usable trials, epochs,
+  LP and DP from `striatum_lfp.trials`. The Python binning reproduces MATLAB's
+  `spatial_binned_data.durations` to 2e-15 s with an identical NaN pattern.
+- Figures: `video/figures/<id>_binned.*` and `frame_lock.*`. 22 tests.
+
+**Caveat before any learning claim:** the mouth and whisker ROIs carry mostly
+running-related motion. They dip where the mouse stops, and the frame-level
+correlation of mouth ME with licks is 0.08–0.23. Epoch differences are
+confounded with speed and are unchecked. In 1201, mouth ME before the reward
+zone is higher in Expert than Naive at similar VR speed. That is a lead:
+n = 10 trials in one animal, no statistics.
+
+**Follow-up analysis (2026-09-26), speed-controlled face motion vs learning:
+negative so far.**
+- The hand-drawn mouth and whisker boxes don't measure licking: partial r with
+  licks given speed is ≤ 0.13.
+- Speed-matched lick maps put the lick signal on the spout, at 1.5–3 grey
+  levels against ~20 for running. But a spout ROI placed on 1201/1206 fails on
+  held-out 1105/1106 (partial r 0.07 / 0.12).
+- There is no Expert effect that survives the Intermediate-vs-Expert contrast
+  (n = 4; floor p = 0.125).
+- The VR lick sensor already measures licking. The video's value is what the
+  sensor can't see (whisking, paws, posture, grooming), and box motion energy
+  is too crude for that. Details are in PREDICTIONS.md 2026-09-25 (c).
+
+**Movement as an encoding covariate (2026-09-26, option 2):**
+`video/scripts/run_movement_encoding.py` and `figures/movement_encoding.png`.
+- Per unit: cross-validated ΔR² of the covariates over position one-hot + slow
+  drift, on firing per (trial, 5 cm bin). The null is a whole-trial circular
+  shift, with an empirical false-positive rate of ~7%.
+- Movement modulation is widespread (24–84% of units) but tiny: median ΔR² is
+  < 0.01 in 14/15 area × animal cells, the exception being 1106 DMS at 0.06.
+- The video adds almost nothing beyond VR speed + licks (median ΔR² ≤ 0.0035).
+- It does not change with learning.
+- An exchangeable trial-shuffle null was fooled by shared slow drift; that is
+  now covered by a test.
+- Face motion SVD (option 1: numpy, Stringer 2019 method, top 10 of 50
+  components; `run_motion_svd.py`, `figures/motion_svd_masks.png`) flags the
+  same fraction of units as the 4 ROI boxes and explains no more (median
+  ΔR² ≤ 0.008). At 5 cm resolution the face adds ~nothing beyond VR speed +
+  licks. Untested: frame-rate encoding, and shared population-level drive.
+
+**Finer timescale + CCA (2026-09-26, `video/`):**
+- At 20 ms, face movement beyond VR speed + licks modulates 52–79% of units
+  (5 cm: 12–52%; null ~6.7%). The per-unit ΔR² stays < 0.01 except 1106 DMS.
+- CCA with movement regressed out (both arms, 18 animal-pairs, new
+  `cca/pipeline.prepare_pair_confounded`): movement removal lowers CC1 below
+  all 10 shifted controls in 20–37% of animal-pair-epochs (chance 9%). The
+  median drop is ≤ 0.011, with a few large pair-specific drops. The
+  naive → expert picture is unchanged.
+- **Found and fixed:** in-sample partialling leaked into held-out CC. It is
+  now partialled inside the CV folds (`cca/NOTES.md` round 18). The committed
+  partial Stage 2, `run_partial` and figures were re-run; pre-fix outputs are
+  in `cca/results/_archive/*prefoldwise_2026-09-26*`.
+  - Held-out partial CC1 falls by a median 0.0096.
+  - Held: striatal-triangle and V1–ACC CC > 0, and no epoch effect.
+  - Lost: V1–DMS expert CC > 0.
+  - The IFI results are fragile.
+  - **Open:** on real epochs, regressing out pure noise still raises held-out
+    CC1 by +0.011 (synthetic: n.s.). Unexplained. Compare partial CC only
+    against same-dimensionality controls.
+- **Input version:** every result from 2026-09-26 read
+  `processed_data/preprocessed_data5cm.mat` of 2026-09-26 00:03. A
+  `ProcessStriatumTask` regeneration was running at wrap time; if it rewrites
+  that file, re-run `video/scripts/run_movement_encoding.py`,
+  `run_temporal_encoding.py`, `run_cca_movement.py` and the cca partial
+  Stage 2.
+- **Found, not fixed:** `cca/dataio.trial_velocity` zeroes on the 1st corridor
+  row, but spike column 0 is the 2nd, a ~30 ms offset. And 1206 is a CCA
+  non-learner but has a measured LP (41) in `striatum_lfp.trials`.
+
+**Session matching** (task, high-confidence) is in `video/src/striatum_video/sessions.py`.
+The controls are unmatched. Frame count = VR row count should now resolve the
+ambiguous ones (1103, 1107, 513, 409) without guessing from timestamps.
+
 ## 2026-09-17 — Theta-gamma coupling: real and widespread, unchanged by learning
 
 **PAC is real here, and the test is calibrated on REAL data.** The existing unit

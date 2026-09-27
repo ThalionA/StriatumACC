@@ -97,6 +97,7 @@ def lag_curve(
     cfg,
     max_lag: int | None = None,
     held_out: bool = False,
+    confound: np.ndarray | None = None,
 ) -> LagResult:
     """Refit CCA at every spatial lag and summarise direction, per dimension.
 
@@ -107,6 +108,9 @@ def lag_curve(
     held_out : bool
         If True use 5-fold cross-validated CC at each lag (the honest
         directionality curve); if False use the fast in-sample CC.
+    confound : ndarray, shape (n_trials, n_bins, q), optional
+        Partialled out of each area inside the folds (held_out only), sliced
+        at every lag exactly like that area's own bins.
     """
     max_lag = cfg.max_lag_bins if max_lag is None else max_lag
     lags = np.arange(-max_lag, max_lag + 1)
@@ -115,7 +119,10 @@ def lag_curve(
     for lag in lags:
         xl, yl = lag_slice(scores_x, scores_y, int(lag))
         if held_out:
-            rows.append(core.cca_cv(xl, yl, cfg).held_out_r)
+            zx = zy = None
+            if confound is not None:
+                zx, zy = lag_slice(confound, confound, int(lag))
+            rows.append(core.cca_cv(xl, yl, cfg, zx=zx, zy=zy).held_out_r)
         else:
             rows.append(core.cca_in_sample(xl, yl))
 

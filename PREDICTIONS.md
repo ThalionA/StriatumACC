@@ -1,5 +1,229 @@
 # Predictions (newest first)
 
+## 2026-09-26 (d) — committed partial CCA re-run with fold-wise partialling
+
+The fix: confounds (other areas' PC scores) are now partialled INSIDE each CV
+fold. Held-out CC, the lag curves and the surrogate null all use unpartialled
+scores + the confound; Stage 3 is unchanged. On synthetic independent areas the
+old in-sample step added +0.013 at k=20 with 16 confounds, and nothing at
+strong coupling.
+- **F1:** partial held-out CC1 falls vs the pre-fix pickle in most
+  animal-pair-epochs. The median fall is 0.003–0.02, and largest where CC is
+  low. ~70%.
+- **F2:** the per-dimension significant count (`n_significant`) falls in a
+  minority of cells, and none rises by more than 1. ~65%.
+- **F3:** the committed conclusions hold: partial CC > 0 at the animal level,
+  and no BH-surviving naive → expert change. ~80%.
+- **Falsifier:** a committed conclusion flips (a pair's partial CC is no
+  longer > 0, or an epoch effect appears).
+- **Outcome (same day; details in cca/NOTES.md round 18):**
+  - **F1 confirmed.** Like-for-like, the median fall is 0.0096 (FS-excl, 64% of
+    epochs), −0.012 in the low-CC half and −0.003 in the high-CC half.
+    FS-incl: 0.0043.
+  - **F2 falsified.** `n_significant` fell in 45% of cells but ROSE in 20%, by
+    up to 4 dims. The total is 686 → 616.
+  - **F3 mostly held. The falsifier fired once:** V1–DMS expert partial CC > 0
+    is lost at the animal level (p 0.031 → 0.080; V1 pairs are few-animal).
+    The striatal triangle and V1–ACC CC > 0 hold, and no rm-ANOVA epoch
+    effect appears.
+  - **IFI (directionality) is fragile:** one vs-0 result is lost, one is new,
+    and several means change sign.
+  - **Lesson:** a leak with a small mean effect on CC (−0.01) can still move
+    near-threshold, sign-based summaries such as the IFI.
+
+## 2026-09-26 (b) — movement encoding at 20 ms (temporal arm), 4 task mice
+
+Same unit set, drift terms and circular-shift null as the 5 cm analysis, but
+per 20 ms bin (the cca temporal_bin_ms) of the corridor period. Spike column 0 =
+the corridor's 2nd VR row (verified: n_1ms = last − 2nd row time + 1 in every
+trial checked). Covariates are interpolated to bin centres and entered at lags
+{−200, −100, 0, +100, +200} ms. Base = position (5 cm one-hot) + drift +
+lagged VR speed and lick. Tested: lagged face SVD (10), or lagged ROI ME (4).
+
+- **T1:** face SVD beyond VR flags more units at 20 ms than at 5 cm in ≥ 3/4
+  animals, pooled over areas. ~60%. Fast whisking and licking are no longer
+  averaged away.
+- **T2:** the median ΔR² stays < 0.01 in every area × animal cell. ~80%.
+  Single 20 ms spike counts are Poisson-noisy, so R² is small for everything.
+- **Falsifier for "the 5 cm null was a resolution artefact":** T1 fails.
+- **Outcome (same day, `run_temporal_encoding.py`):**
+  - **T1 confirmed.** Units modulated by face SVD beyond VR, 5 cm → 20 ms:
+    1105 26→56%, 1106 52→79%, 1201 12→52%, 1206 41→70%. The null's empirical
+    false-positive rate is 6.5–6.8%. The ROI ME give the same picture
+    (44–95% per area).
+  - **T2 falsified in one cell.** The median ΔR² is < 0.01 everywhere except
+    1106 DMS (+0.021), the same outlier as at 5 cm.
+  - No consistent Expert − Intermediate change.
+  - **Reading:** fast face movement is tracked by most units, but it explains
+    very little of any one unit's 20 ms spike count (itself Poisson-dominated,
+    so R² is small for everything). The 5 cm analysis under-counted modulated
+    units by averaging over ≥ 250 ms.
+
+## 2026-09-26 (c) — does shared movement drive the cross-area CCA? (spatial + temporal arms)
+
+Four video animals (18 animal-pairs, cca cohort entries; 1206 is a non-learner).
+Variants of the held-out CC1 per epoch:
+- plain `prepare_pair`;
+- VR confound (|speed|, lick);
+- VR + video confound (4 ROI ME + 10 face-SVD components);
+- control: the VR + video block circularly shifted by half the session.
+The confounds are regressed out of the residual neuron tensors before PCA
+(new `pipeline.prepare_pair_confounded`, tested on synthetic data). Temporal
+arm: 20 ms bins, confounds at lags ±200 ms. Spatial arm: 5 cm bins, no lags.
+The effect is (control CC1 − confounded CC1), so the drop from regressing out
+unrelated signals of the same dimensionality is subtracted.
+
+- **C1 (temporal):** VR + video lowers CC1 beyond the control by ≥ 0.05 in
+  ≥ half of animal-pairs. ~50%. The 20 ms encoding flags 70% of units in 1206,
+  so movement is a common input at this timescale.
+- **C2 (spatial):** the median drop beyond the control is < 0.03. ~65%. Per-unit
+  movement ΔR² is < 0.01 at 5 cm.
+- **C3:** no naive → expert CC1 change appears or disappears after movement
+  removal. That is judged by sign consistency only: 3 learners, and no test
+  can be run. ~80%.
+- **Falsifier for "movement is a negligible confound for the CCA":** C1 true.
+- **Outcome (same day, `video/scripts/run_cca_movement.py`, `figures/cca_movement.png`).**
+  The first run's single shifted control showed the problem: regressing out 16
+  UNRELATED signals raised spatial CC1 by a median 0.027. That is a leak, now
+  reproduced on synthetic data: `partial_out_tensor` fits on ALL epoch samples,
+  test folds included, so the projection mixes training rows into test rows.
+  With no true coupling, 16 random confounds lift held-out CC1 from 0.024 to
+  0.046. The bias fades with real coupling (+0.005 at CC ~0.27, ~0 at 0.8).
+  The final run therefore uses 10 shifted controls of the SAME confound per
+  animal-pair-epoch.
+  - Real CC1 falls below all 10 controls in 0.31 / 0.20 of cases in the
+    spatial arm (VR / VR + video) and 0.33 / 0.37 in the temporal arm. Chance
+    is 0.09.
+  - The median drop vs the control median is +0.005 / +0.011 (spatial) and
+    +0.001 / +0.006 (temporal). A drop ≥ 0.05 happens in 4–20% of cases.
+  - **C1 falsified** (temporal ≥ 0.05 in only 7%). **C2 confirmed** (spatial
+    median 0.011). **C3 confirmed**: expert − naive CC1 over 15 learner
+    animal-pairs has a median of +0.040 → +0.029 in the spatial arm with 3/15
+    sign flips, and +0.006 → +0.008 in the temporal arm with 0 flips.
+  - **Reading:** movement is a real but pair-specific confound. Most coupling
+    survives it, and a few pairs lose a lot: 1106 DMS–DLS spatial intermediate
+    0.82 → 0.52 with VR alone; 1206 CA1–V1 temporal expert 0.24 → 0.09.
+  - n = 4 animals, 3 of them learners: no test.
+
+## 2026-09-26 — how much single-unit activity does movement explain beyond position? (video + VR, 4 task mice)
+
+Per unit, cross-validated (5 folds by trial) ridge on FR per (trial, 5 cm bin).
+Position model = bin one-hot. Movement = |VR speed|, and ME in the wheel,
+whisker, mouth and spout ROIs, plus lick fraction. ΔR² = R²(pos+mov) −
+R²(pos). Null: the movement block is permuted across trials within bin (50
+shuffles); a unit counts as modulated if ΔR² > the 95th percentile of its null.
+Areas DMS, DLS, ACC, V1 and CA1, FS excluded (cca config). n = 4 animals:
+results are per animal × area, and no pooled p.
+
+- **M1 (striatum is movement-modulated):** in DMS and DLS, ≥ 20% of units are
+  modulated in ≥ 3/4 animals, and the median ΔR² is > 0. ~70%. This rests on the
+  striatal locomotion literature.
+- **M2 (small unique share):** the median ΔR² is below 0.05 in every area. The
+  position one-hot already carries each trial's average speed profile, so
+  movement adds only trial-to-trial deviations. ~70%.
+- **M3 (no learning change):** the held-out ΔR², Expert − Intermediate, is not
+  sign-consistent across animals in any area. ~65%.
+- **Falsifier for "movement is a nuisance worth regressing":** < 10% of units
+  are modulated in every area. Then movement regression can be skipped
+  downstream.
+- **Outcome (same day), after a correction.** The first run used an
+  exchangeable within-bin trial shuffle with no drift terms. It flagged 50–94%
+  of units with median ΔR² ~0.003, which is shared slow drift. A synthetic test
+  now reproduces that false positive. The final design puts drift terms in both
+  models and uses a whole-trial circular-shift null. Its empirical
+  false-positive rate on the real data, with each shift treated as if it were
+  the real alignment, is 6.7–7.0% against a nominal 5%.
+  - **M1 half-right.** DMS is ≥ 20% modulated in 4/4 animals (24 / 84 / 30 /
+    60%), but its median ΔR² is > 0 in only 2/4. DLS is untestable
+    (2 animals).
+  - **M2 falsified narrowly.** The median ΔR² is < 0.01 in 14 of 15
+    area × animal cells. 1106 DMS is 0.060, and 1106 is also the animal with
+    the fewest usable trials (79).
+  - **M3 confirmed.** The held-out Expert − Intermediate ΔR² is ~0 and
+    sign-inconsistent in every area.
+  - Video beyond VR speed + licks: 0–20% modulated in most cells (null ~7%).
+    The exceptions are 1106 DMS 79%, 1206 CA1 50%, 1106 DLS 47% and V1 ~40% in
+    1105/1206. The median ΔR² is ≤ 0.0035 everywhere.
+  - **Follow-up prior, face motion SVD** (top 10 components over the face ROI,
+    numpy implementation of Stringer et al. 2019), same design, contrast =
+    beyond VR speed + licks. **F1:** it flags more units than the 4 ME ROIs
+    (`video_beyond_vr`) in ≥ 3/4 animals, pooled over areas. ~60%. **F2:** the
+    median ΔR² is still < 0.01 in every area × animal cell. ~70%.
+    **Outcome: F1 falsified, F2 confirmed.** Units flagged, pooled over areas,
+    4 ROIs vs SVD: 1105 19 vs 26%, 1106 52 vs 52%, 1201 12 vs 12%, 1206 40 vs
+    41%. The richer representation adds nothing over the 4 boxes. The median
+    ΔR² is ≤ 0.008 everywhere.
+    - What the components are (`figures/motion_svd_masks.png`): SVD 1 (50–68%
+      of variance) is global motion including the wheel flanks. The next ones
+      are left whisker pad / snout / paw patterns, plus one mouth–spout
+      component per animal.
+    - What was NOT tested: frame-rate (33 ms) encoding. 5 cm bins average over
+      ≥ 250 ms and wash out fast whisking and licking.
+  - **Reading:** movement modulation is widespread, reliable and tiny per unit.
+    The video adds little beyond VR speed and licks. Not checked: SHARED
+    movement drive at the population level. Small per-unit effects that are
+    common across units could still inflate inter-area correlation or CCA.
+
+## 2026-09-25 (c) — face motion vs learning, speed-controlled (video, 4 task mice)
+
+Data: `video/results/<id>_binned.npz` for 1105, 1106, 1201 and 1206, as raw
+trial × 5 cm bins. Speed model: ME ~ smooth function of |VR speed| per animal,
+fit on usable trials OUTSIDE the compared epochs. Contrast: Expert − Naive in
+the speed residual, per zone (pre-reward 75–125 cm; reward zone 125–169 cm).
+n = 4 animals, so the floor is p = 0.125 and I report direction per animal,
+not p-values.
+
+- **R1 (the ROI is valid):** the speed-residual mouth ME correlates positively
+  with licks per bin within animal, with partial r > 0.1 in ≥ 3/4 animals. ~55%.
+  The raw frame-level r with licks was only 0.08–0.23.
+- **R2 (anticipation):** the Expert − Naive speed-residual mouth ME in the
+  pre-reward zone is > 0 in ≥ 3/4 animals. ~50%. The only hint is 1201's
+  profile.
+- **R3 (the drift confound is real):** the still-frame ME floor differs between
+  the first and last thirds of a session by more than 10% in ≥ 2/4 animals.
+  ~50%. If so, Naive vs Expert is uninterpretable, and Intermediate vs Expert
+  (adjacent in time) is the contrast to read.
+- **Falsifier for "face ME tracks learning":** the residual Expert − Naive
+  difference is inconsistent in sign across animals, or vanishes in
+  Intermediate vs Expert.
+- **Outcome (same day, `scripts/run_face_learning.py`):**
+  - **R1 falsified.** Partial r(mouth ME, lick fraction | speed) =
+    −0.01 / +0.04 / +0.08 / +0.13 (1105/1106/1201/1206); 1/4 > 0.1. The
+    hand-drawn mouth box does not measure licking.
+  - **R2 falsified, and the falsifier fired.** Pre-reward speed-residual mouth
+    ME, Expert − Naive, is −0.54 / −0.32 / +2.04 / +1.61 fit-set SD, 2/4
+    positive. Expert − Intermediate is −0.45 / +0.41 / +0.60 / +0.37.
+  - **R3 untestable as designed.** These mice are almost never still: 2–7% of
+    frames have VR velocity 0. So 3/4 animals have no per-trial still floor in
+    early trials. In 1206, where it exists, the whisker floor falls 31% from
+    the first to the last third of the session, so drift is real there.
+  - **Lesson:** validate the measurement (does the ROI see the behaviour?)
+    before contrasting it across epochs. Next: a data-driven lick map
+    (lick vs lick-free frame differences, speed-stratified).
+- **Lick map (`figures/lick_maps.png`, 1206 + 1201):** lick-specific motion is
+  1.5–3 grey levels, against ~20 for running. It sits on the SPOUT, meaning the
+  spout block and tube edges, where the running map is ≈ 0. It does not sit in
+  the mouth box.
+- **Prior for a spout ROI** (x 250–370, y 295–525), chosen on 1201/1206 only:
+  **S1:** partial r(spout ME, lick fraction | speed) per bin > 0.3 in all four
+  animals, including held-out 1105/1106. ~65%. **S2:** raw r(spout ME, VR
+  speed) per bin is below 0.2 in magnitude in all four. ~60%.
+- **Outcome (2026-09-26): S1 and S2 are both falsified.**
+  - Partial r(spout ME, lick fraction | speed) = +0.07 / +0.12 / +0.38 / +0.21
+    (1105/1106/1201/1206). It is weakest in the two held-out animals. Raw r with
+    licks is 0.16–0.46.
+  - r(spout ME, speed) = −0.31 / −0.40 / −0.29 / +0.14. Licking happens when
+    slow, so a lick signal inherits speed.
+  - The pre-reward spout contrast Expert − Naive is positive in 4/4 animals
+    (+0.12 / +0.29 / +1.16 / +2.76 SD), but Expert − Intermediate is not
+    (−0.39 / −0.16 / +0.18 / −0.39). So Naive → Expert does not survive the
+    time-adjacent contrast, and the floor at n = 4 is p = 0.125. **No claim.**
+  - The ROI was placed on 2 animals and fails on the 2 held out. Its apparent
+    fit on 1201 is partly selection.
+  - **Lesson:** a box drawn on a pixel map from two animals does not transfer.
+    And the VR lick sensor already measures licking, so a video lick readout
+    adds nothing. The video's value is what the sensor can't see.
+
 ## 2026-09-25 (b) — the full LFP re-run on the fixed pipeline (branch lfp-simplify)
 
 Registered before `regen_chain.sh` + `run_lfp_pipeline.sh`. Everything is now
@@ -62,6 +286,58 @@ once with each bundle's VR times; task 1105 (bundles identical) is the reference
   16 ms, a weak response from 53 units) — the controls agree with each other,
   not with it. Lesson: pick a reference with a response as sharp as the thing
   being timed; the across-control consistency was the diagnostic, not 1105.
+
+## 2026-09-25 — top-camera video ↔ VR alignment, task 1201 and 1206
+
+There is no camera sync line. The video clock comes from filename timestamps and
+a frame rate estimated as part-1 frames / (part-2 start − part-1 start). The
+clock link is behavioural: wheel-ROI motion energy against VR |velocity|.
+
+- **P1 (the wheel carries the clock):** the whole-session peak Pearson r between
+  wheel motion energy and |VR velocity| is ≥ 0.5, at a lag within ±90 s of the
+  filename prior (video start → VR start: 1201 ≈ 645 s, 1206 ≈ 642 s; the VR
+  filename has minute precision only). ~75%.
+- **P2 (the nominal rate is close):** 5-min windowed lags fit a line with
+  |drift| < 0.5% and residuals < 0.2 s. There is no step at the part-1/part-2
+  boundary larger than 0.5 s. ~60%. The per-session rates of 25–33 fps make
+  me unsure whether the camera drops frames.
+- **P3 (independent check):** the mouth ROI's motion energy against VR licks
+  peaks at the same lag as the wheel's, within 0.2 s. ~65%. The mouth ROI also
+  sees paw and head motion, which is correlated with running.
+- **Falsifier:** the wheel peak r < 0.3, or the mouth and wheel lags disagreeing
+  by more than 1 s, means the clock is not trustworthy. Stop and look for a
+  visible sync event before going further.
+- **Outcome (same day): FALSIFIED.** Wheel peak r = 0.20 (1201) and 0.31 (1206).
+  The mouth lag disagrees with the wheel lag by 11 s (1201) and 97 s (1206). In
+  1206, 12 of 23 windows pass r ≥ 0.3, and their lags scatter with SD 9 s.
+  Diagnostics: the wheel motion energy saturates, so it is a moving/stopped
+  signal, not speed (1201: median 12 of a maximum of ~19). VR velocity does
+  track the wheel in both worlds: corr(dx, v·dt) = 0.88–0.89, and it is not
+  zeroed in world 12. On the filename clock, 1206 shows the wheel moving in the
+  video about 90 s before VR registers movement, and the two bouts differ in
+  length (5.7 vs 4.7 min). That is not a single shift. **Lesson:** frame-difference
+  energy on a textured wheel cannot carry a sub-second clock. What remains open
+  is whether the video clock itself is non-uniform (dropped frames).
+- **Follow-up prior (registered before the speed run):** signed wheel speed
+  from phase correlation. A 6-min 1206 snippet gave clean signed bouts, with
+  video running starting ~89 s before VR on the filename clock.
+  **Q1:** the whole-session continuous r ≥ 0.5 in both sessions. ~55%.
+  **Q2:** event matching pairs ≥ 70% of VR onsets, with residual SD < 0.3 s,
+  and agrees with the continuous fit within 0.5 s. ~50%.
+  **Q3:** the windowed and event residuals show a step or curvature larger
+  than 1 s, i.e. the video clock is non-uniform. ~40%. If Q3 is true, a
+  piecewise clock is needed.
+- **Outcome: Q1 and Q2 were falsified, and the premise behind all three was
+  wrong.** Continuous r = 0.26 (1206) and 0.15 (1201). Events matched 9/67 and
+  13/101, and onset patterns matched no better than a shuffled-interval null at
+  any lag. **Why:** video frame count = VR row count exactly (1201: 246,826;
+  1206: 236,074). The camera is triggered once per VR frame, so frame i = VR row i,
+  and the filename start times and "fps" are meaningless. At frame shift 0, video
+  wheel speed vs VR velocity gives r = 0.98 (1206) and 0.95–0.97 on frames with
+  phase-correlation response > 0.5 (1201). The best shift stays within 0–1 frame
+  in all 12 blocks of 1206. Every behavioural lag I estimated was fitting a clock
+  that doesn't exist. **Lesson:** check structural invariants (sample counts)
+  before building a statistical clock.
 
 ## 2026-08-12 — spatial CCA rerun on the corrected 5 cm cache
 

@@ -78,16 +78,17 @@ def analyse_pair(prepared: pipeline.PreparedPair, cfg=config.DEFAULT) -> PairAna
     """Run the lagged CCA and surrogate nulls for one prepared area pair."""
     epochs: dict[str, EpochAnalysis] = {}
     for epoch in config.EPOCH_NAMES:
-        scores_x = prepared.scores_x[epoch]
-        scores_y = prepared.scores_y[epoch]
+        # Partial / confounded pairs: unpartialled scores + the confound, which is
+        # partialled inside every fold (partialling first inflates held-out CC).
+        scores_x, scores_y, z = pipeline.epoch_inputs(prepared, epoch)
 
         # Lag-0 held-out CCA -- unbiased effect size + the full A, B.
-        cv0 = core.cca_cv(scores_x, scores_y, cfg)
+        cv0 = core.cca_cv(scores_x, scores_y, cfg, zx=z)
         # Held-out lagged curve, all canonical dimensions -- directionality.
-        lag = lagged.lag_curve(scores_x, scores_y, cfg, held_out=True)
+        lag = lagged.lag_curve(scores_x, scores_y, cfg, held_out=True, confound=z)
         # Significance: held-out-CC permutation test, per dimension (the
         # in-sample test over-called -- spectrum shift; see surrogate.py).
-        null = surrogate.build_null(scores_x, scores_y, cv0.held_out_r, cfg)
+        null = surrogate.build_null(scores_x, scores_y, cv0.held_out_r, cfg, confound=z)
 
         epochs[epoch] = EpochAnalysis(
             epoch=epoch,

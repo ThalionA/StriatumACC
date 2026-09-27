@@ -11,7 +11,9 @@ varies by animal and is recorded per cell (`n_control`). Cells need at least
 one other area to condition on. Plain CC1 uses the per-area `prepare_area`
 scores (so it can differ slightly from the Stage-2 CC, which picks a symmetric
 k per pair); plain vs partial is internally consistent here. The confound
-regression is fitted on all samples (not cross-validated) -- as in partial.py.
+regression is fitted inside each cross-validation fold (partial.partial_cca_cv;
+until 2026-09-26 it was fitted on all samples, which inflated held-out partial
+CC -- see GOTCHAS.md).
 
 Resumable by animal; --max-seconds chunks the run. Saves
 results/partial_committed.pkl.
