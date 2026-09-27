@@ -97,9 +97,10 @@ negative so far.**
     CC1 by +0.011 (synthetic: n.s.). Unexplained. Compare partial CC only
     against same-dimensionality controls.
 - **Input version:** every result from 2026-09-26 read
-  `processed_data/preprocessed_data5cm.mat` of 2026-09-26 00:03. A
-  `ProcessStriatumTask` regeneration was running at wrap time; if it rewrites
-  that file, re-run `video/scripts/run_movement_encoding.py`,
+  `processed_data/preprocessed_data5cm.mat` of 2026-09-26 00:03. Checked
+  2026-09-27: the regeneration chain that was running at wrap time finished
+  without rewriting that file, so the results stand. If it is ever
+  regenerated, re-run `video/scripts/run_movement_encoding.py`,
   `run_temporal_encoding.py`, `run_cca_movement.py` and the cca partial
   Stage 2.
 - **Found, not fixed:** `cca/dataio.trial_velocity` zeroes on the 1st corridor
