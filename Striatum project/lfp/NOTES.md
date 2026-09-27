@@ -64,7 +64,8 @@ and in CA1 LFP theta (0.08-0.12) matches the units (0.10-0.13); CA1 is n = 3.
 
 Housekeeping: 48 figures no current script produces → `figures/_archive_pre_2026-09-25/`;
 July npz → `results/_archive_july/`. `ProcessStriatumTask.m` had an undefined
-`task_data` in its tail (hidden while the chain ignored exit codes) — fixed.
+`task_data` in its tail (hidden while the chain ignored exit codes) — fixed, and
+the fixed script then ran end to end (exit 0, 2026-09-26 10:45; `processed_data/regen_2026-09-25.log`).
 
 ## 2026-09-25 — Soundness review before simplifying: most headline claims are at risk
 
