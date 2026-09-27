@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -67,9 +68,10 @@ TABLES = [
 def _check(path: Path, not_older_than: str) -> None:
     if not path.exists():
         sys.exit(f"missing: {path}")
-    mtime = datetime.fromtimestamp(path.stat().st_mtime)
-    if mtime < datetime.fromisoformat(not_older_than):
-        sys.exit(f"stale: {path} ({mtime:%Y-%m-%d %H:%M}) predates {not_older_than}")
+    mtime = path.stat().st_mtime
+    if mtime < datetime.fromisoformat(not_older_than).timestamp():  # local time, as file mtimes
+        sys.exit(f"stale: {path} ({time.strftime('%Y-%m-%d %H:%M', time.localtime(mtime))}) "
+                 f"predates {not_older_than}")
 
 
 def main() -> None:
