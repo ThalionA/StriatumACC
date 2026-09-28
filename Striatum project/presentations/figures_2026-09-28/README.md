@@ -64,6 +64,19 @@ were also inspected here.
 | `C10_spike_mi_overview`, `C11_lfp_mi_overview` | Information theory. "Beyond speed" does not survive (8/9 features at or below the speed floor), and no spike-MI learning change survives correction. |
 | `tables/C_lfp_pac_coupling_epochs_task.csv` | Theta–gamma PAC in 66–78% of cells vs a 2–6% calibrated null (descriptive). No current pipeline figure exists; the 2026-09-18 meeting figure predates the re-run. |
 
+## D. LFP band power across the corridor and across trials (added 2026-09-28)
+
+Descriptive, no statistics. The value is log10 power z-scored per channel over
+corridor + dark, then averaged over the area's channels. Drawn by
+`lfp/scripts/plot_lfp_position_trial.py`; see `lfp/NOTES.md` 2026-09-28.
+
+| file | take-away |
+|---|---|
+| `D1_lfp_position_profiles_task` | Epoch position profiles, with the animal as the unit. Beta peaks at ~100-125 cm in every area. Theta is higher in Naive. |
+| `D2_..._speedresid` | The same with speed removed within trial. The striatal and ACC beta peak shrinks by about half, so it is deceleration. **V1 beta and high gamma still peak at the visual cue zone (100 cm)**: sensory (N = 5). |
+| `D3_lfp_trial_evolution_task`, `D4_..._control` | Power vs trial relative to LP. Low and high gamma climb across the session in **both** cohorts, so that is session drift, not learning. The early theta fall is task-only. |
+| `D5_lfp_position_trial_1201_task` | One animal's trial × position maps per area and band, with running speed. |
+
 ## Deliberately not included
 
 - **`figures_2026-09-18/`.** Drawn from pre-re-run tables, and its titles

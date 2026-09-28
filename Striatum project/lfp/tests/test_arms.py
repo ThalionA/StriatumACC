@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from striatum_lfp import arms
+from striatum_lfp import analysis, arms
 
 
 # --- design matrix assembly --------------------------------------------------
@@ -398,3 +398,48 @@ def test_shuffle_trials_is_a_permutation():
     out = arms.shuffle_trials(cube, rng)
     assert sorted(out[0, 0].tolist()) == sorted(cube[0, 0].tolist())
     assert not np.array_equal(out, cube)
+
+
+def test_area_position_trial_map_is_channel_mean_of_joint_z_log_power():
+    rng = np.random.default_rng(0)
+    corridor = 10 ** rng.normal(2, 0.3, (4, 50, 12))  # (channels, bins, trials), linear power
+    dark = 10 ** rng.normal(2, 0.3, (4, 50, 12))
+    out = arms.area_position_trial_map(corridor, dark)
+    zc, _ = analysis.joint_zscore(analysis.log_power(corridor), analysis.log_power(dark))
+    assert out.shape == (50, 12)
+    np.testing.assert_allclose(out, zc.mean(axis=0))
+
+
+def test_area_position_trial_map_keeps_a_position_effect_and_ignores_gain():
+    # channel 0 is recorded at 1000x the gain of channel 1 (the two export
+    # regimes); both carry a 2x power bump in bins 20-24. After the per-channel
+    # log z-score, gain disappears and the bump survives in every trial.
+    rng = np.random.default_rng(1)
+    base = 10 ** rng.normal(0, 0.05, (2, 50, 8))
+    base[:, 20:25] *= 2
+    base[0] *= 1000
+    out = arms.area_position_trial_map(base, base.copy())
+    assert np.all(out[20:25].mean(axis=0) > out[:20].mean(axis=0) + 1.0)
+
+
+def test_area_position_trial_map_leaves_empty_bins_missing():
+    corridor = np.ones((3, 50, 4)) * 10.0
+    corridor[:, 0] = 0.0  # never-visited bin: power 0 -> log nan
+    corridor[:, 1:] *= np.linspace(1, 2, 49)[None, :, None]
+    out = arms.area_position_trial_map(corridor, corridor.copy())
+    assert np.all(np.isnan(out[0])) and np.all(np.isfinite(out[1:]))
+
+
+def test_area_position_trial_map_removes_a_purely_speed_driven_profile():
+    # Power follows log speed bin by bin (mouse slows at the reward zone);
+    # with the speed covariate the position profile flattens.
+    rng = np.random.default_rng(2)
+    log_speed = np.tile(np.log10(np.r_[np.full(25, 30.0), np.full(10, 5.0), np.full(15, 30.0)])[:, None], (1, 10))
+    log_speed = log_speed + rng.normal(0, 0.05, log_speed.shape)
+    power = 10 ** (2 + 0.8 * log_speed[None] + rng.normal(0, 0.02, (3, 50, 10)))
+    raw = arms.area_position_trial_map(power, power.copy())
+    resid = arms.area_position_trial_map(power, power.copy(), speed_covariate=log_speed)
+    dip_raw = raw[:25].mean() - raw[25:35].mean()
+    dip_resid = resid[:25].mean() - resid[25:35].mean()
+    assert dip_raw > 1.0
+    assert abs(dip_resid) < 0.2 * dip_raw

@@ -14,6 +14,8 @@ tables. Suffix `_task` / `_control` = cohort; no suffix = both cohorts.
 | `lfp_evolution_z_task_vs_control`, `lfp_reliability_moving_*_task_vs_control` | `plot_lfp_combined.py` | both cohorts on one axis |
 | `lfp_distance_control` | `plot_lfp_distance_control.py` | within vs across area at identical separation |
 | `lfp_psi_direction` | `plot_lfp_psi.py` | phase-slope index, monopolar vs vertical bipolar |
+| `lfp_position_trial_<mouse>_<cohort>[_speedresid]` | `plot_lfp_position_trial.py` | one animal: trial × position heatmaps per area × band, with running speed |
+| `lfp_position_profiles_<cohort>[_speedresid]`, `lfp_trial_evolution_<cohort>[_speedresid]` | `plot_lfp_position_trial.py` | epoch position profiles, and power vs trial relative to LP (animal = unit; descriptive) |
 | `lfp_probe2_clock_audit` | `audit_probe2_clock.py` (not in the pipeline) | which clock the probe-2 data are on |
 
 `_archive_pre_2026-09-25/` holds figures no current script produces (the July

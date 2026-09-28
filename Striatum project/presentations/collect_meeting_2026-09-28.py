@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Collect the figures and tables for the 2026-09-28 meeting into
 presentations/figures_2026-09-28/ (A = video/movement, B = spike CCA partial
-fix, C = LFP + infotheory re-run on the fixed pipeline).
+fix, C = LFP + infotheory re-run on the fixed pipeline, D = LFP band power
+across corridor and trials).
 
 Copies only; every figure is drawn by its own pipeline (named in README.md).
 Each figure is copied as its .svg + .png pair; a missing file, or one older
@@ -52,6 +53,11 @@ FIGURES = [
     (LFP / "lfp_psi_direction", "C9_lfp_psi_direction", "2026-09-26"),
     (INFO / "mi_overview", "C10_spike_mi_overview", "2026-09-26"),
     (INFO / "lfp_mi_overview", "C11_lfp_mi_overview", "2026-09-26"),
+    (LFP / "lfp_position_profiles_task", "D1_lfp_position_profiles_task", "2026-09-28"),
+    (LFP / "lfp_position_profiles_task_speedresid", "D2_lfp_position_profiles_task_speedresid", "2026-09-28"),
+    (LFP / "lfp_trial_evolution_task", "D3_lfp_trial_evolution_task", "2026-09-28"),
+    (LFP / "lfp_trial_evolution_control", "D4_lfp_trial_evolution_control", "2026-09-28"),
+    (LFP / "lfp_position_trial_1201_task", "D5_lfp_position_trial_1201_task", "2026-09-28"),
 ]
 
 # (source file, destination name, not-older-than)

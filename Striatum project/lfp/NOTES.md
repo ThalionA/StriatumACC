@@ -1,5 +1,29 @@
 # striatum_lfp — running log (newest first)
 
+## 2026-09-28 — Band power across the corridor and across trials (descriptive)
+
+Agent-written. New: `arms.area_position_trial_map`, which gives log10 power
+z-scored per channel over corridor + dark and then the channel mean, as a
+bin × trial map, optionally with the within-trial speed component removed via
+`residualise_on`. Three tests. `scripts/run_lfp_position_trial.py` writes
+`results/lfp_position_trial_<cohort>/`, and `scripts/plot_lfp_position_trial.py`
+draws per-animal heatmaps, epoch position profiles and trial evolution aligned
+to LP, raw and speed-residualised. It reads tables only. No statistics; read by
+eye from the figures:
+- **Beta peaks at ~100-125 cm** in every area. In the striatum and ACC it
+  shrinks by roughly half after speed residualisation, so it is largely the
+  deceleration before the reward-zone stop. In **V1, beta (~+0.6 z) and high
+  gamma peak at the visual cue zone** (starts 80 a.u. = 100 cm) and survive
+  speed residualisation. That looks like a sensory response. N = 5; untested.
+- **Theta is higher in Naive** than in later epochs (DLS, CA1, DG) and falls
+  early in the task session. That is consistent with the tested DLS-theta
+  within-task fall. Yoked controls show no early fall.
+- **Low and high gamma climb steadily across the session in task AND
+  control** (DMS, DLS, ACC). This is session time or drift, not learning. Do
+  not read the task-only gamma trend as a learning effect.
+- Caveat: `analysis.bin_speed_cm_s` quantises. A 5 cm bin crossed in one VR
+  frame reads ~150 cm/s, so the top of the speed scale is coarse.
+
 ## 2026-09-26 — The re-run on the fixed pipeline: what survives
 
 Agent-written. MATLAB products regenerated (`regen_chain.sh`, all steps exit 0;

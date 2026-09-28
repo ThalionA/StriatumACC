@@ -29,6 +29,8 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
 
+from .analysis import joint_zscore, log_power
+
 
 def design_matrix(cube: np.ndarray, trials: np.ndarray | None = None):
     """``(X, bin_index, trial_index)`` from a ``(n_channels, n_bins, n_trials)`` cube.
@@ -242,6 +244,28 @@ def residualise_on(cube: np.ndarray, covariate: np.ndarray) -> np.ndarray:
         resid[~ok] = np.nan
         out[c] = resid
     return out
+
+
+def area_position_trial_map(corridor: np.ndarray, dark: np.ndarray,
+                            speed_covariate: np.ndarray | None = None) -> np.ndarray:
+    """One area's band power as a ``(n_bins, n_trials)`` map for display.
+
+    log10 power, z-scored per channel over corridor AND dark pooled
+    (``analysis.joint_zscore``: the within-session scale, since absolute power
+    is not comparable across the two gain regimes), then averaged over the
+    area's channels. With ``speed_covariate`` (``(n_bins, n_trials)``, e.g. log
+    running speed) each channel first has its within-trial speed component
+    removed (:func:`residualise_on`, as in the evolution arm).
+
+    ``corridor`` and ``dark`` are one band's linear power, ``(n_channels,
+    n_bins, n_trials)``. Empty bins stay ``nan``.
+    """
+    zc, _ = joint_zscore(log_power(corridor), log_power(dark))
+    if speed_covariate is not None:
+        zc = residualise_on(zc, speed_covariate)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # all-nan (empty) bins
+        return np.nanmean(zc, axis=0)
 
 
 # --- The project's own moving-window reliability -----------------------------
